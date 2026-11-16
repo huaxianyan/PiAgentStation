@@ -9,10 +9,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $root "src\PiGui\PiGui.csproj"
-$exe = Join-Path $root "src\PiGui\bin\Debug\net10.0-windows\PiGui.exe"
+$project = Join-Path $root "src\PiAgentStation\PiAgentStation.csproj"
+$exe = Join-Path $root "src\PiAgentStation\bin\Debug\net10.0-windows\PiAgentStation.exe"
 
-Get-Process PiGui -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process PiAgentStation -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 400
 
 dotnet build $project -v q --nologo

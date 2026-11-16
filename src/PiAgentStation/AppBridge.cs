@@ -1,10 +1,10 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using PiGui.Rpc;
-using PiGui.Sessions;
+using PiAgentStation.Rpc;
+using PiAgentStation.Sessions;
 
-namespace PiGui;
+namespace PiAgentStation;
 
 /// <summary>界面（WebView2）与 Pi 子进程之间的桥。消息体是 JSON，两边约定 type 字段。</summary>
 public sealed class AppBridge

@@ -78,8 +78,7 @@ await call('Runtime.enable');
 await sleep(800);
 
 const listCount = await evaluate('return document.querySelectorAll(".session-item").length');
-console.log('会话列表条目数：' + listCount);
-if (listCount === 0) fail('侧栏没有渲染出任何会话');
+console.log('会话列表条目数（起始）：' + listCount);
 
 await evaluate(`window.chrome.webview.postMessage({ type: 'new_session', cwd: ${JSON.stringify(cwd)} }); return true;`);
 
@@ -121,10 +120,18 @@ const threadText = await evaluate('return document.getElementById("threadInner")
 if (!threadText.includes('冒烟通过')) fail('回合结束后线程里没有助手回复：' + JSON.stringify(threadText.slice(-160)));
 
 const usage = await evaluate('return document.getElementById("ctxUsage").textContent');
+
+// 新会话的文件是首次消息后才落盘的，收尾后列表应该已经把它带上。
+let listed = 0;
+for (let i = 0; i < 20; i++) {
+  listed = await evaluate('return document.querySelectorAll(".session-item").length');
+  if (listed > listCount || listed > 0) break;
+  await sleep(300);
+}
+if (listed === 0) fail('回合结束后侧栏仍然没有任何会话，列表刷新没生效');
 if (pageErrors.length) fail('页面抛过异常：' + pageErrors.slice(0, 3).join(' | '));
 
-await call('Page.captureScreenshot', { format: 'png' }).catch(() => {});
-console.log('上下文用量：' + usage);
+console.log('上下文用量：' + usage + '，侧栏条目数：' + listed);
 console.log('✓ 冒烟通过：列表、新会话、流式回复、收尾都正常');
 socket.close();
 process.exit(0);

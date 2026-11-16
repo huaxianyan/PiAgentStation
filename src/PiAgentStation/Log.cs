@@ -1,10 +1,10 @@
 using System.IO;
 
-namespace PiGui;
+namespace PiAgentStation;
 
 /// <summary>
 /// 极简运行日志。这个进程是 WinExe，没有控制台，出问题时只能靠文件留证据。
-/// 位置：%LOCALAPPDATA%\PiGui\logs\app.log，超过 1 MB 时截断重来。
+/// 位置：%LOCALAPPDATA%\PiAgentStation\logs\app.log，超过 1 MB 时截断重来。
 /// </summary>
 public static class Log
 {
@@ -12,7 +12,7 @@ public static class Log
 
     public static string FilePath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "PiGui", "logs", "app.log");
+        "PiAgentStation", "logs", "app.log");
 
     public static void Write(string message)
     {

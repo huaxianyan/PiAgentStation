@@ -1001,7 +1001,7 @@ function dispatch(message) {
 
     case 'error':
       setOverlay(null);
-      toast(message.message || '出错了', 'error');
+      toast(message.message || '这条操作没成功，可以再试一次。', 'error');
       break;
 
     default:
@@ -1058,7 +1058,7 @@ function onProcessExit(message) {
   const session = app.byKey.get(message.key);
   app.byKey.delete(message.key);
   const detail = message.stderr ? '\n' + message.stderr.split('\n').slice(-4).join('\n') : '';
-  toast('Pi 进程退出了（退出码 ' + message.code + '）' + detail, 'error');
+  toast('Pi 运行时退出了（退出码 ' + message.code + '），点一个会话可以重新启动。' + detail, 'error');
   if (app.currentKey === message.key) {
     app.currentKey = null;
     showWorkspace(false);
@@ -1326,7 +1326,7 @@ function onExtensionRequest(session, request) {
   }
 
   if (method === 'setTitle') {
-    document.title = request.title ? 'Pi · ' + stripAnsi(request.title) : 'Pi';
+    document.title = request.title ? 'PiAgentStation · ' + stripAnsi(request.title) : 'PiAgentStation';
     return;
   }
 
@@ -1478,5 +1478,5 @@ showWorkspace(false);
 send({ type: 'list_sessions' });
 
 if (!host) {
-  toast('这个界面要在 Pi 桌面应用里打开。', 'error');
+  toast('这个界面要在 PiAgentStation 里打开。', 'error');
 }

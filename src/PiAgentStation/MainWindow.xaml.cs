@@ -6,7 +6,7 @@ using System.Windows;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
 
-namespace PiGui;
+namespace PiAgentStation;
 
 public partial class MainWindow : Window
 {
@@ -26,7 +26,7 @@ public partial class MainWindow : Window
         {
             var userData = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "PiGui", "WebView2");
+                "PiAgentStation", "WebView2");
             Directory.CreateDirectory(userData);
 
             var environment = await CoreWebView2Environment.CreateAsync(null, userData);
@@ -49,7 +49,7 @@ public partial class MainWindow : Window
             Log.Write("界面没能启动", ex);
             MessageBox.Show(
                 $"界面没能启动：{ex.Message}",
-                "Pi",
+                "PiAgentStation",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Close();

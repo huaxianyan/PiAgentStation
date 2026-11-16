@@ -1,7 +1,7 @@
-# Pi-GUI
+# PiAgentStation
 
-Pi 的桌面界面：一个 .NET 窗口托管 WebView2，进程里跑 `pi --mode rpc` 子进程，
-界面直接渲染 Pi 的会话事件。会话记录还是 Pi 自己那一份，不复制、不迁移。
+PiAgentStation 是 Pi 的桌面客户端：一个 .NET 窗口托管 WebView2，进程里跑 `pi --mode rpc`
+子进程，界面直接渲染 Pi 的会话事件。会话记录还是 Pi 自己那一份，不复制、不迁移。
 
 ## 现在能做什么
 
@@ -34,17 +34,17 @@ pwsh -File scripts/dev-run.ps1 -SessionDir E:\tmp\pigui-sessions
 node scripts/ui-smoke.mjs --cwd E:\tmp\pigui-smoke-ws   # 主链路冒烟，会真调一次模型
 ```
 
-运行日志在 `%LOCALAPPDATA%\PiGui\logs\app.log`。桌面整屏截图抓不到 WebView2 的画面，
+运行日志在 `%LOCALAPPDATA%\PiAgentStation\logs\app.log`。桌面整屏截图抓不到 WebView2 的画面，
 要看界面就用 CDP 的 `Page.captureScreenshot`。
 
 ## 结构
 
 ```text
-src/PiGui/MainWindow.xaml.cs   窗口与 WebView2 初始化、目录选择框、外链处理
-src/PiGui/AppBridge.cs         界面命令与事件的路由
-src/PiGui/Rpc/PiSession.cs     pi --mode rpc 子进程与 JSONL 协议
-src/PiGui/Sessions/           会话文件扫描
-src/PiGui/wwwroot/            界面：index.html、styles.css、app.js
+src/PiAgentStation/MainWindow.xaml.cs   窗口与 WebView2 初始化、目录选择框、外链处理
+src/PiAgentStation/AppBridge.cs         界面命令与事件的路由
+src/PiAgentStation/Rpc/PiSession.cs     pi --mode rpc 子进程与 JSONL 协议
+src/PiAgentStation/Sessions/           会话文件扫描
+src/PiAgentStation/wwwroot/            界面：index.html、styles.css、app.js
 ```
 
 ## 限制

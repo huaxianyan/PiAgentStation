@@ -2,7 +2,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json.Nodes;
 
-namespace PiGui.Sessions;
+namespace PiAgentStation.Sessions;
 
 public sealed record SessionSummary(
     string Path,

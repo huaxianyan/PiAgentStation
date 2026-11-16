@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Threading;
 
-namespace PiGui;
+namespace PiAgentStation;
 
 public partial class App : Application
 {
