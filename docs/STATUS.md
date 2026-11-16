@@ -23,9 +23,8 @@
 
 ## STATUS-002：仓库定名 PiAgentStation 并推到公开远端
 
-- 按用户要求把项目从临时的 `E:\Dev\Pi-GUI` 搬到当前工作目录 `E:\Dev\PiAgentStation`，
-  仓库名与目录同名。程序集、命名空间、exe、日志与 WebView2 缓存目录一并改名，
-  避免同一产品留两个名字。
+- 按用户要求把项目搬到当前工作目录，仓库名与目录同名（均为 PiAgentStation），
+  程序集、命名空间、exe、日志与界面品牌一并改名，避免同一产品留两个名字。
 - 验证：`dotnet build` 通过，`scripts/ui-smoke.mjs` 在改名后重跑通过；`git log` 保留原有提交。
 - 记录：那次 `gdi32full.dll` 崩溃（`0xc0000409`）由用户指认为本机 MacType 注入所致，
   不是代码问题，已写进 `AGENTS.md` 的已知坑。
