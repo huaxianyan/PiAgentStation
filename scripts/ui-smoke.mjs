@@ -1,0 +1,130 @@
+// 界面冒烟：用 CDP 驱动真实窗口跑一遍主链路。
+// 前置：应用已用 --remote-debugging-port=9222 启动（scripts/dev-run.ps1 会做）。
+// 用法：node scripts/ui-smoke.mjs --cwd E:\tmp\pigui-smoke-ws
+import { existsSync } from 'node:fs';
+
+const args = process.argv.slice(2);
+const argValue = (name) => {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : undefined;
+};
+
+const cwd = argValue('--cwd');
+const port = Number(argValue('--port') ?? 9222);
+const prompt = '只回复四个字：冒烟通过';
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const fail = (message) => {
+  console.error('✗ ' + message);
+  process.exit(1);
+};
+
+if (!cwd) fail('缺少 --cwd，需要一个已存在的工作目录');
+if (!existsSync(cwd)) fail('工作目录不存在：' + cwd);
+
+async function findPage() {
+  for (let i = 0; i < 40; i++) {
+    try {
+      const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+      const page = targets.find((target) => target.type === 'page' && String(target.url).includes('app.local'));
+      if (page) return page;
+    } catch {
+      // 应用可能还没起来。
+    }
+    await sleep(500);
+  }
+  fail(`连不上调试端口 ${port}，确认应用已启动`);
+}
+
+const page = await findPage();
+const socket = new WebSocket(page.webSocketDebuggerUrl);
+await new Promise((resolve, reject) => {
+  socket.onopen = resolve;
+  socket.onerror = () => reject(new Error('CDP 连接失败'));
+});
+
+let nextId = 1;
+const pending = new Map();
+const pageErrors = [];
+socket.onmessage = (event) => {
+  const message = JSON.parse(event.data);
+  if (message.id && pending.has(message.id)) {
+    pending.get(message.id)(message);
+    pending.delete(message.id);
+  } else if (message.method === 'Runtime.exceptionThrown') {
+    pageErrors.push(message.params.exceptionDetails.text);
+  }
+};
+
+function call(method, params) {
+  const id = nextId++;
+  socket.send(JSON.stringify({ id, method, params }));
+  return new Promise((resolve) => pending.set(id, resolve));
+}
+
+async function evaluate(expression) {
+  const response = await call('Runtime.evaluate', {
+    expression: `(async () => { ${expression} })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (response.result?.exceptionDetails) {
+    fail('页面执行出错：' + JSON.stringify(response.result.exceptionDetails).slice(0, 300));
+  }
+  return response.result?.result?.value;
+}
+
+await call('Runtime.enable');
+await sleep(800);
+
+const listCount = await evaluate('return document.querySelectorAll(".session-item").length');
+console.log('会话列表条目数：' + listCount);
+if (listCount === 0) fail('侧栏没有渲染出任何会话');
+
+await evaluate(`window.chrome.webview.postMessage({ type: 'new_session', cwd: ${JSON.stringify(cwd)} }); return true;`);
+
+let ready = false;
+for (let i = 0; i < 90; i++) {
+  ready = await evaluate('return !document.getElementById("thread").hidden');
+  if (ready) break;
+  await sleep(500);
+}
+if (!ready) fail('新建会话没有进入就绪状态');
+
+const modelVisible = await evaluate('return !document.getElementById("modelSelect").hidden');
+if (!modelVisible) fail('模型下拉没出现');
+
+await evaluate(`
+  const input = document.getElementById('input');
+  input.value = ${JSON.stringify(prompt)};
+  input.dispatchEvent(new Event('input'));
+  document.getElementById('sendBtn').click();
+  return true;
+`);
+
+let sawStreaming = false;
+let settled = false;
+for (let i = 0; i < 480; i++) {
+  const label = await evaluate('return document.getElementById("sendBtn").textContent');
+  if (label === '停止') sawStreaming = true;
+  if (sawStreaming && label === '发送') {
+    settled = true;
+    break;
+  }
+  await sleep(250);
+}
+
+if (!sawStreaming) fail('没有观察到流式状态（发送按钮没变成停止）');
+if (!settled) fail('回合没有收尾');
+
+const threadText = await evaluate('return document.getElementById("threadInner").innerText');
+if (!threadText.includes('冒烟通过')) fail('回合结束后线程里没有助手回复：' + JSON.stringify(threadText.slice(-160)));
+
+const usage = await evaluate('return document.getElementById("ctxUsage").textContent');
+if (pageErrors.length) fail('页面抛过异常：' + pageErrors.slice(0, 3).join(' | '));
+
+await call('Page.captureScreenshot', { format: 'png' }).catch(() => {});
+console.log('上下文用量：' + usage);
+console.log('✓ 冒烟通过：列表、新会话、流式回复、收尾都正常');
+socket.close();
+process.exit(0);

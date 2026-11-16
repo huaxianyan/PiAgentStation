@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pi</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar">
+      <div class="brandbar">
+        <div class="brand"><span class="mark"></span><span>Pi</span></div>
+        <button class="icon-btn" id="newSessionBtn" title="新建会话">＋</button>
+      </div>
+      <div class="filterbar">
+        <input id="sessionFilter" type="search" placeholder="筛选会话" autocomplete="off" />
+      </div>
+      <div class="session-list" id="sessionList"></div>
+      <div class="sidebar-foot">
+        <div class="ext-status" id="extStatus"></div>
+        <div class="session-root" id="sessionRoot"></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="title-block">
+          <h1 id="sessionTitle">未选择会话</h1>
+          <div class="sub" id="sessionCwd"></div>
+        </div>
+        <div class="controls">
+          <span class="ctx" id="ctxUsage" hidden></span>
+          <select id="thinkingSelect" title="思考等级" hidden></select>
+          <select id="modelSelect" title="模型" hidden></select>
+          <button class="ghost-btn" id="compactBtn" title="压缩上下文" hidden>压缩</button>
+        </div>
+      </header>
+
+      <div class="thread" id="thread" hidden>
+        <div class="thread-inner" id="threadInner"></div>
+      </div>
+
+      <div class="composer" id="composer" hidden>
+        <div class="widget-strip" id="widgetStrip" hidden></div>
+        <div class="attachments" id="attachments" hidden></div>
+        <div class="composer-box">
+          <textarea id="input" rows="1" placeholder="给 Pi 一个任务…" spellcheck="false"></textarea>
+          <div class="composer-row">
+            <button class="ghost-btn" id="attachBtn" title="附加图片">图片</button>
+            <span class="hint" id="hint"></span>
+            <button class="primary-btn" id="sendBtn">发送</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="empty" id="empty">
+        <div class="empty-inner">
+          <h2>打开一个会话，或者新建</h2>
+          <p class="muted">会话读写的是本机 Pi 的那份记录，和终端里看到的是同一批。</p>
+          <div class="starters" id="starters"></div>
+          <button class="primary-btn" id="emptyNewBtn">选择工作目录</button>
+        </div>
+      </div>
+
+      <div class="overlay" id="overlay" hidden>
+        <div class="overlay-card">
+          <div class="spinner"></div>
+          <div id="overlayText">正在启动 Pi…</div>
+        </div>
+      </div>
+    </main>
+
+    <div class="toasts" id="toasts"></div>
+    <div class="modal-backdrop" id="modal" hidden></div>
+    <input type="file" id="fileInput" accept="image/*" multiple hidden />
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

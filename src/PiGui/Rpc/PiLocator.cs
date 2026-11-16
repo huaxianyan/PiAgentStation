@@ -1,0 +1,68 @@
+using System.Diagnostics;
+using System.IO;
+
+namespace PiGui.Rpc;
+
+/// <summary>
+/// 定位本机已安装的 Pi。不打包自己的 Pi，只用 ~/.pi/agent 下那一份。
+/// Windows 上 ~/.pi/agent/bin/pi.cmd 与 sh 脚本都不能被 CreateProcess 直接执行，
+/// 所以统一走 node + pi-launcher.js，由 launcher 自己解析当前版本目录。
+/// </summary>
+public static class PiLocator
+{
+    public static string AgentDirectory { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pi", "agent");
+
+    public static string LauncherPath { get; } = Path.Combine(AgentDirectory, "bin", "pi-launcher.js");
+
+    /// <summary>Node 解释器。优先环境变量覆盖，其次 PATH 上的 node，最后是 Pi 自带的 node 副本。</summary>
+    public static string ResolveNode()
+    {
+        var overridePath = Environment.GetEnvironmentVariable("PI_GUI_NODE");
+        if (!string.IsNullOrWhiteSpace(overridePath) && File.Exists(overridePath))
+        {
+            return overridePath;
+        }
+
+        var managed = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "pi-node", "current", "node.exe");
+        if (File.Exists(managed))
+        {
+            return managed;
+        }
+
+        // PATH 上的 node：交给系统解析，找不到时 Start 会抛异常并由调用方报给界面。
+        return "node";
+    }
+
+    public static void EnsureInstalled()
+    {
+        if (!File.Exists(LauncherPath))
+        {
+            throw new FileNotFoundException(
+                $"没有找到 Pi 的启动器：{LauncherPath}。请先安装 Pi，或用 PI_GUI_NODE 指定 node 解释器。",
+                LauncherPath);
+        }
+    }
+
+    public static string Describe()
+    {
+        return $"node={ResolveNode()}; launcher={LauncherPath}";
+    }
+
+    public static bool TryStartProbe(out string detail)
+    {
+        try
+        {
+            EnsureInstalled();
+            detail = Describe();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            detail = ex.Message;
+            return false;
+        }
+    }
+}
