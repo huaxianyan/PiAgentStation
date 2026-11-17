@@ -21,7 +21,12 @@ var hub = new CenterHub();
 
 app.UseWebSockets();
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    // 前端是跟着中心一起更新的，客户端不能拿着旧缓存跑：每次都要回中心确认。
+    OnPrepareResponse = context =>
+        context.Context.Response.Headers.CacheControl = "no-cache, must-revalidate",
+});
 
 app.Map("/ws", async (HttpContext context) =>
 {
