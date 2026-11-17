@@ -1,4 +1,4 @@
-﻿# 起 SevenStation.Core（中心）+ SevenStation（桌面客户端）。
+﻿# 起 SevenStation.Core（中心）+ Seven Station 桌面客户端。
 #
 # 用法：
 #   pwsh -File scripts/dev-run.ps1
@@ -13,12 +13,16 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
 $serverProject = Join-Path $root "src/SevenStation.Core/SevenStation.Core.csproj"
-$desktopProject = Join-Path $root "src\SevenStation.Desktop\SevenStation.Desktop.csproj"
+$desktopProject = Join-Path $root "src/SevenStation.Desktop"
 $serverExe = Join-Path $root "src/SevenStation.Core/bin/Debug/net10.0/SevenStation.Core.exe"
-$desktopExe = Join-Path $root "src\SevenStation.Desktop\bin\Debug\net10.0-windows\SevenStation.exe"
-$logDir = Join-Path $env:LOCALAPPDATA "SevenStation\logs"
+$desktopExe = Join-Path $root "src/SevenStation.Desktop/target/debug/sevenstation-desktop.exe"
+$logDir = Join-Path $env:LOCALAPPDATA "SevenStation/logs"
 
-Get-Process SevenStation, SevenStation.Core -ErrorAction SilentlyContinue | Stop-Process -Force
+# rustup 装的工具不一定在当前会话的 PATH 里。
+$cargoBin = Join-Path $env:USERPROFILE ".cargo/bin"
+if (Test-Path $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
+
+Get-Process sevenstation-desktop, SevenStation.Core -ErrorAction SilentlyContinue | Stop-Process -Force
 # 强杀主进程后 WebView2 的浏览器进程会留下来占着缓存目录，客户端就打不开了。
 Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
     Where-Object { $_.CommandLine -like '*SevenStation*' } |
@@ -27,8 +31,14 @@ Start-Sleep -Milliseconds 400
 
 dotnet build $serverProject -v q --nologo
 if ($LASTEXITCODE -ne 0) { throw "SevenStation.Core 构建失败" }
-dotnet build $desktopProject -v q --nologo
-if ($LASTEXITCODE -ne 0) { throw "客户端构建失败" }
+
+Push-Location $desktopProject
+try {
+    cargo build
+    if ($LASTEXITCODE -ne 0) { throw "客户端构建失败" }
+} finally {
+    Pop-Location
+}
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 if ($SessionDir) {
@@ -54,9 +64,9 @@ for ($i = 0; $i -lt 60; $i++) {
     }
 }
 
-Start-Process -FilePath $desktopExe `
+Start-Process -FilePath $desktopExe -WorkingDirectory $desktopProject `
     -RedirectStandardOutput (Join-Path $logDir "desktop.out.log") `
     -RedirectStandardError (Join-Path $logDir "desktop.err.log") | Out-Null
 Write-Host "中心：$probe"
-Write-Host "令牌：$(Join-Path $env:LOCALAPPDATA 'SevenStation.Core/token.txt')"
+Write-Host "令牌：$(Join-Path $env:LOCALAPPDATA 'SevenStation/token.txt')"
 Write-Host "日志：$logDir"

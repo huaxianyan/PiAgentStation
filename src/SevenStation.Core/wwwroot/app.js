@@ -10,14 +10,14 @@
 /* 界面偏好：放本地，换设备不跟着走。 */
 const prefs = { interrupt: false };
 try {
-  prefs.interrupt = localStorage.getItem('piagentstation.interruptCtrlEnter') === '1';
+  prefs.interrupt = localStorage.getItem('sevenstation.interruptCtrlEnter') === '1';
 } catch {
   prefs.interrupt = false;
 }
 
 function savePrefs() {
   try {
-    localStorage.setItem('piagentstation.interruptCtrlEnter', prefs.interrupt ? '1' : '0');
+    localStorage.setItem('sevenstation.interruptCtrlEnter', prefs.interrupt ? '1' : '0');
   } catch {
     /* 隐私模式下存不了，本次会话内生效就够。 */
   }
@@ -159,7 +159,6 @@ const el = {
   extensionsNav: document.getElementById('extensionsNav'),
   skillsCount: document.getElementById('skillsCount'),
   extensionsCount: document.getElementById('extensionsCount'),
-  windowControls: document.getElementById('windowControls'),
   topbar: document.querySelector('.topbar'),
   pageView: document.getElementById('pageView'),
   pageInner: document.getElementById('pageInner'),
@@ -1178,7 +1177,8 @@ function renderHeader() {
 
   renderModelPill();
 
-  const levels = (session.levels && session.levels.levels) || [];
+  const capabilities = agentCapabilities();
+  const levels = capabilities.thinkingLevels ? (session.levels && session.levels.levels) || [] : [];
   if (levels.length > 1) {
     // 库里记的等级可能不在当前模型的可选范围（换过模型就会出现），照实显示出来。
     const wanted = state.thinkingLevel || levels[0];
@@ -1257,6 +1257,22 @@ function modelPrice(entry) {
   return '$' + input + ' / $' + output;
 }
 
+function agentCapabilities() {
+  const agent = app.agent;
+  const caps = (agent && agent.capabilities) || {};
+  return {
+    tools: caps.tools !== false,
+    thinkingLevels: Boolean(caps.thinkingLevels),
+    models: Boolean(caps.models),
+    contextUsage: Boolean(caps.contextUsage),
+    compaction: Boolean(caps.compaction),
+    extensions: Boolean(caps.extensions),
+    skills: Boolean(caps.skills),
+    commands: Boolean(caps.commands),
+    attachments: Boolean(caps.attachments),
+  };
+}
+
 function currentModel() {
   const session = current();
   const entries = modelEntries();
@@ -1267,7 +1283,7 @@ function currentModel() {
 function renderModelPill() {
   const session = current();
   const entries = modelEntries();
-  if (!session || entries.length < 2) {
+  if (!session || entries.length < 2 || !agentCapabilities().models) {
     el.modelPill.hidden = true;
     closeModelPanel();
     return;
@@ -1663,13 +1679,17 @@ function newSession() {
 }
 
 /**
- * 选目录：能交给系统就用系统的，浏览器里没有这条路，退回页面里那棵目录树。
+ * 选目录：桌面壳里交给系统的对话框，浏览器里没有这条路，退回页面里那棵目录树。
  */
-function pickFolder(initial, onPick) {
-  if (hostWindow && nativeFolderPicker) {
-    folderPickCallback = onPick;
-    hostWindow.postMessage({ type: 'window', action: 'pick-folder', initial: initial || '' });
-    return;
+async function pickFolder(initial, onPick) {
+  if (shell) {
+    try {
+      const picked = await shell.invoke('pick_folder', { initial: initial || '' });
+      onPick(picked || '');
+      return;
+    } catch (error) {
+      console.warn('系统选目录没打开，改用页面里的目录树', error);
+    }
   }
 
   openDirPicker(initial, onPick);
@@ -1792,8 +1812,8 @@ function renderDirListing(payload) {
 }
 
 function askCwd() {
-  // 桌面客户端连本机中心：直接用系统的选目录对话框，省掉中间那层自己画的。
-  if (hostWindow && nativeFolderPicker) {
+  // 桌面壳里直接开系统的选目录对话框，省掉中间那层自己画的。
+  if (shell) {
     pickFolder(app.cwdDraft || app.lastCwd || app.activeCwd || '', (picked) => {
       if (picked) startSession(picked);
     });
@@ -1918,7 +1938,7 @@ function setSidebar(open) {
   el.windowEl.classList.toggle('sidebar-collapsed', !open);
   el.sidebarToggle.hidden = open;
   try {
-    localStorage.setItem('piagentstation.sidebar', open ? '1' : '0');
+    localStorage.setItem('sevenstation.sidebar', open ? '1' : '0');
   } catch {
     // 无痕模式写不了，忽略。
   }
@@ -1928,65 +1948,15 @@ el.collapseBtn.addEventListener('click', () => setSidebar(false));
 el.sidebarToggle.addEventListener('click', () => setSidebar(true));
 
 /* ------------------------------------------------------------------ *
- * 窗口边框：桌面客户端没有系统标题栏，拖动和三个按钮都由这里发给客户端
+ * 桌面壳：窗口边框、最小化这些交给系统（Tauri 用系统标题栏），
+ * 页面这边只保留一件跟壳有关的事——选目录时开系统的对话框
  * ------------------------------------------------------------------ */
 
-const hostWindow = window.chrome && window.chrome.webview ? window.chrome.webview : null;
-
-// 桌面客户端连的是本机中心时，选目录才由系统对话框负责：选出来的是这台机器的路径。
-let nativeFolderPicker = false;
-let folderPickCallback = null;
-
-function sendWindowAction(action) {
-  if (hostWindow) hostWindow.postMessage({ type: 'window', action });
-}
-
-function bindWindowChrome() {
-  if (!hostWindow) return;
-
-  document.body.classList.add('has-window-chrome');
-  el.windowControls.hidden = false;
-
-  // 顶栏空白处按住就交给系统的拖动循环，双击切换最大化。
-  el.topbar.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0) return;
-    if (event.target.closest('button, input, select, textarea, a')) return;
-    sendWindowAction('drag');
-  });
-
-  el.topbar.addEventListener('dblclick', (event) => {
-    if (event.target.closest('button, input, select, textarea, a')) return;
-    sendWindowAction('toggle-maximize');
-  });
-
-  el.windowControls.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-window-action]');
-    if (button) sendWindowAction(button.dataset.windowAction);
-  });
-
-  hostWindow.addEventListener('message', (event) => {
-    const message = event.data;
-    if (!message) return;
-
-    if (message.type === 'window-state') {
-      document.body.classList.toggle('is-maximized', Boolean(message.maximized));
-      nativeFolderPicker = Boolean(message.local);
-      return;
-    }
-
-    if (message.type === 'folder-picked') {
-      const callback = folderPickCallback;
-      folderPickCallback = null;
-      if (callback) callback(message.path || '');
-    }
-  });
-}
-
-bindWindowChrome();
+const shell = window.__TAURI__ && window.__TAURI__.core ? window.__TAURI__.core : null;
 
 let sidebarOpen = true;
 try {
-  sidebarOpen = localStorage.getItem('piagentstation.sidebar') !== '0';
+  sidebarOpen = localStorage.getItem('sevenstation.sidebar') !== '0';
 } catch {
   sidebarOpen = true;
 }
@@ -2192,13 +2162,13 @@ function renderSettingsPage() {
   ]);
   el.pageInner.appendChild(connection);
 
-  const pi = makePageCard('Pi');
-  addKeyValues(pi, [
-    ['版本', (app.pi && app.pi.version) || '未知'],
-    ['程序目录', app.pi ? app.pi.agentDir : ''],
-    ['会话目录', app.pi ? app.pi.sessions : ''],
-  ]);
-  el.pageInner.appendChild(pi);
+  const agent = app.agent;
+  const card = makePageCard(agent ? agent.name : 'Agent');
+  const rows = agent && Array.isArray(agent.info) ? agent.info : [];
+  addKeyValues(card, rows.length
+    ? rows.map((row) => [row.label, row.value || '未知'])
+    : [['状态', '还没连上中心']]);
+  el.pageInner.appendChild(card);
 
   const recent = makePageCard('最近工作区', '点一下在那个目录里开新对话。');
   if (!app.recentWorkspaces || !app.recentWorkspaces.length) {
@@ -3363,8 +3333,9 @@ function dispatch(message) {
       if (message.version) {
         app.centerVersion = message.version;
       }
-      if (message.pi) {
-        app.pi = message.pi;
+      if (Array.isArray(message.agents)) {
+        app.agents = message.agents;
+        app.agent = message.agents[0] || null;
       }
       if (message.listen) {
         app.listen = message.listen;
@@ -3375,8 +3346,8 @@ function dispatch(message) {
       if (Array.isArray(message.workspaces)) {
         app.recentWorkspaces = message.workspaces;
       }
-      if (message.pi && message.pi.ready === false) {
-        toast('中心那台机器上没找到 Pi，先把 Pi 装好再开始对话。', 'warning');
+      if (app.agent && app.agent.ready === false) {
+        toast(`中心那台机器上没找到 ${app.agent.name}，先把 ${app.agent.name} 装好再开始对话。`, 'warning');
       }
       break;
 

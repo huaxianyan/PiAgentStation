@@ -1,0 +1,13 @@
+{
+  "identifier": "center-page",
+  "description": "中心页面可以调用壳的命令",
+  "windows": ["main"],
+  "remote": {
+    "urls": ["http://127.0.0.1:8787/*", "http://localhost:8787/*"]
+  },
+  "permissions": [
+    "core:default",
+    "allow-pick-folder",
+    "allow-center-local"
+  ]
+}

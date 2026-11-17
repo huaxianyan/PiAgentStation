@@ -14,6 +14,9 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $dist = Join-Path $root "dist"
 
+$cargoBin = Join-Path $env:USERPROFILE ".cargo/bin"
+if (Test-Path $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
+
 function Read-Version([string]$project) {
     $text = Get-Content -Raw $project
     $match = [regex]::Match($text, '<Version>([^<]+)</Version>')
@@ -22,7 +25,10 @@ function Read-Version([string]$project) {
 }
 
 $centerVersion = Read-Version (Join-Path $root "src/SevenStation.Core/SevenStation.Core.csproj")
-$clientVersion = Read-Version (Join-Path $root "src/SevenStation.Desktop/SevenStation.Desktop.csproj")
+$cargoText = Get-Content -Raw (Join-Path $root "src/SevenStation.Desktop/Cargo.toml")
+$clientMatch = [regex]::Match($cargoText, '(?m)^version\s*=\s*"([^"]+)"')
+if (-not $clientMatch.Success) { throw "找不到客户端版本号" }
+$clientVersion = $clientMatch.Groups[1].Value.Trim()
 if ($centerVersion -ne $clientVersion) {
     throw "两个项目的版本号不一致：中心 $centerVersion / 客户端 $clientVersion"
 }
@@ -36,16 +42,20 @@ if (-not (Test-Path $notes)) {
 Write-Host "版本 $version"
 
 $centerOut = Join-Path $root "src/SevenStation.Core/bin/Release/net10.0/win-x64/publish"
-$clientOut = Join-Path $root "src/SevenStation.Desktop/bin/Release/net10.0-windows/win-x64/publish"
+$clientOut = Join-Path $root "src/SevenStation.Desktop/target/release"
 
 if (-not $SkipPublish) {
     dotnet publish (Join-Path $root "src/SevenStation.Core/SevenStation.Core.csproj") `
         -c Release -r win-x64 --self-contained -o $centerOut -v q --nologo
     if ($LASTEXITCODE -ne 0) { throw "中心发布失败" }
 
-    dotnet publish (Join-Path $root "src/SevenStation.Desktop/SevenStation.Desktop.csproj") `
-        -c Release -r win-x64 --self-contained -o $clientOut -v q --nologo
-    if ($LASTEXITCODE -ne 0) { throw "客户端发布失败" }
+    Push-Location (Join-Path $root "src/SevenStation.Desktop")
+    try {
+        cargo build --release
+        if ($LASTEXITCODE -ne 0) { throw "客户端发布失败" }
+    } finally {
+        Pop-Location
+    }
 }
 
 foreach ($output in @($centerOut, $clientOut)) {

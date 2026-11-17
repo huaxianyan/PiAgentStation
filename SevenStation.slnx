@@ -1,6 +1,5 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/SevenStation.Core/SevenStation.Core.csproj" />
-    <Project Path="src/SevenStation.Desktop/SevenStation.Desktop.csproj" />
   </Folder>
 </Solution>

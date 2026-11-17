@@ -1,0 +1,65 @@
+using SevenStation.Core.Rpc;
+
+namespace SevenStation.Core.Agents;
+
+/// <summary>
+/// Pi 作为 Agent 的名片与能力。Pi 专属的路径、版本、会话目录都留在这里，
+/// 不上浮到 Host 的调度里。
+/// </summary>
+public static class PiAgent
+{
+    public static AgentDescriptor Describe()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var agentDirectory = Path.Combine(home, ".pi", "agent");
+        var launcher = Path.Combine(agentDirectory, "bin", "pi-launcher.js");
+        var sessions = Environment.GetEnvironmentVariable("PI_CODING_AGENT_SESSION_DIR")
+            ?? Path.Combine(home, ".pi", "sessions");
+
+        return new AgentDescriptor(
+            AgentRegistry.PiId,
+            "Pi",
+            InstalledVersion(agentDirectory),
+            File.Exists(launcher),
+            new AgentCapabilities
+            {
+                Tools = true,
+                ThinkingLevels = true,
+                Models = true,
+                ContextUsage = true,
+                Compaction = true,
+                Extensions = true,
+                Skills = true,
+                Commands = true,
+                Attachments = true,
+            },
+            [
+                new AgentInfoRow("版本", InstalledVersion(agentDirectory)),
+                new AgentInfoRow("程序目录", agentDirectory),
+                new AgentInfoRow("会话目录", sessions),
+            ]);
+    }
+
+    /// <summary>装了几个版本时，报最近装的那个；读不到就留空，界面显示未知。</summary>
+    private static string InstalledVersion(string agentDirectory)
+    {
+        try
+        {
+            var releases = Path.Combine(agentDirectory, "install", "releases");
+            if (!Directory.Exists(releases))
+            {
+                return "";
+            }
+
+            return Directory.GetDirectories(releases)
+                .Select(Path.GetFileName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .OrderByDescending(name => name, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault() ?? "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+}

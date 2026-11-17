@@ -15,7 +15,7 @@ Pi 的客户端。形态是一个中心加多个薄客户端：中心跑 Pi、�
 
 ## 怎么跑
 
-需要中心那台机器装好 Pi（`~/.pi/agent`）与 .NET 10 SDK。客户端需要 WebView2 运行时。
+Host 那台机器要装好 Pi（`~/.pi/agent`）与 .NET 10 SDK；桌面客户端要 Rust 工具链（cargo）与 WebView2 运行时。
 
 ```powershell
 pwsh -File scripts/dev-run.ps1        # 开发：构建并起中心 + 桌面客户端
@@ -74,7 +74,7 @@ node scripts/ui-smoke.mjs --cwd E:\tmp\pigui-smoke-ws   # 主链路冒烟，会�
 src/SevenStation.Core/                中心：对话库、pi 子进程、WebSocket、托管前端
 src/SevenStation.Core/Storage/        对话库（SQLite）
 src/SevenStation.Core/wwwroot/        前端（桌面与手机共用）
-src/SevenStation.Desktop/   客户端：WebView2 壳，只加载中心地址
+src/SevenStation.Desktop/   桌面客户端：Tauri 壳（Rust + WebView2），只加载中心地址
 src/Shared/Log.cs             两边共用的文件日志
 ```
 

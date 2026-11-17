@@ -2,7 +2,7 @@
 # 用法：pwsh -NoProfile -File scripts/close-smoke.ps1
 # 前置：客户端已构建（bin\Debug\net10.0-windows\SevenStation.exe）。
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot '../src/SevenStation.Desktop/bin/Debug/net10.0-windows/SevenStation.exe'),
+    [string]$Exe = (Join-Path $PSScriptRoot '../src/SevenStation.Desktop/target/debug/sevenstation-desktop.exe'),
     [int]$WaitSeconds = 12
 )
 
@@ -54,7 +54,7 @@ if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-$sent = [CloseSmoke]::CloseWindow($process.Id, 'SevenStation')
+$sent = [CloseSmoke]::CloseWindow($process.Id, 'sevenstation-desktop')
 if ($sent -lt 1) {
     Write-Output '✗ 没找到主窗口'
     exit 1

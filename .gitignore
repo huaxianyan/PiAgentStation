@@ -1,7 +1,14 @@
 bin/
 obj/
 dist/
+!src/SevenStation.Desktop/dist/
+!src/SevenStation.Desktop/dist/**
+target/
 work/
 .vs/
 *.user
 *.suo
+
+# Tauri 构建时生成，不入库。
+src/SevenStation.Desktop/gen/
+src/SevenStation.Desktop/permissions/

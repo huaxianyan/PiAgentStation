@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>Seven Station</title>
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body {
+      display: flex; align-items: center; justify-content: center;
+      background: #ffffff; color: #8a8a92;
+      font: 14px/1.7 "Microsoft YaHei", system-ui, sans-serif;
+    }
+    .box { text-align: center; }
+    .mark {
+      width: 46px; height: 46px; margin: 0 auto 14px;
+      border-radius: 12px; background: #1a1a1d; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px; font-weight: 600;
+    }
+    p { margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="mark">π</div>
+    <p id="state">正在连中心…</p>
+  </div>
+  <script>
+    window.sevenStationShowState = function (text) {
+      document.getElementById('state').textContent = text;
+    };
+  </script>
+</body>
+</html>

@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using SevenStation.Core.Rpc;
+using SevenStation.Core.Agents;
 using SevenStation.Core.Storage;
 using SevenStation.Shared;
 
@@ -55,7 +56,8 @@ public sealed class CenterHub
             ["center"] = "SevenStation",
             ["version"] = typeof(CenterHub).Assembly.GetName().Version?.ToString() ?? "0",
             ["data"] = _store.DatabasePath,
-            ["pi"] = PiStatus(),
+            ["agent"] = AgentRegistry.PrimaryId,
+            ["agents"] = AgentPayload(),
             ["listen"] = ListenUrl,
             ["css"] = _store.GetSetting("custom_css"),
             ["workspaces"] = new JsonArray(RecentWorkspaces().Select(entry => (JsonNode?)JsonValue.Create(entry)).ToArray()),
@@ -352,43 +354,45 @@ public sealed class CenterHub
     }
 
     /// <summary>中心这台机器上的 Pi 装好了没有，界面在设置里给个准话。</summary>
-    private static JsonObject PiStatus()
+    /// <summary>把注册表里的 Agent 名片转成协议里的形状。</summary>
+    private static JsonArray AgentPayload()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var agentDirectory = Path.Combine(home, ".pi", "agent");
-        var launcher = Path.Combine(agentDirectory, "bin", "pi-launcher.js");
-
-        return new JsonObject
+        var agents = new JsonArray();
+        foreach (var agent in AgentRegistry.Describe())
         {
-            ["agentDir"] = agentDirectory,
-            ["ready"] = File.Exists(launcher),
-            ["version"] = InstalledPiVersion(agentDirectory),
-            ["sessions"] = Environment.GetEnvironmentVariable("PI_CODING_AGENT_SESSION_DIR")
-                ?? Path.Combine(home, ".pi", "sessions"),
-        };
-    }
+            var capabilities = new JsonObject();
+            capabilities["tools"] = agent.Capabilities.Tools;
+            capabilities["thinkingLevels"] = agent.Capabilities.ThinkingLevels;
+            capabilities["models"] = agent.Capabilities.Models;
+            capabilities["contextUsage"] = agent.Capabilities.ContextUsage;
+            capabilities["compaction"] = agent.Capabilities.Compaction;
+            capabilities["extensions"] = agent.Capabilities.Extensions;
+            capabilities["skills"] = agent.Capabilities.Skills;
+            capabilities["commands"] = agent.Capabilities.Commands;
+            capabilities["attachments"] = agent.Capabilities.Attachments;
 
-    /// <summary>装了几个版本时，报最近装的那个；读不到就留空，界面显示未知。</summary>
-    private static string InstalledPiVersion(string agentDirectory)
-    {
-        try
-        {
-            var releases = Path.Combine(agentDirectory, "install", "releases");
-            if (!Directory.Exists(releases))
+            var info = new JsonArray();
+            foreach (var row in agent.Info)
             {
-                return "";
+                info.Add(new JsonObject
+                {
+                    ["label"] = row.Label,
+                    ["value"] = row.Value,
+                });
             }
 
-            return Directory.GetDirectories(releases)
-                .Select(Path.GetFileName)
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .OrderByDescending(name => name, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault() ?? "";
+            agents.Add(new JsonObject
+            {
+                ["id"] = agent.Id,
+                ["name"] = agent.Name,
+                ["version"] = agent.Version,
+                ["ready"] = agent.Ready,
+                ["capabilities"] = capabilities,
+                ["info"] = info,
+            });
         }
-        catch (Exception)
-        {
-            return "";
-        }
+
+        return agents;
     }
 
     /// <summary>
