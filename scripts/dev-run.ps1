@@ -19,6 +19,10 @@ $desktopExe = Join-Path $root "src\PiAgentStation.Desktop\bin\Debug\net10.0-wind
 $logDir = Join-Path $env:LOCALAPPDATA "PiAgentStation\logs"
 
 Get-Process PiAgentStation, MAStation -ErrorAction SilentlyContinue | Stop-Process -Force
+# 强杀主进程后 WebView2 的浏览器进程会留下来占着缓存目录，客户端就打不开了。
+Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
+    Where-Object { $_.CommandLine -like '*PiAgentStation*' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Start-Sleep -Milliseconds 400
 
 dotnet build $serverProject -v q --nologo

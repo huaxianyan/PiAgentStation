@@ -217,6 +217,29 @@ public sealed class CenterHub
         });
     }
 
+    /// <summary>对话的标题、模型、思考等级变了：只回这几项，绝不重发消息，免得覆盖界面上的内容。</summary>
+    private static JsonObject Settings(Conversation conversation)
+    {
+        var payload = new JsonObject
+        {
+            ["type"] = "conversation_settings",
+            ["key"] = conversation.Id,
+            ["title"] = conversation.Title,
+        };
+
+        if (Parse(conversation.Model) is { } model)
+        {
+            payload["model"] = model.DeepClone();
+        }
+
+        if (!string.IsNullOrEmpty(conversation.ThinkingLevel))
+        {
+            payload["thinkingLevel"] = conversation.ThinkingLevel;
+        }
+
+        return payload;
+    }
+
     /// <summary>只发用量，不碰线程内容：收尾后界面会来问一次，不能拿库里的旧副本覆盖流式结果。</summary>
     private void SendStats(string id, CenterConnection sender)
     {
@@ -275,7 +298,8 @@ public sealed class CenterHub
         }
 
         _store.Rename(id, title);
-        SendState(id, sender);
+        var updated = RequireConversation(id);
+        Broadcast(Settings(updated));
         SendConversationList(sender);
     }
 
@@ -512,7 +536,7 @@ public sealed class CenterHub
             ["modelId"] = message["modelId"]?.GetValue<string>(),
         });
         await CaptureSettingsAsync(live);
-        SendState(id, sender);
+        sender.Send(Settings(RequireConversation(id)));
     }
 
     private async Task SetThinkingAsync(string id, JsonObject message, CenterConnection sender)
@@ -524,7 +548,7 @@ public sealed class CenterHub
             ["level"] = message["level"]?.GetValue<string>(),
         });
         await CaptureSettingsAsync(live);
-        SendState(id, sender);
+        sender.Send(Settings(RequireConversation(id)));
     }
 
     /// <summary>模型与思考等级是对话自己的设置，改了立刻记下来，下次打开还对得上。</summary>

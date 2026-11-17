@@ -129,6 +129,7 @@ const el = {
   sessionFilter: document.getElementById('sessionFilter'),
   sessionRoot: document.getElementById('sessionRoot'),
   sessionTitle: document.getElementById('sessionTitle'),
+  renameBtn: document.getElementById('renameBtn'),
   sessionCwd: document.getElementById('sessionCwd'),
   thread: document.getElementById('thread'),
   threadInner: document.getElementById('threadInner'),
@@ -777,6 +778,7 @@ function renderHeader() {
     el.thinkingSelect.hidden = true;
     el.compactBtn.hidden = true;
     el.ctxUsage.hidden = true;
+    el.renameBtn.hidden = true;
     return;
   }
 
@@ -812,22 +814,27 @@ function renderHeader() {
 
   const levels = (session.levels && session.levels.levels) || [];
   if (levels.length > 1) {
-    if (el.thinkingSelect.options.length !== levels.length) {
+    // 库里记的等级可能不在当前模型的可选范围（换过模型就会出现），照实显示出来。
+    const wanted = state.thinkingLevel || levels[0];
+    const values = levels.includes(wanted) ? levels : [...levels, wanted];
+    if (el.thinkingSelect.dataset.values !== values.join(',')) {
       el.thinkingSelect.innerHTML = '';
-      for (const level of levels) {
+      for (const level of values) {
         const option = document.createElement('option');
         option.value = level;
         option.textContent = level;
         el.thinkingSelect.appendChild(option);
       }
+      el.thinkingSelect.dataset.values = values.join(',');
     }
-    el.thinkingSelect.value = state.thinkingLevel || levels[0];
+    el.thinkingSelect.value = wanted;
     el.thinkingSelect.hidden = false;
   } else {
     el.thinkingSelect.hidden = true;
   }
 
   el.compactBtn.hidden = false;
+  el.renameBtn.hidden = false;
   renderContext();
 }
 
@@ -1006,6 +1013,63 @@ function startSession(cwd) {
 
 el.newSessionBtn.addEventListener('click', newSession);
 el.emptyNewBtn.addEventListener('click', newSession);
+el.renameBtn.addEventListener('click', renameConversation);
+el.sessionTitle.addEventListener('dblclick', renameConversation);
+
+function renameConversation() {
+  const session = current();
+  if (!session) return;
+
+  closeModal();
+  const card = document.createElement('div');
+  card.className = 'modal';
+
+  const title = document.createElement('h3');
+  title.textContent = '给这个对话改个名字';
+  card.appendChild(title);
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = (session.state && session.state.sessionName) || '';
+  card.appendChild(input);
+
+  const actions = document.createElement('div');
+  actions.className = 'modal-actions';
+
+  const cancel = document.createElement('button');
+  cancel.className = 'ghost-btn';
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', closeModal);
+
+  const save = document.createElement('button');
+  save.className = 'primary-btn';
+  save.textContent = '保存';
+  const commit = () => {
+    const next = input.value.trim();
+    if (!next) {
+      toast('名字不能是空的。', 'warning');
+      return;
+    }
+    closeModal();
+    send({ type: 'rename_conversation', id: session.key, title: next });
+  };
+  save.addEventListener('click', commit);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') commit();
+  });
+
+  actions.appendChild(cancel);
+  actions.appendChild(save);
+  card.appendChild(actions);
+
+  el.modal.innerHTML = '';
+  el.modal.appendChild(card);
+  el.modal.hidden = false;
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 0);
+}
 
 el.sessionFilter.addEventListener('input', () => {
   app.filter = el.sessionFilter.value;
@@ -1160,6 +1224,23 @@ function dispatch(message) {
     case 'conversation_saved':
       send({ type: 'list_conversations' });
       break;
+
+    case 'conversation_settings': {
+      const session = app.byKey.get(message.key);
+      if (session) {
+        if (typeof message.title === 'string' && message.title) {
+          session.state.sessionName = message.title;
+        }
+        if (message.model) session.state.model = message.model;
+        if (message.thinkingLevel) session.state.thinkingLevel = message.thinkingLevel;
+      }
+      const entry = app.sessions.find((item) => item.id === message.key);
+      if (entry && message.title) entry.title = message.title;
+      if (message.key === app.currentKey) renderHeader();
+      renderSessionList();
+      break;
+    }
+
 
     case 'session_state':
       onSessionState(message);

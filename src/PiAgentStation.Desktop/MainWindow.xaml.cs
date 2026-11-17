@@ -27,7 +27,7 @@ public partial class MainWindow : Window
                 "PiAgentStation", "WebView2");
             Directory.CreateDirectory(userData);
 
-            var environment = await CoreWebView2Environment.CreateAsync(null, userData);
+            var environment = await CreateEnvironmentAsync(userData);
             await Web.EnsureCoreWebView2Async(environment);
 
             var core = Web.CoreWebView2;
@@ -47,12 +47,37 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             Log.Write("界面没能启动", ex);
+            var busy = ex is System.Runtime.InteropServices.COMException { HResult: unchecked((int)0x800700AA) };
             MessageBox.Show(
-                $"界面没能启动：{ex.Message}",
+                busy
+                    ? "没能打开界面：还有旧的 PiAgentStation 占着缓存目录。" + Environment.NewLine + Environment.NewLine +
+                      "先把之前的窗口都关掉（任务管理器里残留的 msedgewebview2 也一起结束），再打开一次。"
+                    : $"界面没能启动：{ex.Message}",
                 "PiAgentStation",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Close();
+        }
+    }
+
+    /// <summary>
+    /// 上一次被强制结束时，WebView2 的浏览器进程可能还占着缓存目录（0x800700AA）。
+    /// 这种情况等一会儿重试通常就好了，不必让用户自己去清理。
+    /// </summary>
+    private static async Task<CoreWebView2Environment> CreateEnvironmentAsync(string userData)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await CoreWebView2Environment.CreateAsync(null, userData);
+            }
+            catch (Exception ex) when (attempt < 2 &&
+                ex is System.Runtime.InteropServices.COMException { HResult: unchecked((int)0x800700AA) })
+            {
+                Log.Write($"缓存目录被占用，{attempt + 1} 次重试");
+                await Task.Delay(1500);
+            }
         }
     }
 

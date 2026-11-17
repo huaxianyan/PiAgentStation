@@ -233,6 +233,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
   min-height: 58px;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.icon-btn.small {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  opacity: .55;
+}
+
+.icon-btn.small:hover { opacity: 1; }
+
 .title-block { flex: 1; min-width: 0; }
 .title-block h1 { margin: 0; font-size: 14px; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .title-block .sub { font-size: 11.5px; color: var(--text-mute); font-family: var(--mono); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
