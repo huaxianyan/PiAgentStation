@@ -60,8 +60,26 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            Log.Write("窗口位置读不出来", ex);
+            Log.Write("窗口位置读不出来，按默认位置开窗", ex);
         }
+    }
+
+    /// <summary>
+    /// 关窗口前先把 WebView2 明确释放掉。让它在窗口销毁之后被 GC 收，
+    /// 浏览器那套 GDI 资源会在 WPF 已经拆掉窗口时回收，容易连带整进程一起崩。
+    /// </summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        try
+        {
+            Web?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Write("关窗口时释放浏览器出错", ex);
+        }
+
+        base.OnClosing(e);
     }
 
     protected override void OnClosed(EventArgs e)
@@ -72,9 +90,13 @@ public partial class MainWindow : Window
                 ? new WindowBounds(Left, Top, Width, Height)
                 : new WindowBounds(RestoreBounds.Left, RestoreBounds.Top, RestoreBounds.Width, RestoreBounds.Height);
 
+            // 先写临时文件再换上去：上次进程要是写到一半崩了，留下的是空文件，
+            // 下次启动就得从默认位置开窗。
             var path = Path.Combine(CenterUrl.DirectoryPath, "window.json");
+            var temp = path + ".tmp";
             Directory.CreateDirectory(CenterUrl.DirectoryPath);
-            File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(bounds));
+            File.WriteAllText(temp, System.Text.Json.JsonSerializer.Serialize(bounds));
+            File.Move(temp, path, overwrite: true);
         }
         catch (Exception ex)
         {
