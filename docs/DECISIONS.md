@@ -20,6 +20,13 @@
 
 ## D3 页面由中心托管，桌面壳与浏览器共用一份前端
 
-前端只有 `src/PiAgentStation.Server/wwwroot` 一份。桌面客户端是 WebView2 壳，加载中心地址；
+前端只有 `src/MAStation/wwwroot` 一份。桌面客户端是 WebView2 壳，加载中心地址；
 手机浏览器打开同一地址即可。命令与事件都走 `/ws?token=`，不再依赖 `chrome.webview` 桥，
 所以同一套 `app.js` 在两种环境里行为一致。
+
+## D4 命名：中心 MAStation，客户端 PiAgentStation
+
+2026-11-17 用户定。MA 既是 Main 也是 Main Agent 的缩写，中心就叫 MAStation；面向用户打开的那个
+窗口叫 PiAgentStation。两个名字分工固定：说 MAStation 指部署在中心那套服务，说 PiAgentStation
+指客户端。程序集、日志目录、令牌位置都按这个分：中心写 `%LOCALAPPDATA%\MAStation`，
+客户端写 `%LOCALAPPDATA%\PiAgentStation`。

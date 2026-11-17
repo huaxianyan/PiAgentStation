@@ -1,11 +1,11 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using PiAgentStation.Server.Rpc;
-using PiAgentStation.Server.Sessions;
+using MAStation.Rpc;
+using MAStation.Sessions;
 using PiAgentStation.Shared;
 
-namespace PiAgentStation.Server;
+namespace MAStation;
 
 /// <summary>
 /// 中心的会话管理：每个会话一个 <c>pi --mode rpc</c> 子进程，命令的应答回到发起连接，
@@ -40,6 +40,7 @@ public sealed class CenterHub
         connection.Send(new JsonObject
         {
             ["type"] = "hello",
+            ["center"] = "MAStation",
             ["version"] = typeof(CenterHub).Assembly.GetName().Version?.ToString() ?? "0",
             ["sessionRoot"] = SessionStore.RootDirectory,
         });

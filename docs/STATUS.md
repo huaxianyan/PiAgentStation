@@ -2,8 +2,8 @@
 
 ## 当前主线
 
-- 现在在做什么：已经分成「中心 + 客户端」。中心管 Pi 子进程、会话与前端托管，客户端只连中心；
-  桌面壳与手机浏览器跑同一份前端。
+- 现在在做什么：中心（MAStation）管 Pi 子进程、会话与前端托管，客户端（PiAgentStation）只连中心；
+  桌面壳与手机浏览器跑同一份前端。中心与客户端都已在本机跑起来，可实测。
 - 下一步：手机端能用（现在只是同一页面能打开，还要按窄屏调）、中心常驻运行（开机自启或服务化）、
   `@文件` 补全、终端面板、会话重命名与删除。
 - 已知阻塞：无。中心默认只监听本机，局域网开放要用户明确授权。
@@ -35,15 +35,26 @@
 
 - 用户 2026-11-17 定下目标形态：一套中心负责跟 Pi 打交道，PC 与手机都连这套中心；日后客户端再加
   host 能力，用中心的 Pi 操作别的设备。原「只做 PC 端」的约束作废，见 `docs/DECISIONS.md`。
-- 改了什么：新增 `src/PiAgentStation.Server`（ASP.NET Core，管 pi 子进程、会话扫描、`/ws`、
+- 改了什么：新增 `src/MAStation`（ASP.NET Core，管 pi 子进程、会话扫描、`/ws`、
   托管前端）；桌面端退化成 WebView2 壳，加载中心地址；`AppBridge` 变成 `CenterHub`，
   命令应答回发起连接、会话事件广播给所有连接。前端从 `chrome.webview` 桥换成 WebSocket。
-- 安全：中心默认只监听 `127.0.0.1:8787`；`/ws` 要令牌，令牌文件在 `%LOCALAPPDATA%\PiAgentStation\center-token.txt`。
+- 安全：中心默认只监听 `127.0.0.1:8787`；`/ws` 要令牌，令牌文件在 `%LOCALAPPDATA%\MAStation\token.txt`。
 - 验证（2026-11-17，真窗口 + CDP + 第二个 WebSocket 客户端）：
   - `scripts/ui-smoke.mjs` 通过：连接状态「已连接」、新会话、流式、收尾、侧栏刷新。
   - 第二个客户端 `list_sessions` 拿到同一份会话（1 条），`open_session` 拿到 3 条历史。
   - 桌面窗口里发一条消息，第二个客户端收到同一条 `text_delta` 与 `agent_settled`，key 一致。
   - 同一会话打开两次只产生 1 个 key，即一个子进程，满足单写者。
 - 边界：局域网与 TLS 没做；手机端只验证了同一页面能被打开（未做窄屏适配）。
+
+## STATUS-004：中心定名 MAStation，与客户端分家
+
+- 用户 2026-11-17 定名：中心叫 MAStation（MA 既是 Main 也是 Main Agent），客户端仍是 PiAgentStation。
+- 改了什么：`src/PiAgentStation.Server` → `src/MAStation`，程序集与 exe 变成 `MAStation`；
+  中心日志写 `%LOCALAPPDATA%\MAStation\logs\center.log`，令牌文件 `%LOCALAPPDATA%\MAStation	oken.txt`；
+  环境变量改为 `MASTATION_LISTEN` / `MASTATION_TOKEN`；客户端从中心的令牌文件自动读取。
+- 界面：连接状态显示成「已连接 · MAStation」；新建会话语义改为「填中心机器上的目录」；
+  空状态文案不再说「本机」。
+- 验证：`dotnet build PiAgentStation.slnx` 0 警告 0 错误；`dev-run.ps1` 起中心与客户端，
+  health 返回真实会话根目录，界面连上后列出 170 个会话。
 
 ## 归档索引

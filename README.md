@@ -21,7 +21,7 @@ Pi 的客户端。形态是一个中心加多个薄客户端：中心跑 Pi、�
 pwsh -File scripts/dev-run.ps1        # 起中心 + 桌面客户端
 ```
 
-中心会在 `%LOCALAPPDATA%\PiAgentStation\center-token.txt` 生成访问令牌，客户端自动读取。
+中心会在 `%LOCALAPPDATA%\MAStation\token.txt` 生成访问令牌，客户端自动读取。
 想隔离会话记录，不污染真实会话：
 
 ```powershell
@@ -51,8 +51,8 @@ node scripts/ui-smoke.mjs --cwd E:\tmp\pigui-smoke-ws   # 主链路冒烟，会�
 ## 结构
 
 ```text
-src/PiAgentStation.Server/    中心：pi 子进程、会话扫描、WebSocket、托管前端
-src/PiAgentStation.Server/wwwroot/   前端（桌面与手机共用）
+src/MAStation/    中心：pi 子进程、会话扫描、WebSocket、托管前端
+src/MAStation/wwwroot/   前端（桌面与手机共用）
 src/PiAgentStation.Desktop/   客户端：WebView2 壳，只加载中心地址
 src/Shared/Log.cs             两边共用的文件日志
 ```

@@ -4,8 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>PiAgentStation.Server</AssemblyName>
-    <RootNamespace>PiAgentStation.Server</RootNamespace>
+    <AssemblyName>MAStation</AssemblyName>
+    <RootNamespace>MAStation</RootNamespace>
     <Version>0.2.0</Version>
   </PropertyGroup>
 

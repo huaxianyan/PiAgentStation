@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
+using FileLog = PiAgentStation.Shared.Log;
 
-namespace PiAgentStation.Server;
+namespace MAStation;
 
 /// <summary>
 /// 把框架日志（Kestrel、中间件、异常）写进同一个文件。
@@ -39,7 +40,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
                 return;
             }
 
-            Shared.Log.Write($"[{logLevel}] {_category}: {formatter(state, exception)}", exception);
+            FileLog.Write($"[{logLevel}] {_category}: {formatter(state, exception)}", exception);
         }
     }
 }

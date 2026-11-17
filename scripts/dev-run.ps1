@@ -1,4 +1,4 @@
-﻿# 起中心 + 桌面客户端。
+﻿# 起 MAStation（中心）+ PiAgentStation（桌面客户端）。
 #
 # 用法：
 #   pwsh -File scripts/dev-run.ps1
@@ -12,17 +12,17 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
-$serverProject = Join-Path $root "src\PiAgentStation.Server\PiAgentStation.Server.csproj"
+$serverProject = Join-Path $root "src/MAStation/MAStation.csproj"
 $desktopProject = Join-Path $root "src\PiAgentStation.Desktop\PiAgentStation.Desktop.csproj"
-$serverExe = Join-Path $root "src\PiAgentStation.Server\bin\Debug\net10.0\PiAgentStation.Server.exe"
+$serverExe = Join-Path $root "src/MAStation/bin/Debug/net10.0/MAStation.exe"
 $desktopExe = Join-Path $root "src\PiAgentStation.Desktop\bin\Debug\net10.0-windows\PiAgentStation.exe"
 $logDir = Join-Path $env:LOCALAPPDATA "PiAgentStation\logs"
 
-Get-Process PiAgentStation, PiAgentStation.Server -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process PiAgentStation, MAStation -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 400
 
 dotnet build $serverProject -v q --nologo
-if ($LASTEXITCODE -ne 0) { throw "中心构建失败" }
+if ($LASTEXITCODE -ne 0) { throw "MAStation 构建失败" }
 dotnet build $desktopProject -v q --nologo
 if ($LASTEXITCODE -ne 0) { throw "客户端构建失败" }
 
@@ -32,7 +32,7 @@ if ($SessionDir) {
     $env:PI_CODING_AGENT_SESSION_DIR = $SessionDir
     Write-Host "会话目录：$SessionDir"
 }
-if ($Listen) { $env:PIAGENTSTATION_LISTEN = $Listen }
+if ($Listen) { $env:MASTATION_LISTEN = $Listen }
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9222"
 
 # 中心的启动地址印在 center.out.log 里，里面带访问令牌。
@@ -54,5 +54,5 @@ Start-Process -FilePath $desktopExe `
     -RedirectStandardOutput (Join-Path $logDir "desktop.out.log") `
     -RedirectStandardError (Join-Path $logDir "desktop.err.log") | Out-Null
 Write-Host "中心：$probe"
-Write-Host "令牌：$(Join-Path $env:LOCALAPPDATA 'PiAgentStation\center-token.txt')"
+Write-Host "令牌：$(Join-Path $env:LOCALAPPDATA 'MAStation/token.txt')"
 Write-Host "日志：$logDir"

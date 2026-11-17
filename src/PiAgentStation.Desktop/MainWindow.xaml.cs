@@ -90,13 +90,15 @@ internal static class CenterUrl
 
     public static string ConfigPath { get; } = Path.Combine(DirectoryPath, "center.json");
 
-    public static string TokenPath { get; } = Path.Combine(DirectoryPath, "center-token.txt");
+    /// <summary>中心与本机同一台机器时，直接读中心写下的令牌文件。</summary>
+    public static string TokenPath { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MAStation", "token.txt");
 
     public static string Resolve()
     {
         var (baseUrl, token) = ReadConfig();
         token ??= TryRead(TokenPath)
-            ?? Environment.GetEnvironmentVariable("PIAGENTSTATION_TOKEN")?.Trim();
+            ?? Environment.GetEnvironmentVariable("MASTATION_TOKEN")?.Trim();
 
         if (string.IsNullOrEmpty(token))
         {

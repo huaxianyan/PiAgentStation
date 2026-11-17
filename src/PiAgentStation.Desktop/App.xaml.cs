@@ -8,6 +8,7 @@ public partial class App : Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
+        Log.Initialize("PiAgentStation", "app.log");
         Log.Write($"启动：{Environment.ProcessPath}");
 
         DispatcherUnhandledException += (_, args) =>

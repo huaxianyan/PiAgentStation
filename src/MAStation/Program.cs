@@ -1,11 +1,13 @@
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
-using PiAgentStation.Server;
-using PiAgentStation.Server.Sessions;
+using MAStation;
+using MAStation.Sessions;
 using PiAgentStation.Shared;
 
-var listen = Environment.GetEnvironmentVariable("PIAGENTSTATION_LISTEN") ?? "http://127.0.0.1:8787";
+PiAgentStation.Shared.Log.Initialize("MAStation", "center.log");
+
+var listen = Environment.GetEnvironmentVariable("MASTATION_LISTEN") ?? "http://127.0.0.1:8787";
 var token = TokenStore.Resolve();
 
 var builder = WebApplication.CreateBuilder(args);
@@ -54,7 +56,7 @@ app.Lifetime.ApplicationStopping.Register(() =>
 });
 
 Log.Write($"中心启动 {listen}，会话目录 {SessionStore.RootDirectory}");
-Console.WriteLine($"PiAgentStation 中心已启动：{listen}");
+Console.WriteLine($"MAStation 已启动：{listen}");
 Console.WriteLine($"打开地址：{listen.TrimEnd('/')}/");
 Console.WriteLine($"访问令牌：见 {TokenStore.FilePath}（桌面客户端会自动读取；手机用 ?token= 拼在地址后）");
 
@@ -64,11 +66,11 @@ internal static class TokenStore
 {
     public static string FilePath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "PiAgentStation", "center-token.txt");
+        "MAStation", "token.txt");
 
     public static string Resolve()
     {
-        var fromEnvironment = Environment.GetEnvironmentVariable("PIAGENTSTATION_TOKEN");
+        var fromEnvironment = Environment.GetEnvironmentVariable("MASTATION_TOKEN");
         if (!string.IsNullOrWhiteSpace(fromEnvironment))
         {
             return fromEnvironment.Trim();

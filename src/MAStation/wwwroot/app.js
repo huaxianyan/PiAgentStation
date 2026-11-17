@@ -29,7 +29,7 @@ function send(message) {
 }
 
 function setConnectionState(text, ok) {
-  el.connStatus.textContent = text;
+  el.connStatus.textContent = app.centerName ? text + ' · ' + app.centerName : text;
   el.connStatus.className = 'conn' + (ok === true ? ' ok' : ok === false ? ' off' : '');
 }
 
@@ -86,6 +86,7 @@ function connect() {
 const app = {
   sessions: [],
   sessionRoot: '',
+  centerName: '',
   filter: '',
   currentKey: null,
   byKey: new Map(),
@@ -495,7 +496,9 @@ function renderSessionList() {
     const label = document.createElement('div');
     label.className = 'group-label';
     label.title = cwd;
-    label.innerHTML = '<span class="folder">' + escapeHtml(baseName(cwd) || cwd) + '</span>';
+    const folder = baseName(cwd);
+    const labelText = !folder || folder === '.' || folder === '..' ? '未标明目录' : folder;
+    label.innerHTML = '<span class="folder">' + escapeHtml(labelText) + '</span>';
     el.sessionList.appendChild(label);
 
     for (const session of sessions) {
@@ -1086,6 +1089,10 @@ let pendingCwd = '';
 function dispatch(message) {
   switch (message.type) {
     case 'hello':
+      if (message.center) {
+        app.centerName = message.center;
+        if (transport.connected) setConnectionState('已连接', true);
+      }
       if (message.sessionRoot) {
         app.sessionRoot = message.sessionRoot;
         el.sessionRoot.textContent = app.sessionRoot;
