@@ -1,7 +1,8 @@
 using System.Windows;
 using System.Windows.Threading;
+using PiAgentStation.Shared;
 
-namespace PiAgentStation;
+namespace PiAgentStation.Desktop;
 
 public partial class App : Application
 {

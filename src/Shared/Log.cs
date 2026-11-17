@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace PiAgentStation;
+namespace PiAgentStation.Shared;
 
 /// <summary>
 /// 极简运行日志。这个进程是 WinExe，没有控制台，出问题时只能靠文件留证据。

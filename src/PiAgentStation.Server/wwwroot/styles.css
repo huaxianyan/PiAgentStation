@@ -171,6 +171,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .ext-status { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .ext-status span { white-space: nowrap; overflow: hidden; max-width: 240px; text-overflow: ellipsis; }
 
+.conn { color: var(--text-mute); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.conn.ok { color: var(--ok); }
+.conn.off { color: var(--danger); }
+
 .session-root { font-family: var(--mono); font-size: 10px; opacity: 0.6; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 /* ---------- 主区 ---------- */

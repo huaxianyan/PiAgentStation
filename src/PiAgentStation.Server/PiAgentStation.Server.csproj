@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>PiAgentStation.Server</AssemblyName>
+    <RootNamespace>PiAgentStation.Server</RootNamespace>
+    <Version>0.2.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\Log.cs" Link="Log.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 从 bin 目录直接启动时 content root 就是 exe 所在目录，页面要跟着复制过去。 -->
+    <Content Update="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

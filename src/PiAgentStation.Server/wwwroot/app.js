@@ -1,23 +1,81 @@
 'use strict';
 
 /* ------------------------------------------------------------------ *
- * 与宿主通信
+ * 与中心通信
+ *
+ * 页面由中心托管，命令与事件都走同一条 WebSocket，所以桌面壳和手机浏览器
+ * 用的是同一套前端代码。令牌由中心生成，桌面壳拼在地址上，手机手动带上。
  * ------------------------------------------------------------------ */
 
-const host = window.chrome && window.chrome.webview ? window.chrome.webview : null;
+const transport = {
+  socket: null,
+  connected: false,
+  attempts: 0,
+  queue: [],
+  token: new URLSearchParams(location.search).get('token') || '',
+};
 
 function send(message) {
-  if (host) {
-    host.postMessage(message);
+  if (transport.connected && transport.socket && transport.socket.readyState === WebSocket.OPEN) {
+    transport.socket.send(JSON.stringify(message));
+    return true;
   }
+
+  // 掉线时只留住能自愈的请求，别的操作直接告诉用户没连上。
+  if (message.type === 'list_sessions' && !transport.queue.some((item) => item.type === 'list_sessions')) {
+    transport.queue.push(message);
+  }
+  return false;
 }
 
-if (host) {
-  host.addEventListener('message', (event) => {
-    const data = event.data;
+function setConnectionState(text, ok) {
+  el.connStatus.textContent = text;
+  el.connStatus.className = 'conn' + (ok === true ? ' ok' : ok === false ? ' off' : '');
+}
+
+function connect() {
+  if (!transport.token) {
+    setConnectionState('这个地址缺少访问令牌，从中心启动时打印的地址打开', false);
+    return;
+  }
+
+  const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+  const socket = new WebSocket(`${scheme}://${location.host}/ws?token=${encodeURIComponent(transport.token)}`);
+  transport.socket = socket;
+  setConnectionState(transport.attempts ? '正在重连…' : '正在连接…');
+
+  socket.addEventListener('open', () => {
+    transport.connected = true;
+    transport.attempts = 0;
+    setConnectionState('已连接', true);
+    while (transport.queue.length) {
+      socket.send(JSON.stringify(transport.queue.shift()));
+    }
+    send({ type: 'list_sessions' });
+  });
+
+  socket.addEventListener('message', (event) => {
+    let data;
+    try {
+      data = JSON.parse(event.data);
+    } catch {
+      return;
+    }
     if (data && typeof data === 'object') {
       dispatch(data);
     }
+  });
+
+  socket.addEventListener('close', () => {
+    transport.connected = false;
+    transport.attempts += 1;
+    setConnectionState('连接断开，正在自动重连', false);
+    const delay = Math.min(1000 * 2 ** (transport.attempts - 1), 15000);
+    setTimeout(connect, delay);
+  });
+
+  socket.addEventListener('error', () => {
+    // 具体原因看 close。
   });
 }
 
@@ -97,6 +155,7 @@ const el = {
   modal: document.getElementById('modal'),
   toasts: document.getElementById('toasts'),
   extStatus: document.getElementById('extStatus'),
+  connStatus: document.getElementById('connStatus'),
   widgetStrip: document.getElementById('widgetStrip'),
   starters: document.getElementById('starters'),
   fileInput: document.getElementById('fileInput'),
@@ -809,13 +868,85 @@ function openSession(session) {
     return;
   }
 
-  setOverlay('正在启动 Pi…');
+  setOverlay('正在打开会话…');
   send({ type: 'open_session', path: session.path });
   app.pendingCwd = session.cwd || '';
 }
 
 function newSession() {
-  send({ type: 'pick_folder', initial: app.lastCwd || app.activeCwd || '' });
+  askCwd();
+}
+
+function askCwd() {
+  closeModal();
+  const card = document.createElement('div');
+  card.className = 'modal';
+
+  const title = document.createElement('h3');
+  title.textContent = '在哪个目录开会话';
+  card.appendChild(title);
+
+  const note = document.createElement('div');
+  note.className = 'modal-message';
+  note.textContent = '填中心那台机器上的绝对路径。';
+  card.appendChild(note);
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'D:\work\project';
+  input.value = app.lastCwd || app.activeCwd || '';
+  card.appendChild(input);
+
+  const recent = [...new Set(app.sessions.map((session) => session.cwd).filter(Boolean))].slice(0, 4);
+  if (recent.length) {
+    const list = document.createElement('div');
+    list.className = 'options';
+    for (const cwd of recent) {
+      const option = document.createElement('button');
+      option.className = 'option';
+      option.textContent = cwd;
+      option.addEventListener('click', () => {
+        input.value = cwd;
+        input.focus();
+      });
+      list.appendChild(option);
+    }
+    card.appendChild(list);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'modal-actions';
+  const cancel = document.createElement('button');
+  cancel.className = 'ghost-btn';
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', closeModal);
+  const start = document.createElement('button');
+  start.className = 'primary-btn';
+  start.textContent = '开始';
+  start.addEventListener('click', () => startSession(input.value.trim()));
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') startSession(input.value.trim());
+  });
+  actions.appendChild(cancel);
+  actions.appendChild(start);
+  card.appendChild(actions);
+
+  el.modal.innerHTML = '';
+  el.modal.appendChild(card);
+  el.modal.hidden = false;
+  setTimeout(() => input.focus(), 0);
+}
+
+function startSession(cwd) {
+  if (!cwd) return;
+  closeModal();
+  setOverlay('正在打开会话…');
+  pendingCwd = cwd;
+  app.lastCwd = cwd;
+  if (!send({ type: 'new_session', cwd })) {
+    setOverlay(null);
+    toast('还没连上中心，等连接恢复再试。', 'warning');
+  }
 }
 
 el.newSessionBtn.addEventListener('click', newSession);
@@ -954,6 +1085,14 @@ let pendingCwd = '';
 
 function dispatch(message) {
   switch (message.type) {
+    case 'hello':
+      if (message.sessionRoot) {
+        app.sessionRoot = message.sessionRoot;
+        el.sessionRoot.textContent = app.sessionRoot;
+        el.sessionRoot.title = app.sessionRoot;
+      }
+      break;
+
     case 'session_list':
       app.sessions = message.items || [];
       app.sessionRoot = message.root || '';
@@ -988,15 +1127,6 @@ function dispatch(message) {
 
     case 'process_exit':
       onProcessExit(message);
-      break;
-
-    case 'folder_picked':
-      if (message.path) {
-        app.lastCwd = message.path;
-        setOverlay('正在启动 Pi…');
-        pendingCwd = message.path;
-        send({ type: 'new_session', cwd: message.path });
-      }
       break;
 
     case 'error':
@@ -1475,8 +1605,5 @@ renderSessionList();
 renderExtStatus();
 renderComposerState();
 showWorkspace(false);
-send({ type: 'list_sessions' });
-
-if (!host) {
-  toast('这个界面要在 PiAgentStation 里打开。', 'error');
-}
+setConnectionState('正在连接…');
+connect();

@@ -7,15 +7,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>PiAgentStation</AssemblyName>
-    <RootNamespace>PiAgentStation</RootNamespace>
-    <Version>0.1.0</Version>
+    <RootNamespace>PiAgentStation.Desktop</RootNamespace>
+    <Version>0.2.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="wwwroot\**\*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <Compile Include="..\Shared\Log.cs" Link="Log.cs" />
   </ItemGroup>
 
   <ItemGroup>

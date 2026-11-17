@@ -1,0 +1,45 @@
+using Microsoft.Extensions.Logging;
+
+namespace PiAgentStation.Server;
+
+/// <summary>
+/// 把框架日志（Kestrel、中间件、异常）写进同一个文件。
+/// 这个中心是个后台服务，出问题时没人盯着控制台。
+/// </summary>
+public sealed class FileLoggerProvider : ILoggerProvider
+{
+    public ILogger CreateLogger(string categoryName) => new FileLogger(categoryName);
+
+    public void Dispose()
+    {
+    }
+
+    private sealed class FileLogger : ILogger
+    {
+        private readonly string _category;
+
+        public FileLogger(string category)
+        {
+            _category = category;
+        }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (!IsEnabled(logLevel))
+            {
+                return;
+            }
+
+            Shared.Log.Write($"[{logLevel}] {_category}: {formatter(state, exception)}", exception);
+        }
+    }
+}

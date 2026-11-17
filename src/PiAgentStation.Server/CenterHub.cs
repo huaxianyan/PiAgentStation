@@ -1,13 +1,17 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using PiAgentStation.Rpc;
-using PiAgentStation.Sessions;
+using PiAgentStation.Server.Rpc;
+using PiAgentStation.Server.Sessions;
+using PiAgentStation.Shared;
 
-namespace PiAgentStation;
+namespace PiAgentStation.Server;
 
-/// <summary>界面（WebView2）与 Pi 子进程之间的桥。消息体是 JSON，两边约定 type 字段。</summary>
-public sealed class AppBridge
+/// <summary>
+/// 中心的会话管理：每个会话一个 <c>pi --mode rpc</c> 子进程，命令的应答回到发起连接，
+/// 会话事件广播给所有连接。多个客户端打开同一个会话时复用同一个子进程，只有一个写者。
+/// </summary>
+public sealed class CenterHub
 {
     private sealed class Entry
     {
@@ -16,39 +20,54 @@ public sealed class AppBridge
         public string? SessionPath { get; set; }
     }
 
-    private readonly object _gate = new();
-    private readonly Dictionary<string, Entry> _byKey = new();
-    private readonly Dictionary<string, string> _keyByPath = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>发往界面的 JSON 字符串。已切回 UI 线程。</summary>
-    public event Action<string>? Outbound;
-
-    private static readonly JsonSerializerOptions SerializerOptions = new()
+    public static readonly JsonSerializerOptions SerializerOptions = new()
     {
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public void Handle(string json)
+    private readonly object _gate = new();
+    private readonly Dictionary<string, Entry> _byKey = new();
+    private readonly Dictionary<string, string> _keyByPath = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<CenterConnection> _clients = new();
+
+    public void Join(CenterConnection connection)
     {
-        JsonObject? message;
-        try
+        lock (_gate)
         {
-            message = JsonNode.Parse(json) as JsonObject;
-        }
-        catch
-        {
-            return;
+            _clients.Add(connection);
         }
 
-        if (message is null)
+        connection.Send(new JsonObject
         {
-            return;
-        }
-
-        _ = Task.Run(() => DispatchAsync(message));
+            ["type"] = "hello",
+            ["version"] = typeof(CenterHub).Assembly.GetName().Version?.ToString() ?? "0",
+            ["sessionRoot"] = SessionStore.RootDirectory,
+        });
     }
 
-    private async Task DispatchAsync(JsonObject message)
+    public void Leave(CenterConnection connection)
+    {
+        lock (_gate)
+        {
+            _clients.Remove(connection);
+        }
+    }
+
+    private void Broadcast(JsonObject payload)
+    {
+        CenterConnection[] targets;
+        lock (_gate)
+        {
+            targets = _clients.ToArray();
+        }
+
+        foreach (var target in targets)
+        {
+            target.Send(payload);
+        }
+    }
+
+    public async Task HandleAsync(JsonObject message, CenterConnection sender)
     {
         var type = message["type"]?.GetValue<string>();
         var key = message["key"]?.GetValue<string>();
@@ -57,27 +76,27 @@ public sealed class AppBridge
             switch (type)
             {
                 case "list_sessions":
-                    SendSessionList();
+                    SendSessionList(sender);
                     break;
 
                 case "open_session":
-                    await OpenSessionAsync(message);
+                    await OpenSessionAsync(message, sender);
                     break;
 
                 case "new_session":
-                    await NewSessionAsync(message);
+                    await NewSessionAsync(message, sender);
                     break;
 
                 case "refresh_state":
-                    await SendStateAsync(Require(key));
+                    await SendStateAsync(Require(key), sender);
                     break;
 
                 case "refresh_stats":
-                    await SendStatsAsync(Require(key));
+                    await SendStatsAsync(Require(key), sender);
                     break;
 
                 case "prompt":
-                    await PromptAsync(Require(key), message);
+                    await PromptAsync(Require(key), message, sender);
                     break;
 
                 case "abort":
@@ -89,15 +108,15 @@ public sealed class AppBridge
                     break;
 
                 case "set_model":
-                    await SetModelAsync(Require(key), message);
+                    await SetModelAsync(Require(key), message, sender);
                     break;
 
                 case "set_thinking":
-                    await SetThinkingAsync(Require(key), message);
+                    await SetThinkingAsync(Require(key), message, sender);
                     break;
 
                 case "list_models":
-                    await SendModelsAsync(Require(key));
+                    await SendModelsAsync(Require(key), sender);
                     break;
 
                 case "extension_response":
@@ -109,7 +128,7 @@ public sealed class AppBridge
                     break;
 
                 default:
-                    Emit(new JsonObject
+                    sender.Send(new JsonObject
                     {
                         ["type"] = "error",
                         ["key"] = key,
@@ -121,7 +140,7 @@ public sealed class AppBridge
         catch (Exception ex)
         {
             Log.Write($"命令 {type} 失败（key={key}）", ex);
-            Emit(new JsonObject
+            sender.Send(new JsonObject
             {
                 ["type"] = "error",
                 ["key"] = key,
@@ -140,7 +159,7 @@ public sealed class AppBridge
         return key;
     }
 
-    private void SendSessionList()
+    private void SendSessionList(CenterConnection sender)
     {
         var items = new JsonArray();
         foreach (var summary in SessionStore.List())
@@ -157,7 +176,7 @@ public sealed class AppBridge
             });
         }
 
-        Emit(new JsonObject
+        sender.Send(new JsonObject
         {
             ["type"] = "session_list",
             ["root"] = SessionStore.RootDirectory,
@@ -165,7 +184,7 @@ public sealed class AppBridge
         });
     }
 
-    private async Task OpenSessionAsync(JsonObject message)
+    private async Task OpenSessionAsync(JsonObject message, CenterConnection sender)
     {
         var path = message["path"]?.GetValue<string>()
             ?? throw new InvalidOperationException("缺少会话文件路径。");
@@ -180,10 +199,10 @@ public sealed class AppBridge
         }
 
         var entry = GetOrStart(path, summary.Cwd, path);
-        await SendStateAsync(entry.Key);
+        await SendStateAsync(entry.Key, sender);
     }
 
-    private async Task NewSessionAsync(JsonObject message)
+    private async Task NewSessionAsync(JsonObject message, CenterConnection sender)
     {
         var cwd = message["cwd"]?.GetValue<string>();
         if (string.IsNullOrWhiteSpace(cwd) || !Directory.Exists(cwd))
@@ -192,7 +211,7 @@ public sealed class AppBridge
         }
 
         var entry = GetOrStart(null, cwd, null);
-        await SendStateAsync(entry.Key);
+        await SendStateAsync(entry.Key, sender);
     }
 
     private Entry GetOrStart(string? sessionPath, string workingDirectory, string? resumePath)
@@ -210,7 +229,7 @@ public sealed class AppBridge
             var session = PiSession.Start(workingDirectory, resumePath);
             var entry = new Entry { Key = key, Session = session, SessionPath = sessionPath };
 
-            session.RecordReceived += record => Emit(new JsonObject
+            session.RecordReceived += record => Broadcast(new JsonObject
             {
                 ["type"] = "event",
                 ["key"] = key,
@@ -219,7 +238,6 @@ public sealed class AppBridge
 
             session.Exited += (code, stderr) =>
             {
-                Log.Write($"子进程退出 key={key} code={code} stderr={stderr.Replace(Environment.NewLine, " | ")}");
                 lock (_gate)
                 {
                     if (_byKey.TryGetValue(key, out var current) && ReferenceEquals(current.Session, session))
@@ -232,7 +250,8 @@ public sealed class AppBridge
                     }
                 }
 
-                Emit(new JsonObject
+                Log.Write($"子进程退出 key={key} code={code} stderr={stderr.Replace(Environment.NewLine, " | ")}");
+                Broadcast(new JsonObject
                 {
                     ["type"] = "process_exit",
                     ["key"] = key,
@@ -261,23 +280,13 @@ public sealed class AppBridge
         }
     }
 
-    private async Task SendStateAsync(string key)
+    private async Task SendStateAsync(string key, CenterConnection sender)
     {
         var entry = Find(key);
         var state = await entry.Session.SendAsync(new JsonObject { ["type"] = "get_state" });
         var messages = await entry.Session.SendAsync(new JsonObject { ["type"] = "get_messages" });
         var stats = await entry.Session.SendAsync(new JsonObject { ["type"] = "get_session_stats" });
         var stateData = Data(state);
-        var payload = new JsonObject
-        {
-            ["type"] = "session_state",
-            ["key"] = key,
-            ["cwd"] = entry.Session.WorkingDirectory,
-            // 响应里的节点已经挂在原响应树上，挂到新对象前必须深拷贝。
-            ["state"] = stateData?.DeepClone(),
-            ["messages"] = Data(messages)?["messages"]?.DeepClone(),
-            ["stats"] = Data(stats)?.DeepClone(),
-        };
 
         var sessionFile = stateData?["sessionFile"]?.GetValue<string>();
         if (!string.IsNullOrEmpty(sessionFile))
@@ -289,14 +298,23 @@ public sealed class AppBridge
             }
         }
 
-        Emit(payload);
+        sender.Send(new JsonObject
+        {
+            ["type"] = "session_state",
+            ["key"] = key,
+            ["cwd"] = entry.Session.WorkingDirectory,
+            // 响应里的节点已经挂在原响应树上，挂到新对象前必须深拷贝。
+            ["state"] = stateData?.DeepClone(),
+            ["messages"] = Data(messages)?["messages"]?.DeepClone(),
+            ["stats"] = Data(stats)?.DeepClone(),
+        });
     }
 
-    private async Task SendStatsAsync(string key)
+    private async Task SendStatsAsync(string key, CenterConnection sender)
     {
         var entry = Find(key);
         var stats = await entry.Session.SendAsync(new JsonObject { ["type"] = "get_session_stats" });
-        Emit(new JsonObject
+        sender.Send(new JsonObject
         {
             ["type"] = "stats",
             ["key"] = key,
@@ -304,7 +322,7 @@ public sealed class AppBridge
         });
     }
 
-    private async Task PromptAsync(string key, JsonObject message)
+    private async Task PromptAsync(string key, JsonObject message, CenterConnection sender)
     {
         var entry = Find(key);
         var command = new JsonObject
@@ -325,7 +343,7 @@ public sealed class AppBridge
         }
 
         var response = await entry.Session.SendAsync(command, TimeSpan.FromSeconds(60));
-        Emit(new JsonObject
+        sender.Send(new JsonObject
         {
             ["type"] = "prompt_accepted",
             ["key"] = key,
@@ -339,7 +357,7 @@ public sealed class AppBridge
         await entry.Session.SendAsync(new JsonObject { ["type"] = command }, TimeSpan.FromSeconds(120));
     }
 
-    private async Task SetModelAsync(string key, JsonObject message)
+    private async Task SetModelAsync(string key, JsonObject message, CenterConnection sender)
     {
         var entry = Find(key);
         var command = new JsonObject
@@ -349,10 +367,10 @@ public sealed class AppBridge
             ["modelId"] = message["modelId"]?.GetValue<string>(),
         };
         await entry.Session.SendAsync(command);
-        await SendStateAsync(key);
+        await SendStateAsync(key, sender);
     }
 
-    private async Task SetThinkingAsync(string key, JsonObject message)
+    private async Task SetThinkingAsync(string key, JsonObject message, CenterConnection sender)
     {
         var entry = Find(key);
         var command = new JsonObject
@@ -361,15 +379,15 @@ public sealed class AppBridge
             ["level"] = message["level"]?.GetValue<string>(),
         };
         await entry.Session.SendAsync(command);
-        await SendStateAsync(key);
+        await SendStateAsync(key, sender);
     }
 
-    private async Task SendModelsAsync(string key)
+    private async Task SendModelsAsync(string key, CenterConnection sender)
     {
         var entry = Find(key);
         var response = await entry.Session.SendAsync(new JsonObject { ["type"] = "get_available_models" });
         var levels = await entry.Session.SendAsync(new JsonObject { ["type"] = "get_available_thinking_levels" });
-        Emit(new JsonObject
+        sender.Send(new JsonObject
         {
             ["type"] = "models",
             ["key"] = key,
@@ -400,7 +418,7 @@ public sealed class AppBridge
             response["value"] = message["value"]?.DeepClone();
         }
 
-        // 扩展应答不产生普通 response，按请求 id 直接写。
+        // 扩展应答不产生普通响应，按请求 id 直接写。
         entry.Session.SendNoReply(response);
     }
 
@@ -448,10 +466,5 @@ public sealed class AppBridge
         }
 
         return response["data"] as JsonObject;
-    }
-
-    private void Emit(JsonObject payload)
-    {
-        Outbound?.Invoke(payload.ToJsonString(SerializerOptions));
     }
 }

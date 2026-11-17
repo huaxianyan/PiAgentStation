@@ -26,7 +26,7 @@ async function findPage() {
   for (let i = 0; i < 40; i++) {
     try {
       const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-      const page = targets.find((target) => target.type === 'page' && String(target.url).includes('app.local'));
+      const page = targets.find((target) => target.type === 'page' && !String(target.url).startsWith('devtools://'));
       if (page) return page;
     } catch {
       // 应用可能还没起来。
@@ -77,10 +77,14 @@ async function evaluate(expression) {
 await call('Runtime.enable');
 await sleep(800);
 
+const connected = await evaluate('return document.getElementById("connStatus").textContent');
+console.log('连接状态：' + connected);
+if (!connected.includes('已连接')) fail('客户端没有连上中心：' + connected);
+
 const listCount = await evaluate('return document.querySelectorAll(".session-item").length');
 console.log('会话列表条目数（起始）：' + listCount);
 
-await evaluate(`window.chrome.webview.postMessage({ type: 'new_session', cwd: ${JSON.stringify(cwd)} }); return true;`);
+await evaluate(`if (!window.send({ type: 'new_session', cwd: ${JSON.stringify(cwd)} })) fail('还没连上中心'); return true;`);
 
 let ready = false;
 for (let i = 0; i < 90; i++) {

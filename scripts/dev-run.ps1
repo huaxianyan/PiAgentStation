@@ -1,29 +1,58 @@
-# 杀掉旧实例、构建、带调试端口启动 Pi 界面。
+﻿# 起中心 + 桌面客户端。
 #
 # 用法：
 #   pwsh -File scripts/dev-run.ps1
 #   pwsh -File scripts/dev-run.ps1 -SessionDir E:\tmp\pigui-sessions
+#   pwsh -File scripts/dev-run.ps1 -Listen http://0.0.0.0:8787   # 给局域网里的别的设备连
 param(
-    [string]$SessionDir = ""
+    [string]$SessionDir = "",
+    [string]$Listen = ""
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $root "src\PiAgentStation\PiAgentStation.csproj"
-$exe = Join-Path $root "src\PiAgentStation\bin\Debug\net10.0-windows\PiAgentStation.exe"
 
-Get-Process PiAgentStation -ErrorAction SilentlyContinue | Stop-Process -Force
+$serverProject = Join-Path $root "src\PiAgentStation.Server\PiAgentStation.Server.csproj"
+$desktopProject = Join-Path $root "src\PiAgentStation.Desktop\PiAgentStation.Desktop.csproj"
+$serverExe = Join-Path $root "src\PiAgentStation.Server\bin\Debug\net10.0\PiAgentStation.Server.exe"
+$desktopExe = Join-Path $root "src\PiAgentStation.Desktop\bin\Debug\net10.0-windows\PiAgentStation.exe"
+$logDir = Join-Path $env:LOCALAPPDATA "PiAgentStation\logs"
+
+Get-Process PiAgentStation, PiAgentStation.Server -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 400
 
-dotnet build $project -v q --nologo
-if ($LASTEXITCODE -ne 0) { throw "构建失败" }
+dotnet build $serverProject -v q --nologo
+if ($LASTEXITCODE -ne 0) { throw "中心构建失败" }
+dotnet build $desktopProject -v q --nologo
+if ($LASTEXITCODE -ne 0) { throw "客户端构建失败" }
 
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9222"
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 if ($SessionDir) {
     New-Item -ItemType Directory -Force -Path $SessionDir | Out-Null
     $env:PI_CODING_AGENT_SESSION_DIR = $SessionDir
     Write-Host "会话目录：$SessionDir"
 }
+if ($Listen) { $env:PIAGENTSTATION_LISTEN = $Listen }
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9222"
 
-Start-Process -FilePath $exe | Out-Null
-Write-Host "已启动，调试端口 9222"
+# 中心的启动地址印在 center.out.log 里，里面带访问令牌。
+Start-Process -FilePath $serverExe -WorkingDirectory (Split-Path $serverExe) `
+    -RedirectStandardOutput (Join-Path $logDir "center.out.log") `
+    -RedirectStandardError (Join-Path $logDir "center.err.log") | Out-Null
+
+$probe = if ($Listen) { $Listen.Replace("0.0.0.0", "127.0.0.1") } else { "http://127.0.0.1:8787" }
+for ($i = 0; $i -lt 60; $i++) {
+    try {
+        Invoke-WebRequest "$probe/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
+        break
+    } catch {
+        Start-Sleep -Milliseconds 500
+    }
+}
+
+Start-Process -FilePath $desktopExe `
+    -RedirectStandardOutput (Join-Path $logDir "desktop.out.log") `
+    -RedirectStandardError (Join-Path $logDir "desktop.err.log") | Out-Null
+Write-Host "中心：$probe"
+Write-Host "令牌：$(Join-Path $env:LOCALAPPDATA 'PiAgentStation\center-token.txt')"
+Write-Host "日志：$logDir"
