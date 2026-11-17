@@ -57,6 +57,7 @@ public sealed class CenterHub
             ["data"] = _store.DatabasePath,
             ["pi"] = PiStatus(),
             ["listen"] = ListenUrl,
+            ["css"] = _store.GetSetting("custom_css"),
             ["workspaces"] = new JsonArray(RecentWorkspaces().Select(entry => (JsonNode?)JsonValue.Create(entry)).ToArray()),
         });
     }
@@ -152,12 +153,20 @@ public sealed class CenterHub
                     CompleteFiles(Require(key, "对话标识"), message, sender);
                     break;
 
+                case "set_css":
+                    SetCustomCss(message["css"]?.GetValue<string>() ?? string.Empty);
+                    break;
+
                 case "read_log":
                     ReadLog(message["lines"]?.GetValue<int?>() ?? 120, sender);
                     break;
 
                 case "search":
                     SearchConversations(Require(message["query"]?.GetValue<string>() ?? string.Empty, "关键词"), sender);
+                    break;
+
+                case "browse_dir":
+                    BrowseDirectory(message["path"]?.GetValue<string>() ?? string.Empty, sender);
                     break;
 
                 case "check_path":
@@ -348,6 +357,127 @@ public sealed class CenterHub
             ["sessions"] = Environment.GetEnvironmentVariable("PI_CODING_AGENT_SESSION_DIR")
                 ?? Path.Combine(home, ".pi", "sessions"),
         };
+    }
+
+    /// <summary>
+    /// 选工作区时在里面翻目录用：只给盘符和子目录名，不读文件内容。
+    /// </summary>
+    private static void BrowseDirectory(string path, CenterConnection sender)
+    {
+        var drives = new JsonArray();
+        foreach (var drive in DriveInfo.GetDrives())
+        {
+            try
+            {
+                if (!drive.IsReady)
+                {
+                    continue;
+                }
+
+                var label = string.IsNullOrWhiteSpace(drive.VolumeLabel)
+                    ? drive.Name
+                    : $"{drive.VolumeLabel} ({drive.Name.TrimEnd('\\')})";
+
+                drives.Add(new JsonObject
+                {
+                    ["name"] = label,
+                    ["path"] = drive.Name,
+                });
+            }
+            catch (Exception)
+            {
+                // 光驱、没插的移动盘读卷标会抛，跳过就好。
+            }
+        }
+
+        var current = string.Empty;
+        string? parent = null;
+        var dirs = new JsonArray();
+        var error = string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            try
+            {
+                var full = Path.GetFullPath(path.Trim().Trim('"'));
+                if (Directory.Exists(full))
+                {
+                    current = full;
+                    parent = Directory.GetParent(full)?.FullName;
+                    dirs = ListSubdirectories(full);
+                }
+                else
+                {
+                    error = "这个目录不存在";
+                }
+            }
+            catch (Exception)
+            {
+                error = "这个路径打不开";
+            }
+        }
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "browse_dir",
+            ["path"] = current,
+            ["parent"] = parent,
+            ["error"] = error,
+            ["drives"] = drives,
+            ["dirs"] = dirs,
+        });
+    }
+
+    private static JsonArray ListSubdirectories(string folder)
+    {
+        var items = new JsonArray();
+        List<string> entries;
+
+        try
+        {
+            entries = Directory.EnumerateDirectories(folder).ToList();
+        }
+        catch (Exception)
+        {
+            return items;
+        }
+
+        foreach (var entry in entries.OrderBy(item => Path.GetFileName(item), StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var info = new DirectoryInfo(entry);
+                if (info.Attributes.HasFlag(FileAttributes.Hidden) || info.Attributes.HasFlag(FileAttributes.System))
+                {
+                    continue;
+                }
+
+                items.Add(new JsonObject
+                {
+                    ["name"] = info.Name,
+                    ["path"] = info.FullName,
+                });
+            }
+            catch (Exception)
+            {
+                // 权限不足的目录单独跳过，不影响整层。
+            }
+        }
+
+        return items;
+    }
+
+    /// <summary>
+    /// 自定义样式存在中心，换设备打开也是同一套；改完推给所有在线客户端，立刻生效。
+    /// </summary>
+    private void SetCustomCss(string css)
+    {
+        _store.SetSetting("custom_css", css);
+        Broadcast(new JsonObject
+        {
+            ["type"] = "css",
+            ["css"] = css,
+        });
     }
 
     /// <summary>中心日志的尾巴。手机上出了问题先看这一屏，不用回电脑翻文件。</summary>

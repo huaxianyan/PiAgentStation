@@ -187,6 +187,48 @@ const el = {
   fileInput: document.getElementById('fileInput'),
 };
 
+const DEFAULT_CSS = `body,
+input,
+textarea,
+keygen,
+select,
+button {
+  text-shadow: 0px 0px 1px rgba(0, 0, 0, 0.16) !important;
+  -webkit-font-smoothing: subpixel-antialiased !important;
+  font-family: 'Microsoft Yahei';
+}
+
+@font-face {
+  font-family: 'Microsoft YaHei';
+  src: local('Microsoft Yahei');
+}
+
+@font-face {
+  font-family: 'Microsoft YaHei';
+  src: local('Segoe UI');
+}
+
+@font-face {
+  font-family: '微软雅黑';
+  src: local('Microsoft Yahei');
+}
+
+@font-face {
+  font-family: '微软雅黑';
+  src: local('Segoe UI');
+}
+
+@font-face {
+  font-family: 'Segoe UI';
+  src: local('Microsoft Yahei');
+}
+
+@font-face {
+  font-family: 'Segoe UI';
+  src: local('Segoe UI');
+}
+`;
+
 /* ------------------------------------------------------------------ *
  * 通用小工具
  * ------------------------------------------------------------------ */
@@ -311,8 +353,8 @@ function renderMarkdown(text) {
 function renderBlocks(body) {
   const lines = body.split('\n');
   const out = [];
-  let list = null;
   let paragraph = [];
+  let list = null;
 
   const flushParagraph = () => {
     if (paragraph.length) {
@@ -321,15 +363,24 @@ function renderBlocks(body) {
     }
   };
   const flushList = () => {
-    if (list) {
-      out.push('<' + list.tag + '>' + list.items.map((item) => '<li>' + renderInline(item) + '</li>').join('') +
-        '</' + list.tag + '>');
+    if (list && list.items.length) {
+      out.push(renderListTree(list.items, 0).html);
       list = null;
     }
   };
+  const pushListEntry = (tag, depth, text) => {
+    if (!list) list = { items: [] };
+    list.items.push({ tag, depth, text });
+  };
 
-  for (const line of lines) {
+  const tableCells = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+  const isTableRow = (line) => /^\|.*\|$/.test(line.trim());
+  const isSeparator = (line) => /^\|?[\s:|-]*-{2,}[\s:|-]*\|?$/.test(line.trim()) && line.includes('-');
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const trimmed = line.trim();
+
     if (!trimmed) {
       flushParagraph();
       flushList();
@@ -360,42 +411,56 @@ function renderBlocks(body) {
       continue;
     }
 
-    const bullet = /^[-*+]\s+(.*)$/.exec(trimmed);
+    // 表格：表头 + 分隔行 + 若干行，整体渲染成一张表。
+    if (isTableRow(trimmed) && i + 1 < lines.length && isSeparator(lines[i + 1])) {
+      flushParagraph();
+      flushList();
+
+      const header = tableCells(trimmed);
+      const aligns = tableCells(lines[i + 1]).map((cell) => {
+        const left = cell.startsWith(':');
+        const right = cell.endsWith(':');
+        if (left && right) return 'center';
+        if (right) return 'right';
+        if (left) return 'left';
+        return '';
+      });
+
+      const alignAttr = (index) => (aligns[index] ? ' class="align-' + aligns[index] + '"' : '');
+      let html = '<div class="table-wrap"><table><thead><tr>' +
+        header.map((cell, index) => '<th' + alignAttr(index) + '>' + renderInline(cell) + '</th>').join('') +
+        '</tr></thead><tbody>';
+
+      i += 2;
+      for (; i < lines.length && isTableRow(lines[i]); i++) {
+        const cells = tableCells(lines[i]);
+        html += '<tr>' + header.map((_, index) =>
+          '<td' + alignAttr(index) + '>' + renderInline(cells[index] || '') + '</td>').join('') + '</tr>';
+      }
+      i--;
+      out.push(html + '</tbody></table></div>');
+      continue;
+    }
+
+    const bullet = /^([-*+])\s+(.*)$/.exec(trimmed);
     if (bullet) {
       flushParagraph();
-      if (!list || list.tag !== 'ul') {
-        flushList();
-        list = { tag: 'ul', items: [] };
-      }
-      list.items.push(bullet[1]);
+      const depth = Math.floor((line.length - line.trimStart().length) / 2);
+      pushListEntry('ul', depth, bullet[2]);
       continue;
     }
 
     const ordered = /^\d+[.)]\s+(.*)$/.exec(trimmed);
     if (ordered) {
       flushParagraph();
-      if (!list || list.tag !== 'ol') {
-        flushList();
-        list = { tag: 'ol', items: [] };
-      }
-      list.items.push(ordered[1]);
-      continue;
-    }
-
-    const tableRow = /^\|(.+)\|$/.exec(trimmed);
-    if (tableRow) {
-      flushParagraph();
-      flushList();
-      const cells = tableRow[1].split('|').map((cell) => cell.trim());
-      if (cells.every((cell) => /^:?-{2,}:?$/.test(cell))) {
-        continue;
-      }
-      out.push('<table><tr>' + cells.map((cell) => '<td>' + renderInline(cell) + '</td>').join('') + '</tr></table>');
+      const depth = Math.floor((line.length - line.trimStart().length) / 2);
+      pushListEntry('ol', depth, ordered[1]);
       continue;
     }
 
     if (list) {
-      list.items[list.items.length - 1] += '\n' + trimmed;
+      // 列表项的续行
+      list.items[list.items.length - 1].text += '\n' + trimmed;
       continue;
     }
 
@@ -407,26 +472,33 @@ function renderBlocks(body) {
   return out.join('');
 }
 
-/* ------------------------------------------------------------------ *
- * 消息模型
- * ------------------------------------------------------------------ */
+/** 按缩进还原嵌套列表：两层以上也照原样缩进去。 */
+function renderListTree(entries, index) {
+  const tag = entries[index].tag;
+  let html = '<' + tag + '>';
+  const depth = entries[index].depth;
 
-function contentText(content) {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .filter((block) => block && block.type === 'text')
-      .map((block) => block.text || '')
-      .join('\n');
+  while (index < entries.length && entries[index].depth >= depth) {
+    if (entries[index].depth > depth) {
+      const nested = renderListTree(entries, index);
+      html += nested.html;
+      index = nested.index;
+      continue;
+    }
+
+    let inner = renderInline(entries[index].text);
+    index += 1;
+
+    if (index < entries.length && entries[index].depth > depth) {
+      const nested = renderListTree(entries, index);
+      inner += nested.html;
+      index = nested.index;
+    }
+
+    html += '<li>' + inner + '</li>';
   }
-  return '';
-}
 
-function contentImages(content) {
-  if (!Array.isArray(content)) return [];
-  return content
-    .filter((block) => block && block.type === 'image' && block.data)
-    .map((block) => 'data:' + (block.mimeType || 'image/png') + ';base64,' + block.data);
+  return { html: html + '</' + tag + '>', index };
 }
 
 function blocksFromMessage(message) {
@@ -634,66 +706,212 @@ function confirmDelete(conversation) {
  * 渲染：线程
  * ------------------------------------------------------------------ */
 
-function itemNode(item, session) {
+function contentText(content) {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((block) => block && block.type === 'text')
+      .map((block) => block.text || '')
+      .join('\n');
+  }
+  return '';
+}
+
+function contentImages(content) {
+  if (!Array.isArray(content)) return [];
+  return content
+    .filter((block) => block && block.type === 'image' && block.data)
+    .map((block) => 'data:' + (block.mimeType || 'image/png') + ';base64,' + block.data);
+}
+
+function turnsOf(session) {
+  const turns = [];
+  for (const item of session.items) {
+    if (item.kind === 'user' || !turns.length) {
+      turns.push({ items: [] });
+    }
+    turns[turns.length - 1].items.push(item);
+  }
+  return turns;
+}
+
+function userNode(item) {
   const wrapper = document.createElement('div');
+  wrapper.className = 'msg user';
   wrapper.dataset.item = item.id;
 
-  if (item.kind === 'user') {
-    wrapper.className = 'msg user';
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  const md = document.createElement('div');
+  md.className = 'md';
+  md.innerHTML = renderMarkdown(item.text);
+  bubble.appendChild(md);
+
+  if (item.images && item.images.length) {
+    const wrap = document.createElement('div');
+    wrap.className = 'images';
+    for (const url of item.images) {
+      const img = document.createElement('img');
+      img.src = url;
+      wrap.appendChild(img);
+    }
+    bubble.appendChild(wrap);
+  }
+
+  wrapper.appendChild(bubble);
+  return wrapper;
+}
+
+/**
+ * 一轮 = 一条用户消息 + 之后的所有助手动作。
+ * 模型还在干活的时候把每一步都摆出来（一行一步，不展开）；
+ * 正文一出现就把这些收成一行「工作过程」，让回答站在前面。
+ */
+function turnNode(turn, session, isLast) {
+  const node = document.createElement('div');
+  node.className = 'turn';
+
+  const work = [];
+  const texts = [];
+  const images = [];
+
+  for (const item of turn.items) {
+    if (item.kind === 'user') {
+      node.appendChild(userNode(item));
+      continue;
+    }
+
+    for (const block of item.blocks || []) {
+      if (block.type === 'text' && block.text) {
+        texts.push(block.text);
+      } else if (block.type === 'thinking' && block.text) {
+        work.push({ kind: 'thinking', block, item });
+      } else if (block.type === 'toolCall') {
+        work.push({ kind: 'tool', block, item });
+      } else if (block.type === 'image') {
+        images.push(block);
+      }
+    }
+  }
+
+  const streaming = Boolean(session.streaming) && isLast;
+  const answered = texts.length > 0;
+  const hasWork = work.length > 0;
+
+  const assistant = document.createElement('div');
+  assistant.className = 'msg assistant';
+
+  if (hasWork) {
+    assistant.appendChild(workGroup(work, answered && !streaming, streaming));
+  }
+
+  for (const text of texts) {
     const md = document.createElement('div');
     md.className = 'md';
-    md.innerHTML = renderMarkdown(item.text);
-    bubble.appendChild(md);
-    if (item.images && item.images.length) {
-      const wrap = document.createElement('div');
-      wrap.className = 'images';
-      for (const url of item.images) {
-        const img = document.createElement('img');
-        img.src = url;
-        wrap.appendChild(img);
-      }
-      bubble.appendChild(wrap);
-    }
-    wrapper.appendChild(bubble);
-    return wrapper;
+    md.innerHTML = renderMarkdown(text);
+    assistant.appendChild(md);
   }
 
-  wrapper.className = 'msg assistant';
-  for (const block of item.blocks) {
-    if (block.type === 'text') {
-      if (!block.text) continue;
-      const md = document.createElement('div');
-      md.className = 'md';
-      md.innerHTML = renderMarkdown(block.text);
-      wrapper.appendChild(md);
-    } else if (block.type === 'thinking') {
-      if (!block.text) continue;
-      const details = document.createElement('details');
-      details.className = 'think';
-      const summary = document.createElement('summary');
-      summary.textContent = session.streaming && !item.blocks.some((b) => b.type === 'text' && b.text)
-        ? '正在思考'
-        : '思考';
-      const body = document.createElement('div');
-      body.className = 'think-body';
-      body.textContent = block.text;
-      details.appendChild(summary);
-      details.appendChild(body);
-      wrapper.appendChild(details);
-    } else if (block.type === 'toolCall') {
-      wrapper.appendChild(toolCard(block));
-    } else if (block.type === 'image') {
-      const img = document.createElement('img');
-      img.src = block.url;
-      img.style.maxWidth = '280px';
-      img.style.borderRadius = '8px';
-      wrapper.appendChild(img);
-    }
+  for (const block of images) {
+    const img = document.createElement('img');
+    img.src = block.url;
+    img.style.maxWidth = '280px';
+    img.style.borderRadius = '8px';
+    assistant.appendChild(img);
   }
 
-  return wrapper;
+  if (assistant.childElementCount) {
+    node.appendChild(assistant);
+  }
+
+  return node;
+}
+
+function workGroup(work, collapsed, streaming) {
+  const wrap = document.createElement('div');
+  wrap.className = 'work';
+
+  const tools = work.filter((entry) => entry.kind === 'tool').length;
+  const metaText = [
+    work.length + ' 步',
+    tools ? tools + ' 次工具调用' : '只有思考',
+  ].join(' · ');
+
+  const head = document.createElement('button');
+  head.className = 'work-head';
+  head.innerHTML =
+    '<span class="work-caret">▸</span>' +
+    '<span class="work-title">' + (streaming && !collapsed ? '正在处理' : '工作过程') + '</span>' +
+    '<span class="work-meta">' + escapeHtml(metaText) + '</span>';
+
+  const body = document.createElement('div');
+  body.className = 'work-body';
+
+  for (const entry of work) {
+    body.appendChild(stepRow(entry));
+  }
+
+  const setCollapsed = (value) => {
+    wrap.classList.toggle('is-collapsed', value);
+    body.hidden = value;
+    head.querySelector('.work-caret').textContent = value ? '▸' : '▾';
+  };
+
+  setCollapsed(collapsed);
+  head.addEventListener('click', () => setCollapsed(!wrap.classList.contains('is-collapsed')));
+
+  wrap.appendChild(head);
+  wrap.appendChild(body);
+  return wrap;
+}
+
+/** 一行一步：思考或某个工具，点开才看细节。 */
+function stepRow(entry) {
+  const row = document.createElement('div');
+  row.className = 'step' + (entry.kind === 'thinking' ? ' is-thinking' : '');
+
+  const head = document.createElement('button');
+  head.className = 'step-head';
+
+  const label = entry.kind === 'thinking' ? '思考' : (entry.block.name || '工具');
+  const summary = entry.kind === 'thinking'
+    ? String(entry.block.text).replace(/\s+/g, ' ').slice(0, 90)
+    : toolSummary(entry.block);
+
+  const running = entry.kind === 'tool' && !entry.block.done;
+  head.innerHTML =
+    '<span class="step-dot' + (running ? ' is-running' : '') + '"></span>' +
+    '<span class="step-name">' + escapeHtml(label) + '</span>' +
+    '<span class="step-text">' + escapeHtml(summary) + '</span>' +
+    (entry.block.durationMs != null
+      ? '<span class="step-time">' + escapeHtml(formatDuration(entry.block.durationMs)) + '</span>'
+      : '');
+
+  row.appendChild(head);
+
+  const detail = document.createElement('div');
+  detail.className = 'step-detail';
+  detail.hidden = true;
+
+  if (entry.kind === 'thinking') {
+    const pre = document.createElement('pre');
+    pre.textContent = entry.block.text;
+    detail.appendChild(pre);
+  } else {
+    detail.appendChild(toolCard(entry.block));
+  }
+
+  head.addEventListener('click', () => {
+    detail.hidden = !detail.hidden;
+    row.classList.toggle('is-open', !detail.hidden);
+  });
+
+  row.appendChild(detail);
+  return row;
+}
+
+function formatDuration(ms) {
+  return ms >= 1000 ? (ms / 1000).toFixed(1) + ' 秒' : Math.round(ms) + ' 毫秒';
 }
 
 function toolCard(block) {
@@ -794,28 +1012,44 @@ function toolSummary(block) {
 
 function renderThread() {
   const session = current();
-  app.nodeCache.clear();
+  app.turnNodes = [];
   el.threadInner.innerHTML = '';
   if (!session) return;
-  for (const item of session.items) {
-    const node = itemNode(item, session);
-    app.nodeCache.set(item.id, node);
+
+  const turns = turnsOf(session);
+  turns.forEach((turn, index) => {
+    const node = turnNode(turn, session, index === turns.length - 1);
+    app.turnNodes.push({ items: turn.items, node });
     el.threadInner.appendChild(node);
-  }
+  });
+
   scrollToBottom(true);
 }
 
 function patchItem(item) {
   const session = current();
   if (!session) return;
-  const node = itemNode(item, session);
-  const existing = app.nodeCache.get(item.id);
-  if (existing && existing.isConnected) {
-    existing.replaceWith(node);
-  } else {
-    el.threadInner.appendChild(node);
+
+  const turns = turnsOf(session);
+  const index = turns.findIndex((turn) => turn.items.includes(item));
+  if (index < 0) {
+    renderThread();
+    return;
   }
-  app.nodeCache.set(item.id, node);
+
+  const turn = turns[index];
+  const isLast = index === turns.length - 1;
+  const node = turnNode(turn, session, isLast);
+  const known = app.turnNodes[index];
+
+  if (known && known.node.isConnected) {
+    known.node.replaceWith(node);
+    known.node = node;
+    known.items = turn.items;
+  } else {
+    renderThread();
+    return;
+  }
 }
 
 function atBottom() {
@@ -1079,6 +1313,122 @@ function newSession() {
   askCwd();
 }
 
+/**
+ * 选工作区用的目录选择器：目录列表由中心给（browse_dir），
+ * 浏览器里也能用，不依赖桌面客户端的原生对话框。
+ */
+function openDirPicker(startPath, onPick) {
+  closeModal();
+  app.dirPicker = { onPick, path: startPath || '' };
+
+  const card = document.createElement('div');
+  card.className = 'modal dir-picker';
+
+  const title = document.createElement('h3');
+  title.textContent = '选一个目录当工作区';
+  card.appendChild(title);
+
+  const where = document.createElement('div');
+  where.className = 'dir-where';
+  card.appendChild(where);
+
+  const list = document.createElement('div');
+  list.className = 'dir-list';
+  card.appendChild(list);
+
+  const actions = document.createElement('div');
+  actions.className = 'modal-actions';
+
+  const cancel = document.createElement('button');
+  cancel.className = 'ghost-btn';
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', () => {
+    app.dirPicker = null;
+    closeModal();
+  });
+
+  const use = document.createElement('button');
+  use.className = 'primary-btn';
+  use.textContent = '就用这个目录';
+  use.addEventListener('click', () => {
+    const chosen = app.dirPicker && app.dirPicker.path;
+    const callback = app.dirPicker && app.dirPicker.onPick;
+    app.dirPicker = null;
+    closeModal();
+    if (chosen && callback) callback(chosen);
+  });
+
+  actions.appendChild(cancel);
+  actions.appendChild(use);
+  card.appendChild(actions);
+  el.modal.appendChild(card);
+  el.modal.hidden = false;
+
+  app.dirPicker.where = where;
+  app.dirPicker.list = list;
+  app.dirPicker.use = use;
+  renderDirListing({ path: '', parent: null, drives: [], dirs: [], error: '', pending: true });
+  send({ type: 'browse_dir', path: startPath || '' });
+}
+
+function renderDirListing(payload) {
+  const picker = app.dirPicker;
+  if (!picker) return;
+
+  picker.path = payload.path || '';
+  picker.where.textContent = picker.path || '这台机器上的盘符';
+  picker.use.disabled = !picker.path;
+
+  const list = picker.list;
+  list.innerHTML = '';
+
+  if (payload.error) {
+    const note = document.createElement('div');
+    note.className = 'dir-empty';
+    note.textContent = payload.error;
+    list.appendChild(note);
+    return;
+  }
+
+  if (payload.pending) {
+    const note = document.createElement('div');
+    note.className = 'dir-empty';
+    note.textContent = '正在读目录…';
+    list.appendChild(note);
+    return;
+  }
+
+  if (payload.parent) {
+    const up = document.createElement('button');
+    up.className = 'dir-row dir-up';
+    up.textContent = '.. 上一级';
+    up.addEventListener('click', () => {
+      send({ type: 'browse_dir', path: payload.parent });
+    });
+    list.appendChild(up);
+  }
+
+  const entries = picker.path ? payload.dirs || [] : payload.drives || [];
+  if (!entries.length) {
+    const note = document.createElement('div');
+    note.className = 'dir-empty';
+    note.textContent = picker.path ? '这个目录下面没有子目录' : '没有可用的盘符';
+    list.appendChild(note);
+    return;
+  }
+
+  entries.forEach((entry) => {
+    const row = document.createElement('button');
+    row.className = 'dir-row';
+    row.title = entry.path;
+    row.textContent = entry.name;
+    row.addEventListener('click', () => {
+      send({ type: 'browse_dir', path: entry.path });
+    });
+    list.appendChild(row);
+  });
+}
+
 function askCwd() {
   closeModal();
   const card = document.createElement('div');
@@ -1093,11 +1443,28 @@ function askCwd() {
   note.textContent = '填中心那台机器上的绝对路径，对话就绑定在这个目录下。';
   card.appendChild(note);
 
+  const inputRow = document.createElement('div');
+  inputRow.className = 'path-row';
+
   const input = document.createElement('input');
   input.type = 'text';
   input.placeholder = 'D:\work\project';
-  input.value = app.lastCwd || app.activeCwd || '';
-  card.appendChild(input);
+  input.value = app.cwdDraft || app.lastCwd || app.activeCwd || '';
+  app.cwdDraft = null;
+  inputRow.appendChild(input);
+
+  const browse = document.createElement('button');
+  browse.className = 'ghost-btn';
+  browse.textContent = '浏览…';
+  browse.addEventListener('click', () => {
+    openDirPicker(input.value, (picked) => {
+      app.cwdDraft = picked;
+      askCwd();
+    });
+  });
+  inputRow.appendChild(browse);
+
+  card.appendChild(inputRow);
 
   const recent = [...new Set([...(app.recentWorkspaces || []), ...app.sessions.map((session) => session.cwd)])]
     .filter(Boolean)
@@ -1241,6 +1608,55 @@ function openSettings() {
     ['Ctrl+K 新建对话', 'Ctrl+B 收起侧栏', 'Ctrl+J 终端', 'Ctrl+E 文件面板', 'Ctrl+F 搜索', 'Esc 关掉弹层']
       .map((line) => escapeHtml(line)).join('<br>');
   card.appendChild(shortcuts);
+
+  const styleBlock = document.createElement('div');
+  styleBlock.className = 'modal-message';
+  styleBlock.innerHTML = '<span class="label">自定义样式</span><br>' +
+    '<span class="hint">这段 CSS 贴在页面最后，保存后所有设备一起生效。</span>';
+
+  const editor = document.createElement('textarea');
+  editor.className = 'css-editor';
+  editor.spellcheck = false;
+  editor.value = app.customCss || DEFAULT_CSS;
+  styleBlock.appendChild(editor);
+
+  const styleBar = document.createElement('div');
+  styleBar.className = 'css-actions';
+
+  const saveStyle = document.createElement('button');
+  saveStyle.className = 'ghost-btn small';
+  saveStyle.textContent = '保存';
+  saveStyle.addEventListener('click', () => {
+    send({ type: 'set_css', css: editor.value });
+    applyCustomCss(editor.value);
+    toast('样式已保存');
+  });
+
+  const resetStyle = document.createElement('button');
+  resetStyle.className = 'ghost-btn small';
+  resetStyle.textContent = '恢复默认';
+  resetStyle.addEventListener('click', () => {
+    editor.value = DEFAULT_CSS;
+    send({ type: 'set_css', css: DEFAULT_CSS });
+    applyCustomCss(DEFAULT_CSS);
+    toast('已恢复默认样式');
+  });
+
+  const clearStyle = document.createElement('button');
+  clearStyle.className = 'ghost-btn small';
+  clearStyle.textContent = '清空';
+  clearStyle.addEventListener('click', () => {
+    editor.value = '';
+    send({ type: 'set_css', css: '' });
+    applyCustomCss('');
+    toast('已清空，回到默认样式');
+  });
+
+  styleBar.appendChild(saveStyle);
+  styleBar.appendChild(resetStyle);
+  styleBar.appendChild(clearStyle);
+  styleBlock.appendChild(styleBar);
+  card.appendChild(styleBlock);
 
   const actions = document.createElement('div');
   actions.className = 'modal-actions';
@@ -1442,6 +1858,18 @@ let completionTimer = 0;
 
 function completionOpen() {
   return !el.completions.hidden && completion.items.length > 0;
+}
+
+function applyCustomCss(css) {
+  let node = document.getElementById('customCss');
+  if (!node) {
+    node = document.createElement('style');
+    node.id = 'customCss';
+    document.head.appendChild(node);
+  }
+
+  node.textContent = css || DEFAULT_CSS;
+  app.customCss = css || '';
 }
 
 function closeCompletion() {
@@ -2055,6 +2483,9 @@ function dispatch(message) {
       if (message.listen) {
         app.listen = message.listen;
       }
+      if (message.css !== undefined) {
+        applyCustomCss(message.css || '');
+      }
       if (Array.isArray(message.workspaces)) {
         app.recentWorkspaces = message.workspaces;
       }
@@ -2071,6 +2502,14 @@ function dispatch(message) {
       }
       break;
     }
+
+    case 'browse_dir':
+      renderDirListing(message);
+      break;
+
+    case 'css':
+      applyCustomCss(message.css || '');
+      break;
 
     case 'log_tail': {
       const card = document.createElement('div');
@@ -2682,6 +3121,7 @@ el.modal.addEventListener('click', (event) => {
  * 启动
  * ------------------------------------------------------------------ */
 
+applyCustomCss('');
 renderSessionList();
 renderExtStatus();
 renderComposerState();
