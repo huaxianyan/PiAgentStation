@@ -2064,14 +2064,10 @@ function dispatch(message) {
       break;
 
     case 'path_check': {
+      // 只提示，不拦人：中心那边建对话时本来就会校验目录。
       const hint = el.modal.querySelector('.modal-hint');
-      const startBtn = [...el.modal.querySelectorAll('.modal-actions button')]
-        .find((button) => button.textContent === '开始');
       if (hint) {
         hint.textContent = message.exists ? '' : message.reason || '';
-      }
-      if (startBtn) {
-        startBtn.disabled = !message.exists;
       }
       break;
     }

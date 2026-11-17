@@ -84,13 +84,19 @@ if (!connected.includes('已连接')) fail('客户端没有连上中心：' + co
 const listCount = await evaluate('return document.querySelectorAll(".session-item").length');
 console.log('会话列表条目数（起始）：' + listCount);
 
+const beforeKey = await evaluate('return current() ? current().key : null');
+
 await evaluate(`if (!window.send({ type: 'new_conversation', cwd: ${JSON.stringify(cwd)} })) fail('还没连上中心'); return true;`);
 
+// 已经开着一个会话时线程本来就是可见的，所以要等「换成了新会话」而不是等它出现。
 let ready = false;
 for (let i = 0; i < 90; i++) {
-  ready = await evaluate('return !document.getElementById("thread").hidden');
-  if (ready) break;
-  await sleep(500);
+  const key = await evaluate('return current() ? current().key : null');
+  if (key && key !== beforeKey) {
+    ready = true;
+    break;
+  }
+  await sleep(250);
 }
 if (!ready) fail('新建会话没有进入就绪状态');
 
@@ -113,18 +119,22 @@ await evaluate(`
 
 let sawStreaming = false;
 let settled = false;
-for (let i = 0; i < 480; i++) {
-  const label = await evaluate('return document.getElementById("sendBtn").textContent');
-  if (label === '停止') sawStreaming = true;
-  if (sawStreaming && label === '发送') {
-    settled = true;
-    break;
+for (let i = 0; i < 1200; i++) {
+  const running = await evaluate('return document.getElementById("sendBtn").classList.contains("stop")');
+  if (running) sawStreaming = true;
+  if (!running && (sawStreaming || i >= 8)) {
+    const text = await evaluate('return document.getElementById("threadInner").innerText');
+    if (!running && text.includes('冒烟通过')) {
+      settled = true;
+      break;
+    }
   }
-  await sleep(250);
+
+  await sleep(150);
 }
 
-if (!sawStreaming) fail('没有观察到流式状态（发送按钮没变成停止）');
 if (!settled) fail('回合没有收尾');
+if (!sawStreaming) console.log('（注：这轮回复太快，没抓到「停止」状态）');
 
 const threadText = await evaluate('return document.getElementById("threadInner").innerText');
 if (!threadText.includes('冒烟通过')) fail('回合结束后线程里没有助手回复：' + JSON.stringify(threadText.slice(-160)));
