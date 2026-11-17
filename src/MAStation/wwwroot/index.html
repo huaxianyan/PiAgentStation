@@ -28,6 +28,16 @@
             <span>对话</span>
             <span class="nav-count" id="navCount"></span>
           </button>
+          <button class="nav-item" id="skillsNav">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.9l1.3 3 3 1.3-3 1.3L8 10.6 6.7 7.5l-3-1.3 3-1.3z"/><path d="M4.2 11.2 5 13l.8-1.8L7.6 10l-1.8-.8L5 7.4l-.8 1.8L2.4 10z"/></svg>
+            <span>技能</span>
+            <span class="nav-count" id="skillsCount"></span>
+          </button>
+          <button class="nav-item" id="extensionsNav">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="2.2" width="4.6" height="4.6" rx="1.2"/><rect x="9.2" y="2.2" width="4.6" height="4.6" rx="1.2"/><rect x="2.2" y="9.2" width="4.6" height="4.6" rx="1.2"/><rect x="9.2" y="9.2" width="4.6" height="4.6" rx="1.2"/></svg>
+            <span>扩展</span>
+            <span class="nav-count" id="extensionsCount"></span>
+          </button>
           <button class="nav-item" id="settingsBtn">
             <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6"/></svg>
             <span>设置</span>
@@ -96,6 +106,10 @@
             </button>
             <p class="empty-note">对话存在中心，换台设备打开，看到的还是这一份。</p>
           </div>
+
+          <section class="page" id="pageView" hidden>
+            <div class="page-inner" id="pageInner"></div>
+          </section>
 
           <button class="jump-bottom" id="jumpBottom" hidden>回到最新 ↓</button>
 

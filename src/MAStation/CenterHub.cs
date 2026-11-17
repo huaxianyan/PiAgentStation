@@ -165,6 +165,14 @@ public sealed class CenterHub
                     SearchConversations(Require(message["query"]?.GetValue<string>() ?? string.Empty, "关键词"), sender);
                     break;
 
+                case "list_skills":
+                    SendSkills(message["cwd"]?.GetValue<string>() ?? string.Empty, sender);
+                    break;
+
+                case "list_extensions":
+                    _ = SendExtensionsAsync(message["cwd"]?.GetValue<string>() ?? string.Empty, sender);
+                    break;
+
                 case "browse_dir":
                     BrowseDirectory(message["path"]?.GetValue<string>() ?? string.Empty, sender);
                     break;
@@ -465,6 +473,317 @@ public sealed class CenterHub
         }
 
         return items;
+    }
+
+    /// <summary>
+    /// 技能页的清单：直接读磁盘上的 SKILL.md，不经过 Pi，没有对话也能看。
+    /// </summary>
+    private static void SendSkills(string cwd, CenterConnection sender)
+    {
+        var items = new JsonArray();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (root, scope) in SkillRoots(cwd))
+        {
+            List<string> directories;
+            try
+            {
+                if (!Directory.Exists(root))
+                {
+                    continue;
+                }
+
+                directories = Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories).ToList();
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            foreach (var directory in directories.OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            {
+                var file = Path.Combine(directory, "SKILL.md");
+                if (!File.Exists(file) || !seen.Add(file))
+                {
+                    continue;
+                }
+
+                var skill = ReadSkillHeader(file, Path.GetFileName(directory));
+                items.Add(new JsonObject
+                {
+                    ["name"] = skill.Name,
+                    ["description"] = skill.Description,
+                    ["path"] = file,
+                    ["scope"] = scope,
+                    ["commandOnly"] = skill.CommandOnly,
+                });
+            }
+        }
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "skills",
+            ["cwd"] = cwd,
+            ["items"] = items,
+        });
+    }
+
+    private static IEnumerable<(string Root, string Scope)> SkillRoots(string cwd)
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        yield return (Path.Combine(home, ".pi", "agent", "skills"), "用户");
+        yield return (Path.Combine(home, ".agents", "skills"), "用户");
+
+        if (string.IsNullOrWhiteSpace(cwd))
+        {
+            yield break;
+        }
+
+        string full;
+        try
+        {
+            full = Path.GetFullPath(cwd);
+        }
+        catch (Exception)
+        {
+            yield break;
+        }
+
+        yield return (Path.Combine(full, ".pi", "skills"), "项目");
+        yield return (Path.Combine(full, ".agents", "skills"), "项目");
+    }
+
+    private static (string Name, string Description, bool CommandOnly) ReadSkillHeader(string file, string fallbackName)
+    {
+        var name = fallbackName;
+        var description = string.Empty;
+        var commandOnly = false;
+
+        try
+        {
+            var lines = File.ReadAllLines(file).Take(80).ToList();
+            if (lines.Count == 0 || lines[0].Trim() != "---")
+            {
+                return (name, description, commandOnly);
+            }
+
+            for (var index = 1; index < lines.Count; index++)
+            {
+                var line = lines[index];
+                if (line.Trim() == "---")
+                {
+                    break;
+                }
+
+                var colon = line.IndexOf(':');
+                if (colon <= 0)
+                {
+                    continue;
+                }
+
+                var key = line[..colon].Trim().ToLowerInvariant();
+                var value = line[(colon + 1)..].Trim();
+
+                if (key == "disable-model-invocation")
+                {
+                    commandOnly = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                    continue;
+                }
+
+                if (key == "name" && value.Length > 0)
+                {
+                    name = Unquote(value);
+                    continue;
+                }
+
+                if (key != "description")
+                {
+                    continue;
+                }
+
+                // 描述可能是 > 或 | 折起来的块，往下把缩进行都收过来。
+                if (value is ">" or ">-" or "|" or "|-")
+                {
+                    var parts = new List<string>();
+                    while (index + 1 < lines.Count)
+                    {
+                        var next = lines[index + 1];
+                        if (next.Trim().Length == 0)
+                        {
+                            index++;
+                            continue;
+                        }
+
+                        if (next.StartsWith("  ", StringComparison.Ordinal) || next.StartsWith('\t'))
+                        {
+                            parts.Add(next.Trim());
+                            index++;
+                            continue;
+                        }
+
+                        break;
+                    }
+
+                    description = string.Join(" ", parts);
+                }
+                else
+                {
+                    description = Unquote(value);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // 读不通就当没有描述，别让一页清单挂掉。
+        }
+
+        return (name, description, commandOnly);
+    }
+
+    private static string Unquote(string value)
+    {
+        if (value.Length >= 2 &&
+            ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')))
+        {
+            return value[1..^1];
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// 扩展页：Pi 配置里声明的扩展包（装没装、什么版本），加上当前工作区里
+    /// Pi 报过的扩展命令。
+    /// </summary>
+    private async Task SendExtensionsAsync(string cwd, CenterConnection sender)
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var settingsPath = Path.Combine(home, ".pi", "agent", "settings.json");
+        var problems = new JsonArray();
+        var packages = new JsonArray();
+        var declared = new List<string>();
+
+        try
+        {
+            if (File.Exists(settingsPath) &&
+                JsonNode.Parse(File.ReadAllText(settingsPath)) is JsonObject settings &&
+                settings["packages"] is JsonArray list)
+            {
+                foreach (var entry in list)
+                {
+                    var text = entry?.GetValue<string>();
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        declared.Add(text!);
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            problems.Add("读不出 Pi 的扩展配置");
+        }
+
+        foreach (var source in declared)
+        {
+            var (kind, name) = SplitPackageSource(source);
+            var directory = PackageDirectory(home, kind, name);
+            packages.Add(new JsonObject
+            {
+                ["source"] = source,
+                ["kind"] = kind,
+                ["name"] = name,
+                ["path"] = directory ?? string.Empty,
+                ["installed"] = directory is not null && Directory.Exists(directory),
+                ["version"] = directory is null ? string.Empty : ReadPackageVersion(directory),
+            });
+        }
+
+        // 扩展命令只认缓存：不去为了列个清单悄悄起一个 Pi 会话。
+        // 用户打开对话、在输入框里打过 / 之后，中心这边就有了这个工作区的缓存。
+        var commands = new JsonArray();
+        if (!string.IsNullOrWhiteSpace(cwd) &&
+            ParseNode(_store.GetSetting("commands:" + cwd.ToLowerInvariant())) is JsonArray cached)
+        {
+            foreach (var entry in cached.OfType<JsonObject>())
+            {
+                if (entry["source"]?.GetValue<string>() != "extension")
+                {
+                    continue;
+                }
+
+                commands.Add(new JsonObject
+                {
+                    ["name"] = entry["name"]?.GetValue<string>() ?? string.Empty,
+                    ["description"] = entry["description"]?.GetValue<string>() ?? string.Empty,
+                    ["scope"] = (entry["sourceInfo"] as JsonObject)?["scope"]?.GetValue<string>() ?? string.Empty,
+                });
+            }
+        }
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "extensions",
+            ["cwd"] = cwd,
+            ["settingsPath"] = settingsPath,
+            ["packages"] = packages,
+            ["commands"] = commands,
+            ["problems"] = problems,
+        });
+
+        await Task.CompletedTask;
+    }
+
+    private static (string Kind, string Name) SplitPackageSource(string source)
+    {
+        if (source.StartsWith("npm:", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("npm", source[4..].Trim());
+        }
+
+        if (source.StartsWith("git:", StringComparison.OrdinalIgnoreCase))
+        {
+            var rest = source[4..].Trim();
+            var at = rest.LastIndexOf('@');
+            if (at > rest.LastIndexOf('/'))
+            {
+                rest = rest[..at];
+            }
+
+            return ("git", rest);
+        }
+
+        return ("path", source.Trim());
+    }
+
+    private static string? PackageDirectory(string home, string kind, string name)
+    {
+        return kind switch
+        {
+            "npm" => Path.Combine(home, ".pi", "agent", "npm", "node_modules", name),
+            "git" => Path.Combine(home, ".pi", "agent", "git", name),
+            "path" => name,
+            _ => null,
+        };
+    }
+
+    private static string ReadPackageVersion(string directory)
+    {
+        try
+        {
+            var manifest = Path.Combine(directory, "package.json");
+            if (File.Exists(manifest) &&
+                JsonNode.Parse(File.ReadAllText(manifest)) is JsonObject json)
+            {
+                return json["version"]?.GetValue<string>() ?? string.Empty;
+            }
+        }
+        catch (Exception)
+        {
+            // 版本读不出来不影响列表。
+        }
+
+        return string.Empty;
     }
 
     /// <summary>

@@ -84,6 +84,10 @@ function connect() {
  * ------------------------------------------------------------------ */
 
 const app = {
+  view: 'chat',
+  skills: null,
+  extensions: null,
+  logTail: null,
   sessions: [],
   sessionRoot: '',
   storePath: '',
@@ -133,6 +137,13 @@ const el = {
   filterbar: document.getElementById('filterbar'),
   navCount: document.getElementById('navCount'),
   settingsBtn: document.getElementById('settingsBtn'),
+  threadsNav: document.getElementById('threadsNav'),
+  skillsNav: document.getElementById('skillsNav'),
+  extensionsNav: document.getElementById('extensionsNav'),
+  skillsCount: document.getElementById('skillsCount'),
+  extensionsCount: document.getElementById('extensionsCount'),
+  pageView: document.getElementById('pageView'),
+  pageInner: document.getElementById('pageInner'),
   collapseBtn: document.getElementById('collapseBtn'),
   sidebarToggle: document.getElementById('sidebarToggle'),
   exportBtn: document.getElementById('exportBtn'),
@@ -157,6 +168,7 @@ const el = {
   wsSelectText: document.getElementById('wsSelectText'),
   content: document.getElementById('content'),
   windowEl: document.getElementById('app'),
+  main: document.querySelector('.main'),
   crumbSep: document.getElementById('crumbSep'),
   sessionTitle: document.getElementById('sessionTitle'),
   renameBtn: document.getElementById('renameBtn'),
@@ -1280,6 +1292,8 @@ function renderExtStatus() {
 }
 
 function showWorkspace(hasSession) {
+  // 设置 / 技能 / 扩展页面占着右边的时候，不要被对话流程把正文翻回来。
+  if (app.view !== 'chat') return;
   el.thread.hidden = !hasSession;
   el.empty.hidden = hasSession;
   el.content.classList.toggle('is-empty', !hasSession);
@@ -1291,6 +1305,7 @@ function showWorkspace(hasSession) {
 
 function openSession(conversation) {
   if (!conversation || !conversation.id) return;
+  switchView('chat');
   const known = app.byKey.get(conversation.id);
   if (known) {
     app.currentKey = conversation.id;
@@ -1573,58 +1588,229 @@ el.workspacePill.addEventListener('click', () => {
   if (!current()) askCwd();
 });
 
-el.settingsBtn.addEventListener('click', openSettings);
+el.settingsBtn.addEventListener('click', () => switchView('settings'));
+el.threadsNav.addEventListener('click', () => switchView('chat'));
+el.skillsNav.addEventListener('click', () => switchView('skills'));
+el.extensionsNav.addEventListener('click', () => switchView('extensions'));
 
-function openSettings() {
-  closeModal();
-  const card = document.createElement('div');
-  card.className = 'modal';
+/* ------------------------------------------------------------------ *
+ * 页面视图：设置 / 技能 / 扩展（右边整块切换，不用弹窗）
+ * ------------------------------------------------------------------ */
 
-  const title = document.createElement('h3');
-  title.textContent = '设置';
-  card.appendChild(title);
+const PAGE_TITLES = { settings: '设置', skills: '技能', extensions: '扩展' };
 
-  const rows = [
-    ['中心', location.origin],
-    ['版本', app.centerVersion || '未知'],
-    ['对话库', app.storePath || '未知'],
-    ['连接', transport.connected ? '已连接' : '未连接'],
-    ['监听', (app.listen || '未知') + (/127\.0\.0\.1|localhost/.test(app.listen || '') ? '（只本机能连）' : '（局域网可连）')],
-    ['Pi', app.pi ? (app.pi.ready ? '已装好 · ' + app.pi.agentDir : '没找到 · ' + app.pi.agentDir) : '未知'],
-    ['会话目录', app.pi?.sessions || '未知'],
-    ['最近工作区', (app.recentWorkspaces || []).join('、') || '还没有'],
-  ];
+function switchView(view) {
+  app.view = view;
+  const chat = view === 'chat';
 
-  for (const [label, value] of rows) {
-    const row = document.createElement('div');
-    row.className = 'modal-message';
-    row.innerHTML = '<span class="label">' + escapeHtml(label) + '</span><br>' + escapeHtml(value);
-    card.appendChild(row);
+  el.main.classList.toggle('is-page', !chat);
+  el.threadsNav.classList.toggle('is-active', chat);
+  el.skillsNav.classList.toggle('is-active', view === 'skills');
+  el.extensionsNav.classList.toggle('is-active', view === 'extensions');
+  el.settingsBtn.classList.toggle('is-active', view === 'settings');
+  el.composer.hidden = !chat;
+  el.pageView.hidden = chat;
+
+  if (chat) {
+    showWorkspace(Boolean(app.currentKey));
+    renderHeader();
+    return;
   }
 
-  const shortcuts = document.createElement('div');
-  shortcuts.className = 'modal-message';
-  shortcuts.innerHTML = '<span class="label">快捷键</span><br>' +
-    ['Ctrl+K 新建对话', 'Ctrl+B 收起侧栏', 'Ctrl+J 终端', 'Ctrl+E 文件面板', 'Ctrl+F 搜索', 'Esc 关掉弹层']
-      .map((line) => escapeHtml(line)).join('<br>');
-  card.appendChild(shortcuts);
+  el.thread.hidden = true;
+  el.empty.hidden = true;
+  el.jumpBottom.hidden = true;
+  el.content.classList.remove('is-empty');
+  el.sessionTitle.textContent = PAGE_TITLES[view] || '';
+  el.sessionTitle.title = '';
+  el.sessionCwd.textContent = '';
+  el.crumbSep.hidden = true;
+  el.pageView.scrollTop = 0;
+  if (view === 'skills' && !app.skills) requestSkills();
+  if (view === 'extensions' && !app.extensions) requestExtensions();
+  renderPage(view);
+}
 
-  const styleBlock = document.createElement('div');
-  styleBlock.className = 'modal-message';
-  styleBlock.innerHTML = '<span class="label">自定义样式</span><br>' +
-    '<span class="hint">这段 CSS 贴在页面最后，保存后所有设备一起生效。</span>';
+function renderPage(view) {
+  el.pageInner.innerHTML = '';
+  if (view === 'settings') renderSettingsPage();
+  if (view === 'skills') renderSkillsPage();
+  if (view === 'extensions') renderExtensionsPage();
+}
 
+function makePageHead(title, note, action) {
+  const head = document.createElement('div');
+  head.className = 'page-head';
+
+  const text = document.createElement('div');
+  const heading = document.createElement('h2');
+  heading.textContent = title;
+  text.appendChild(heading);
+
+  if (note) {
+    const line = document.createElement('p');
+    line.className = 'page-note';
+    line.textContent = note;
+    text.appendChild(line);
+  }
+
+  head.appendChild(text);
+  if (action) head.appendChild(action);
+  return head;
+}
+
+function makePageCard(title, note) {
+  const card = document.createElement('section');
+  card.className = 'page-card';
+
+  if (title) {
+    const heading = document.createElement('h3');
+    heading.textContent = title;
+    card.appendChild(heading);
+  }
+
+  if (note) {
+    const line = document.createElement('p');
+    line.className = 'page-note';
+    line.textContent = note;
+    card.appendChild(line);
+  }
+
+  return card;
+}
+
+function addKeyValues(card, rows) {
+  const list = document.createElement('div');
+  list.className = 'kv';
+
+  rows.forEach(([key, value]) => {
+    const row = document.createElement('div');
+    row.className = 'kv-row';
+
+    const label = document.createElement('span');
+    label.className = 'kv-key';
+    label.textContent = key;
+
+    const text = document.createElement('span');
+    text.className = 'kv-value';
+    text.textContent = value || '未知';
+    text.title = value || '';
+
+    row.appendChild(label);
+    row.appendChild(text);
+    list.appendChild(row);
+  });
+
+  card.appendChild(list);
+}
+
+function makeRefreshButton(label, onClick) {
+  const button = document.createElement('button');
+  button.className = 'ghost-btn';
+  button.textContent = label || '刷新';
+  button.addEventListener('click', onClick);
+  return button;
+}
+
+function makeBadge(text, tone) {
+  const badge = document.createElement('span');
+  badge.className = 'badge' + (tone ? ' badge-' + tone : '');
+  badge.textContent = text;
+  return badge;
+}
+
+function listenText() {
+  const listen = app.listen || '';
+  if (!listen) return '未知';
+  return listen + (/127\.0\.0\.1|localhost/.test(listen) ? '（只本机能连）' : '（局域网可连）');
+}
+
+/* -------------------------------- 设置 -------------------------------- */
+
+function renderSettingsPage() {
+  el.pageInner.appendChild(makePageHead('设置', '中心、Pi 和界面偏好都在这一页。'));
+
+  const connection = makePageCard('连接');
+  addKeyValues(connection, [
+    ['中心', location.origin],
+    ['版本', app.centerVersion || '未知'],
+    ['状态', transport.connected ? '已连接' : '未连接'],
+    ['对话库', app.storePath || '未知'],
+    ['监听', listenText()],
+  ]);
+  el.pageInner.appendChild(connection);
+
+  const pi = makePageCard('Pi');
+  addKeyValues(pi, [
+    ['本体', app.pi ? (app.pi.ready ? '已装好' : '没找到') : '未知'],
+    ['目录', app.pi ? app.pi.agentDir : ''],
+    ['会话', app.pi ? app.pi.sessions : ''],
+  ]);
+  el.pageInner.appendChild(pi);
+
+  const recent = makePageCard('最近工作区', '点一个就在那个目录里开新对话。');
+  if (!app.recentWorkspaces || !app.recentWorkspaces.length) {
+    const empty = document.createElement('p');
+    empty.className = 'page-note';
+    empty.textContent = '还没有用过工作区。';
+    recent.appendChild(empty);
+  } else {
+    const list = document.createElement('div');
+    list.className = 'chips';
+    app.recentWorkspaces.forEach((dir) => {
+      const chip = document.createElement('button');
+      chip.className = 'chip-btn';
+      chip.textContent = dir;
+      chip.title = dir;
+      chip.addEventListener('click', () => {
+        app.cwdDraft = dir;
+        askCwd();
+      });
+      list.appendChild(chip);
+    });
+    recent.appendChild(list);
+  }
+  el.pageInner.appendChild(recent);
+
+  const keys = makePageCard('快捷键');
+  const shortcutRows = [
+    ['Ctrl+K', '新建对话'],
+    ['Ctrl+B', '收起侧栏'],
+    ['Ctrl+J', '终端'],
+    ['Ctrl+E', '文件面板'],
+    ['Ctrl+F', '搜索对话'],
+    ['Esc', '关掉弹层'],
+  ];
+  const shortcutList = document.createElement('div');
+  shortcutList.className = 'kv';
+  shortcutRows.forEach(([combo, what]) => {
+    const row = document.createElement('div');
+    row.className = 'kv-row';
+    const key = document.createElement('span');
+    key.className = 'kv-key';
+    key.textContent = combo;
+    const text = document.createElement('span');
+    text.className = 'kv-value';
+    text.textContent = what;
+    row.appendChild(key);
+    row.appendChild(text);
+    shortcutList.appendChild(row);
+  });
+  keys.appendChild(shortcutList);
+  el.pageInner.appendChild(keys);
+
+  const style = makePageCard('自定义样式', '这段 CSS 贴在页面最后，保存后所有设备一起生效。');
   const editor = document.createElement('textarea');
   editor.className = 'css-editor';
   editor.spellcheck = false;
   editor.value = app.customCss || DEFAULT_CSS;
-  styleBlock.appendChild(editor);
+  style.appendChild(editor);
 
   const styleBar = document.createElement('div');
   styleBar.className = 'css-actions';
 
   const saveStyle = document.createElement('button');
-  saveStyle.className = 'ghost-btn small';
+  saveStyle.className = 'primary-btn small';
   saveStyle.textContent = '保存';
   saveStyle.addEventListener('click', () => {
     send({ type: 'set_css', css: editor.value });
@@ -1655,32 +1841,229 @@ function openSettings() {
   styleBar.appendChild(saveStyle);
   styleBar.appendChild(resetStyle);
   styleBar.appendChild(clearStyle);
-  styleBlock.appendChild(styleBar);
-  card.appendChild(styleBlock);
+  style.appendChild(styleBar);
+  el.pageInner.appendChild(style);
 
-  const actions = document.createElement('div');
-  actions.className = 'modal-actions';
+  const logs = makePageCard('日志', '中心那边的运行日志，排查问题时看这里。');
+  const logsBar = document.createElement('div');
+  logsBar.className = 'css-actions';
+  const readLog = document.createElement('button');
+  readLog.className = 'ghost-btn small';
+  readLog.textContent = '读最近日志';
+  readLog.addEventListener('click', () => send({ type: 'read_log', lines: 120 }));
+  logsBar.appendChild(readLog);
+  logs.appendChild(logsBar);
 
-  const logButton = document.createElement('button');
-  logButton.className = 'ghost-btn';
-  logButton.textContent = '看最近日志';
-  logButton.addEventListener('click', () => send({ type: 'read_log', lines: 120 }));
-  actions.appendChild(logButton);
-
-  const close = document.createElement('button');
-  close.className = 'primary-btn';
-  close.textContent = '知道了';
-  close.addEventListener('click', closeModal);
-  actions.appendChild(close);
-  card.appendChild(actions);
-
-  el.modal.innerHTML = '';
-  el.modal.appendChild(card);
-  el.modal.hidden = false;
+  const logBox = document.createElement('pre');
+  logBox.className = 'log-tail';
+  logBox.id = 'logTailBox';
+  logBox.textContent = app.logTail ? app.logTail.text || '（空）' : '还没有读，点上面的按钮。';
+  logs.appendChild(logBox);
+  el.pageInner.appendChild(logs);
 }
 
-el.newSessionBtn.addEventListener('click', newSession);
-el.emptyNewBtn.addEventListener('click', newSession);
+/* -------------------------------- 技能 -------------------------------- */
+
+function renderSkillsPage() {
+  const data = app.skills;
+  const refresh = makeRefreshButton('刷新', () => {
+    app.skills = null;
+    requestSkills();
+  });
+
+  el.pageInner.appendChild(makePageHead(
+    '技能',
+    data ? '中心这台机器上能用的技能，来自用户目录和你当前的工作区。' : '正在读技能清单…',
+    refresh,
+  ));
+
+  if (!data) return;
+
+  const groups = new Map();
+  data.items.forEach((item) => {
+    const scope = item.scope || '用户';
+    if (!groups.has(scope)) groups.set(scope, []);
+    groups.get(scope).push(item);
+  });
+
+  if (!data.items.length) {
+    const card = makePageCard();
+    const empty = document.createElement('p');
+    empty.className = 'page-note';
+    empty.textContent = '还没有技能。把带 SKILL.md 的目录放进 ~/.pi/agent/skills 或工作区的 .pi/skills 就会出现在这里。';
+    card.appendChild(empty);
+    el.pageInner.appendChild(card);
+    return;
+  }
+
+  ['用户', '项目'].forEach((scope) => {
+    const items = groups.get(scope);
+    if (!items || !items.length) return;
+
+    const card = makePageCard(scope === '用户' ? '用户技能' : '项目技能（' + baseName(app.activeCwd || '') + '）');
+    const list = document.createElement('div');
+    list.className = 'item-list';
+
+    items.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'item-row';
+
+      const top = document.createElement('div');
+      top.className = 'item-top';
+      const name = document.createElement('span');
+      name.className = 'item-name';
+      name.textContent = item.name;
+      top.appendChild(name);
+      if (item.commandOnly) top.appendChild(makeBadge('只能手动调用', 'soft'));
+      row.appendChild(top);
+
+      if (item.description) {
+        const desc = document.createElement('p');
+        desc.className = 'item-desc clamp';
+        desc.textContent = item.description;
+        desc.title = item.description;
+        row.appendChild(desc);
+      }
+
+      const path = document.createElement('span');
+      path.className = 'item-path';
+      path.textContent = item.path;
+      path.title = item.path;
+      row.appendChild(path);
+
+      list.appendChild(row);
+    });
+
+    card.appendChild(list);
+    el.pageInner.appendChild(card);
+  });
+}
+
+function requestSkills() {
+  send({ type: 'list_skills', cwd: app.activeCwd || app.lastCwd || '' });
+}
+
+/* -------------------------------- 扩展 -------------------------------- */
+
+function renderExtensionsPage() {
+  const data = app.extensions;
+  const refresh = makeRefreshButton('刷新', () => {
+    app.extensions = null;
+    requestExtensions();
+  });
+
+  el.pageInner.appendChild(makePageHead(
+    '扩展',
+    data ? 'Pi 配置里装的扩展包，以及它们在这个工作区注册的命令。' : '正在读扩展清单…',
+    refresh,
+  ));
+
+  if (!data) return;
+
+  const packages = makePageCard('扩展包', data.settingsPath ? '来自 ' + data.settingsPath : '');
+  if (!data.packages.length) {
+    const empty = document.createElement('p');
+    empty.className = 'page-note';
+    empty.textContent = 'Pi 配置里还没有装扩展包。用 pi install 装一个再回来刷新。';
+    packages.appendChild(empty);
+  } else {
+    const list = document.createElement('div');
+    list.className = 'item-list';
+
+    data.packages.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'item-row';
+
+      const top = document.createElement('div');
+      top.className = 'item-top';
+      const name = document.createElement('span');
+      name.className = 'item-name';
+      name.textContent = item.name;
+      top.appendChild(name);
+      top.appendChild(makeBadge(item.kind, 'soft'));
+      if (item.version) top.appendChild(makeBadge(item.version, 'plain'));
+      if (!item.installed) top.appendChild(makeBadge('没装上', 'warn'));
+      row.appendChild(top);
+
+      const where = document.createElement('span');
+      where.className = 'item-path';
+      where.textContent = item.installed && item.path ? item.path : item.source;
+      where.title = item.path || item.source;
+      row.appendChild(where);
+
+      list.appendChild(row);
+    });
+
+    packages.appendChild(list);
+  }
+
+  if (data.problems.length) {
+    data.problems.forEach((problem) => {
+      const line = document.createElement('p');
+      line.className = 'page-note warn';
+      line.textContent = problem;
+      packages.appendChild(line);
+    });
+  }
+
+  el.pageInner.appendChild(packages);
+
+  const commands = makePageCard('扩展命令', '在对话里用 / 加上命令名就能跑。');
+  if (!data.commands.length) {
+    const empty = document.createElement('p');
+    empty.className = 'page-note';
+    empty.textContent = '这个工作区还没有扩展命令。打开一个对话后再回来，这里会填上。';
+    commands.appendChild(empty);
+  } else {
+    const list = document.createElement('div');
+    list.className = 'item-list';
+
+    data.commands.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'item-row';
+
+      const top = document.createElement('div');
+      top.className = 'item-top';
+      const name = document.createElement('span');
+      name.className = 'item-name';
+      name.textContent = '/' + item.name;
+      top.appendChild(name);
+      if (item.scope) top.appendChild(makeBadge(item.scope, 'soft'));
+      row.appendChild(top);
+
+      if (item.description) {
+        const desc = document.createElement('p');
+        desc.className = 'item-desc';
+        desc.textContent = item.description;
+        row.appendChild(desc);
+      }
+
+      list.appendChild(row);
+    });
+
+    commands.appendChild(list);
+  }
+
+  el.pageInner.appendChild(commands);
+}
+
+function requestExtensions() {
+  // 扩展命令是 Pi 报的，中心只认缓存。手上有开着的对话就顺手让它报一遍。
+  const session = current();
+  if (session && !session.commands) {
+    send({ type: 'list_commands', key: session.key });
+  }
+  send({ type: 'list_extensions', cwd: app.activeCwd || app.lastCwd || '' });
+}
+
+el.newSessionBtn.addEventListener('click', () => {
+  switchView('chat');
+  newSession();
+});
+el.emptyNewBtn.addEventListener('click', () => {
+  switchView('chat');
+  newSession();
+});
 el.renameBtn.addEventListener('click', renameConversation);
 el.sessionTitle.addEventListener('dblclick', renameConversation);
 
@@ -2507,29 +2890,32 @@ function dispatch(message) {
       renderDirListing(message);
       break;
 
+    case 'skills':
+      app.skills = message;
+      el.skillsCount.textContent = String((message.items || []).length);
+      if (app.view === 'skills') renderPage('skills');
+      break;
+
+    case 'extensions':
+      app.extensions = message;
+      el.extensionsCount.textContent = String((message.packages || []).length);
+      if (app.view === 'extensions') renderPage('extensions');
+      break;
+
     case 'css':
       applyCustomCss(message.css || '');
       break;
 
     case 'log_tail': {
-      const card = document.createElement('div');
-      card.className = 'modal wide';
-      card.innerHTML = '<h3>中心日志</h3><div class="modal-message">' + escapeHtml(message.path || '') + '</div>';
-      const pre = document.createElement('pre');
-      pre.className = 'log-tail';
-      pre.textContent = message.text || '（空）';
-      card.appendChild(pre);
-      const actions = document.createElement('div');
-      actions.className = 'modal-actions';
-      const close = document.createElement('button');
-      close.className = 'primary-btn';
-      close.textContent = '知道了';
-      close.addEventListener('click', closeModal);
-      actions.appendChild(close);
-      card.appendChild(actions);
-      el.modal.innerHTML = '';
-      el.modal.appendChild(card);
-      el.modal.hidden = false;
+      // 日志就在设置页里，读完直接铺到那一块，不再另开弹窗。
+      app.logTail = message;
+      if (app.view !== 'settings') {
+        switchView('settings');
+      }
+      const box = document.getElementById('logTailBox');
+      if (box) {
+        box.textContent = message.text || '（空）';
+      }
       break;
     }
 
@@ -2622,6 +3008,7 @@ function dispatch(message) {
       if (!session) break;
       session.commands = message.items || [];
       if (completion.kind === 'command') requestCommands(completion.query);
+      if (app.view === 'extensions') requestExtensions();
       break;
     }
 
