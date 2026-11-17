@@ -28,12 +28,12 @@ fn log(message: &str) {
 }
 
 fn timestamp() -> String {
-    // 只要给人看的时间戳，不引第三方库。
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    format!("{now}")
+    let now = time::OffsetDateTime::now_local()
+        .unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    let format = time::macros::format_description!(
+        "[year]-[month]-[day] [hour]:[minute]:[second]"
+    );
+    now.format(&format).unwrap_or_default()
 }
 
 /// 中心地址：center.json 里的 url 与 token，其次 token.txt，最后环境变量。
@@ -196,6 +196,13 @@ fn center_local(app: tauri::AppHandle) -> bool {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // 已经开着一个了：把那个窗口提到前面，不再开第二个。
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![pick_folder, center_local])
         .setup(|app| {
