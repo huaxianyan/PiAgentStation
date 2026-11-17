@@ -7,77 +7,121 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app" id="app">
-    <aside class="sidebar">
-      <div class="brandbar">
-        <div class="brand"><span class="mark"></span><span>PiAgentStation</span></div>
-        <button class="icon-btn" id="newSessionBtn" title="新建对话">＋</button>
-      </div>
-      <div class="filterbar">
-        <input id="sessionFilter" type="search" placeholder="筛选对话" autocomplete="off" />
-      </div>
-      <div class="session-list" id="sessionList"></div>
-      <div class="sidebar-foot">
-        <div class="ext-status" id="extStatus"></div>
-        <div class="conn" id="connStatus">正在连接…</div>
-        <div class="session-root" id="sessionRoot"></div>
-      </div>
-    </aside>
+  <div class="stage">
+    <div class="window" id="app">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-head">
+          <button class="icon-btn" id="collapseBtn" title="收起边栏" aria-label="收起边栏">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2.5"/><path d="M6.5 2.5v11"/></svg>
+          </button>
+        </div>
 
-    <main class="main">
-      <header class="topbar">
-        <div class="title-block">
-          <div class="title-row">
-            <h1 id="sessionTitle">未选择对话</h1>
-            <button class="icon-btn small" id="renameBtn" title="重命名对话" hidden>✎</button>
+        <button class="new-thread" id="newSessionBtn">
+          <span class="plus">+</span>
+          <span>新建对话</span>
+        </button>
+
+        <nav class="nav">
+          <button class="nav-item is-active" id="threadsNav">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5.2c0-.9.7-1.6 1.6-1.6h2l1.4 1.6h4.4c.9 0 1.6.7 1.6 1.6v4.6c0 .9-.7 1.6-1.6 1.6H4.1c-.9 0-1.6-.7-1.6-1.6z"/></svg>
+            <span>对话</span>
+            <span class="nav-count" id="navCount"></span>
+          </button>
+          <button class="nav-item" id="settingsBtn">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6"/></svg>
+            <span>设置</span>
+          </button>
+        </nav>
+
+        <div class="threads-head">
+          <span class="threads-title">对话</span>
+          <button class="icon-btn" id="filterToggle" title="筛选对话" aria-label="筛选对话">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11M4.5 8h7M6.5 11.5h3"/></svg>
+          </button>
+        </div>
+
+        <div class="filterbar" id="filterbar" hidden>
+          <input id="sessionFilter" type="search" placeholder="按标题或目录筛选" autocomplete="off" />
+        </div>
+
+        <div class="session-list" id="sessionList"></div>
+
+        <div class="sidebar-foot">
+          <div class="ext-status" id="extStatus"></div>
+          <div class="conn" id="connStatus">正在连接…</div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="crumbs">
+            <span class="crumb-ws" id="sessionCwd"></span>
+            <span class="crumb-sep" id="crumbSep" hidden>/</span>
+            <h1 id="sessionTitle">新对话</h1>
+            <button class="icon-btn small" id="renameBtn" title="重命名对话" aria-label="重命名对话" hidden>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.8 3.1 12.9 6.2 5.6 13.5H2.5v-3.1z"/><path d="M11.4 1.6 14.4 4.6"/></svg>
+            </button>
           </div>
-          <div class="sub" id="sessionCwd"></div>
-        </div>
-        <div class="controls">
-          <span class="ctx" id="ctxUsage" hidden></span>
-          <select id="thinkingSelect" title="思考等级" hidden></select>
-          <select id="modelSelect" title="模型" hidden></select>
-          <button class="ghost-btn" id="compactBtn" title="压缩上下文" hidden>压缩</button>
-        </div>
-      </header>
+          <div class="controls">
+            <span class="ctx" id="ctxUsage" hidden></span>
+            <button class="ghost-btn" id="compactBtn" title="压缩上下文" hidden>压缩</button>
+            <button class="icon-btn" id="sidebarToggle" title="展开边栏" aria-label="展开边栏" hidden>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2.5"/><path d="M6.5 2.5v11"/></svg>
+            </button>
+          </div>
+        </header>
 
-      <div class="thread" id="thread" hidden>
-        <div class="thread-inner" id="threadInner"></div>
-      </div>
+        <div class="content" id="content">
+          <div class="thread" id="thread" hidden>
+            <div class="thread-inner" id="threadInner"></div>
+          </div>
 
-      <div class="composer" id="composer" hidden>
-        <div class="widget-strip" id="widgetStrip" hidden></div>
-        <div class="attachments" id="attachments" hidden></div>
-        <div class="composer-box">
-          <textarea id="input" rows="1" placeholder="给 PiAgentStation 一个任务…" spellcheck="false"></textarea>
-          <div class="composer-row">
-            <button class="ghost-btn" id="attachBtn" title="附加图片">图片</button>
-            <span class="hint" id="hint"></span>
-            <button class="primary-btn" id="sendBtn">发送</button>
+          <div class="empty" id="empty">
+            <div class="app-mark">π</div>
+            <div class="eyebrow">新对话</div>
+            <h2>开始动手</h2>
+            <button class="ws-select" id="emptyNewBtn">
+              <span id="wsSelectText">选择工作区</span>
+              <span class="chev">⌄</span>
+            </button>
+            <p class="empty-note">对话存在中心，换台设备打开，看到的还是这一份。</p>
+          </div>
+
+          <div class="composer" id="composer">
+            <div class="widget-strip" id="widgetStrip" hidden></div>
+            <div class="attachments" id="attachments" hidden></div>
+            <div class="composer-box">
+              <textarea id="input" rows="1" placeholder="问点什么，用 / 触发命令与技能" spellcheck="false"></textarea>
+              <div class="composer-row">
+                <div class="pills">
+                  <button class="pill pill-primary" id="workspacePill">
+                    <span class="pill-label" id="workspacePillText">选择工作区</span>
+                  </button>
+                  <select class="pill pill-select" id="modelSelect" title="模型" hidden></select>
+                  <select class="pill pill-select" id="thinkingSelect" title="思考等级" hidden></select>
+                </div>
+                <div class="composer-actions">
+                  <button class="icon-btn round" id="attachBtn" title="附加图片" aria-label="附加图片">+</button>
+                  <button class="send-btn" id="sendBtn" title="发送" aria-label="发送">↑</button>
+                </div>
+              </div>
+            </div>
+            <div class="hint" id="hint"></div>
           </div>
         </div>
-      </div>
 
-      <div class="empty" id="empty">
-        <div class="empty-inner">
-          <h2>从左边挑一个对话，或者新建</h2>
-          <p class="muted">对话存在中心，换台设备打开，看到的还是这一份。</p>
-          <div class="starters" id="starters"></div>
-          <button class="primary-btn" id="emptyNewBtn">新建对话</button>
+        <div class="overlay" id="overlay" hidden>
+          <div class="overlay-card">
+            <div class="spinner"></div>
+            <div id="overlayText">正在打开对话…</div>
+          </div>
         </div>
-      </div>
+      </main>
 
-      <div class="overlay" id="overlay" hidden>
-        <div class="overlay-card">
-          <div class="spinner"></div>
-          <div id="overlayText">正在启动 Pi…</div>
-        </div>
-      </div>
-    </main>
-
-    <div class="toasts" id="toasts"></div>
-    <div class="modal-backdrop" id="modal" hidden></div>
-    <input type="file" id="fileInput" accept="image/*" multiple hidden />
+      <div class="toasts" id="toasts"></div>
+      <div class="modal-backdrop" id="modal" hidden></div>
+      <input type="file" id="fileInput" accept="image/*" multiple hidden />
+    </div>
   </div>
   <script src="app.js"></script>
 </body>

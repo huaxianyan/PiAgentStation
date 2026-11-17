@@ -179,6 +179,12 @@ public sealed class CenterHub
         var items = new JsonArray();
         foreach (var conversation in _store.List())
         {
+            bool working;
+            lock (_gate)
+            {
+                working = _live.TryGetValue(conversation.Id, out var live) && live.Streaming;
+            }
+
             items.Add(new JsonObject
             {
                 ["id"] = conversation.Id,
@@ -186,6 +192,7 @@ public sealed class CenterHub
                 ["cwd"] = conversation.Cwd,
                 ["updatedAt"] = conversation.UpdatedAt,
                 ["messageCount"] = conversation.MessageCount,
+                ["working"] = working,
             });
         }
 
@@ -507,6 +514,8 @@ public sealed class CenterHub
             if (firstLine.Length > 0)
             {
                 _store.Rename(id, firstLine.Length > 40 ? firstLine[..40] + "…" : firstLine);
+                // 标题是服务端定的，推回去让开着的界面立刻改名，不用等重开。
+                Broadcast(Settings(RequireConversation(id)));
                 Broadcast(new JsonObject { ["type"] = "conversation_saved", ["key"] = id });
             }
         }

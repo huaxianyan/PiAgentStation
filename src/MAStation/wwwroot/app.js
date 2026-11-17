@@ -87,6 +87,8 @@ const app = {
   sessions: [],
   sessionRoot: '',
   storePath: '',
+  centerVersion: '',
+  pendingPrompt: '',
   centerName: '',
   filter: '',
   currentKey: null,
@@ -127,7 +129,18 @@ function makeSession(key, state, messages, cwd) {
 const el = {
   sessionList: document.getElementById('sessionList'),
   sessionFilter: document.getElementById('sessionFilter'),
-  sessionRoot: document.getElementById('sessionRoot'),
+  filterToggle: document.getElementById('filterToggle'),
+  filterbar: document.getElementById('filterbar'),
+  navCount: document.getElementById('navCount'),
+  settingsBtn: document.getElementById('settingsBtn'),
+  collapseBtn: document.getElementById('collapseBtn'),
+  sidebarToggle: document.getElementById('sidebarToggle'),
+  workspacePill: document.getElementById('workspacePill'),
+  workspacePillText: document.getElementById('workspacePillText'),
+  wsSelectText: document.getElementById('wsSelectText'),
+  content: document.getElementById('content'),
+  windowEl: document.getElementById('app'),
+  crumbSep: document.getElementById('crumbSep'),
   sessionTitle: document.getElementById('sessionTitle'),
   renameBtn: document.getElementById('renameBtn'),
   sessionCwd: document.getElementById('sessionCwd'),
@@ -153,7 +166,6 @@ const el = {
   extStatus: document.getElementById('extStatus'),
   connStatus: document.getElementById('connStatus'),
   widgetStrip: document.getElementById('widgetStrip'),
-  starters: document.getElementById('starters'),
   fileInput: document.getElementById('fileInput'),
 };
 
@@ -464,37 +476,45 @@ function buildItems(messages) {
  * 渲染：会话列表
  * ------------------------------------------------------------------ */
 
+function dateGroup(ms) {
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  if (ms >= startOfToday) return '今天';
+  if (ms >= startOfToday - 86_400_000) return '昨天';
+  if (ms >= startOfToday - 7 * 86_400_000) return '本周';
+  return '更早';
+}
+
 function renderSessionList() {
   const filter = app.filter.trim().toLowerCase();
   const groups = new Map();
 
   for (const conversation of app.sessions) {
-    const label = conversation.cwd || '未知目录';
     if (filter) {
       const haystack = [(conversation.title || ''), conversation.cwd].join(' ').toLowerCase();
       if (!haystack.includes(filter)) continue;
     }
+    const label = dateGroup(conversation.updatedAt);
     if (!groups.has(label)) groups.set(label, []);
     groups.get(label).push(conversation);
   }
+
+  el.navCount.textContent = app.sessions.length ? String(app.sessions.length) : '';
 
   el.sessionList.innerHTML = '';
   if (!groups.size) {
     const empty = document.createElement('div');
     empty.className = 'group-label';
-    empty.textContent = app.sessions.length ? '没有匹配的对话' : '还没有对话，点上面的 ＋ 新建';
+    empty.textContent = app.sessions.length ? '没有匹配的对话' : '还没有对话';
     el.sessionList.appendChild(empty);
     return;
   }
 
-  for (const [cwd, conversations] of groups) {
-    const label = document.createElement('div');
-    label.className = 'group-label';
-    label.title = cwd;
-    const folder = baseName(cwd);
-    const labelText = !folder || folder === '.' || folder === '..' ? '未标明目录' : folder;
-    label.innerHTML = '<span class="folder">' + escapeHtml(labelText) + '</span>';
-    el.sessionList.appendChild(label);
+  for (const [label, conversations] of groups) {
+    const groupLabel = document.createElement('div');
+    groupLabel.className = 'group-label';
+    groupLabel.textContent = label;
+    el.sessionList.appendChild(groupLabel);
 
     for (const conversation of conversations) {
       const item = document.createElement('div');
@@ -504,8 +524,11 @@ function renderSessionList() {
       const open = document.createElement('button');
       open.className = 'session-open';
       open.innerHTML =
-        '<div class="row1"><span class="name">' + escapeHtml(conversation.title || '未命名对话') + '</span>' +
-        '<span class="time">' + relativeTime(conversation.updatedAt) + '</span></div>';
+        '<div class="row1"><span class="name">' + escapeHtml(conversation.title || '新对话') + '</span>' +
+        '<span class="time">' + relativeTime(conversation.updatedAt) + '</span></div>' +
+        '<div class="row2"><span class="ws">' + escapeHtml(baseName(conversation.cwd) || '未知目录') + '</span>' +
+        (conversation.working ? '<span class="working"><span class="dot"></span>正在运行</span>' : '') +
+        '</div>';
       open.addEventListener('click', () => openSession(conversation));
       item.appendChild(open);
 
@@ -772,8 +795,12 @@ function schedule(itemId) {
 function renderHeader() {
   const session = current();
   if (!session) {
-    el.sessionTitle.textContent = '未选择对话';
+    el.sessionTitle.textContent = '新对话';
     el.sessionCwd.textContent = '';
+    el.crumbSep.hidden = true;
+    el.workspacePill.hidden = true;
+    el.wsSelectText.textContent = baseName(app.lastCwd || app.activeCwd) || '选择工作区';
+    el.workspacePill.title = app.lastCwd || app.activeCwd || '';
     el.modelSelect.hidden = true;
     el.thinkingSelect.hidden = true;
     el.compactBtn.hidden = true;
@@ -787,7 +814,13 @@ function renderHeader() {
   const title = state.sessionName || (firstUser && firstUser.text ? firstUser.text.split('\n')[0] : '') || '新对话';
   el.sessionTitle.textContent = title;
   el.sessionTitle.title = title;
-  el.sessionCwd.textContent = session.cwd || '';
+  el.sessionCwd.textContent = baseName(session.cwd) || '';
+  el.sessionCwd.title = session.cwd || '';
+  el.crumbSep.hidden = !session.cwd;
+  el.workspacePill.hidden = false;
+  el.workspacePillText.textContent = baseName(session.cwd) || '选择工作区';
+  el.workspacePill.title = session.cwd || '';
+  el.wsSelectText.textContent = baseName(session.cwd) || '选择工作区';
 
   // 新对话还没跟 Pi 打过交道时，先按模型列表的第一项显示。
   const model = state.model
@@ -801,8 +834,13 @@ function renderHeader() {
         fillModelSelect(list);
         el.modelSelect.dataset.signature = signature;
       }
-      el.modelSelect.value = wanted;
-      el.modelSelect.title = model.name && model.name !== model.id ? wanted + '  ' + model.name : wanted;
+      if (state.model) {
+        el.modelSelect.value = wanted;
+        el.modelSelect.title = model.name && model.name !== model.id ? wanted + '  ' + model.name : wanted;
+      } else {
+        el.modelSelect.value = '';
+        el.modelSelect.title = '还没定，跟着 Pi 的默认走';
+      }
       el.modelSelect.hidden = false;
     } else {
       el.modelSelect.hidden = true;
@@ -846,6 +884,11 @@ function fillModelSelect(list) {
   }
 
   el.modelSelect.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = '默认模型';
+  el.modelSelect.appendChild(placeholder);
+
   for (const [provider, entries] of groups) {
     const group = document.createElement('optgroup');
     group.label = provider;
@@ -890,9 +933,10 @@ function renderContext() {
 function renderComposerState() {
   const session = current();
   const streaming = Boolean(session && session.streaming);
-  el.sendBtn.textContent = streaming ? '停止' : '发送';
+  el.sendBtn.textContent = streaming ? '■' : '↑';
+  el.sendBtn.title = streaming ? '停止' : '发送';
   el.sendBtn.classList.toggle('stop', streaming);
-  el.hint.textContent = streaming ? 'Enter 插入为引导（steer），Shift+Enter 换行' : 'Enter 发送，Shift+Enter 换行';
+  if (!streaming) el.hint.textContent = '';
 }
 
 function renderAttachments() {
@@ -941,8 +985,8 @@ function renderExtStatus() {
 
 function showWorkspace(hasSession) {
   el.thread.hidden = !hasSession;
-  el.composer.hidden = !hasSession;
   el.empty.hidden = hasSession;
+  el.content.classList.toggle('is-empty', !hasSession);
 }
 
 /* ------------------------------------------------------------------ *
@@ -1045,6 +1089,77 @@ function startSession(cwd) {
   }
 }
 
+/* 侧栏：折叠状态记在本地，重开还是上次的样子 */
+function setSidebar(open) {
+  el.windowEl.classList.toggle('sidebar-collapsed', !open);
+  el.sidebarToggle.hidden = open;
+  try {
+    localStorage.setItem('piagentstation.sidebar', open ? '1' : '0');
+  } catch {
+    // 无痕模式写不了，忽略。
+  }
+}
+
+el.collapseBtn.addEventListener('click', () => setSidebar(false));
+el.sidebarToggle.addEventListener('click', () => setSidebar(true));
+
+let sidebarOpen = true;
+try {
+  sidebarOpen = localStorage.getItem('piagentstation.sidebar') !== '0';
+} catch {
+  sidebarOpen = true;
+}
+setSidebar(sidebarOpen);
+
+el.filterToggle.addEventListener('click', () => {
+  el.filterbar.hidden = !el.filterbar.hidden;
+  if (!el.filterbar.hidden) el.sessionFilter.focus();
+});
+
+el.workspacePill.addEventListener('click', () => {
+  // 已有对话时工作区是定下来的，只有新对话才能挑。
+  if (!current()) askCwd();
+});
+
+el.settingsBtn.addEventListener('click', openSettings);
+
+function openSettings() {
+  closeModal();
+  const card = document.createElement('div');
+  card.className = 'modal';
+
+  const title = document.createElement('h3');
+  title.textContent = '设置';
+  card.appendChild(title);
+
+  const rows = [
+    ['中心', location.origin],
+    ['版本', app.centerVersion || '未知'],
+    ['对话库', app.storePath || '未知'],
+    ['连接', transport.connected ? '已连接' : '未连接'],
+  ];
+
+  for (const [label, value] of rows) {
+    const row = document.createElement('div');
+    row.className = 'modal-message';
+    row.innerHTML = '<span class="label">' + escapeHtml(label) + '</span><br>' + escapeHtml(value);
+    card.appendChild(row);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'modal-actions';
+  const close = document.createElement('button');
+  close.className = 'primary-btn';
+  close.textContent = '知道了';
+  close.addEventListener('click', closeModal);
+  actions.appendChild(close);
+  card.appendChild(actions);
+
+  el.modal.innerHTML = '';
+  el.modal.appendChild(card);
+  el.modal.hidden = false;
+}
+
 el.newSessionBtn.addEventListener('click', newSession);
 el.emptyNewBtn.addEventListener('click', newSession);
 el.renameBtn.addEventListener('click', renameConversation);
@@ -1113,6 +1228,7 @@ el.sessionFilter.addEventListener('input', () => {
 el.modelSelect.addEventListener('change', () => {
   const session = current();
   if (!session) return;
+  if (!el.modelSelect.value) return;
   const [provider, ...rest] = el.modelSelect.value.split('/');
   send({ type: 'set_model', key: session.key, provider, modelId: rest.join('/') });
 });
@@ -1159,10 +1275,24 @@ el.sendBtn.addEventListener('click', () => {
 });
 
 function submitPrompt() {
-  const session = current();
-  if (!session) return;
   const text = el.input.value.trim();
   if (!text) return;
+
+  const session = current();
+  if (!session) {
+    // 还没有对话时，直接用当前工作区建一个，再把这句话发出去。
+    const cwd = app.lastCwd || app.activeCwd;
+    if (!cwd) {
+      askCwd();
+      return;
+    }
+
+    app.pendingPrompt = text;
+    el.input.value = '';
+    autoGrow();
+    startSession(cwd);
+    return;
+  }
 
   const message = {
     type: 'prompt',
@@ -1212,24 +1342,6 @@ el.fileInput.addEventListener('change', async () => {
   renderAttachments();
 });
 
-const starters = [
-  '看一下这个目录的结构，说清各部分在做什么。',
-  '跑一遍测试，把失败项和原因列出来。',
-  '梳理现在最该修的三个问题，给出改动位置。',
-];
-
-for (const text of starters) {
-  const button = document.createElement('button');
-  button.className = 'starter';
-  button.textContent = text;
-  button.addEventListener('click', () => {
-    el.input.value = text;
-    autoGrow();
-    el.input.focus();
-  });
-  el.starters.appendChild(button);
-}
-
 /* ------------------------------------------------------------------ *
  * 宿主消息分发
  * ------------------------------------------------------------------ */
@@ -1245,8 +1357,9 @@ function dispatch(message) {
       }
       if (message.data) {
         app.storePath = message.data;
-        el.sessionRoot.textContent = app.storePath;
-        el.sessionRoot.title = '对话都存在这里，客户端看的就是这一份。';
+      }
+      if (message.version) {
+        app.centerVersion = message.version;
       }
       break;
 
@@ -1343,6 +1456,13 @@ function onSessionState(message) {
     send({ type: 'list_models', key });
   }
   send({ type: 'list_conversations' });
+
+  if (app.pendingPrompt) {
+    const text = app.pendingPrompt;
+    app.pendingPrompt = '';
+    el.input.value = text;
+    submitPrompt();
+  }
 }
 
 function onModels(message) {
