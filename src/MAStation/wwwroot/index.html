@@ -65,6 +65,9 @@
           <div class="controls">
             <span class="ctx" id="ctxUsage" hidden></span>
             <button class="ghost-btn" id="compactBtn" title="压缩上下文" hidden>压缩</button>
+            <button class="icon-btn" id="exportBtn" title="导出为 Markdown" aria-label="导出为 Markdown" hidden>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v8"/><path d="M4.8 7.4 8 10.6l3.2-3.2"/><path d="M3 13h10"/></svg>
+            </button>
             <button class="icon-btn" id="sidebarToggle" title="展开边栏" aria-label="展开边栏" hidden>
               <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2.5"/><path d="M6.5 2.5v11"/></svg>
             </button>
@@ -90,6 +93,7 @@
           <div class="composer" id="composer">
             <div class="widget-strip" id="widgetStrip" hidden></div>
             <div class="attachments" id="attachments" hidden></div>
+            <div class="completions" id="completions" hidden></div>
             <div class="composer-box">
               <textarea id="input" rows="1" placeholder="问点什么，用 / 触发命令与技能" spellcheck="false"></textarea>
               <div class="composer-row">

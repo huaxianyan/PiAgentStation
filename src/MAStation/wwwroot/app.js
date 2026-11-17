@@ -135,6 +135,7 @@ const el = {
   settingsBtn: document.getElementById('settingsBtn'),
   collapseBtn: document.getElementById('collapseBtn'),
   sidebarToggle: document.getElementById('sidebarToggle'),
+  exportBtn: document.getElementById('exportBtn'),
   workspacePill: document.getElementById('workspacePill'),
   workspacePillText: document.getElementById('workspacePillText'),
   wsSelectText: document.getElementById('wsSelectText'),
@@ -166,6 +167,7 @@ const el = {
   extStatus: document.getElementById('extStatus'),
   connStatus: document.getElementById('connStatus'),
   widgetStrip: document.getElementById('widgetStrip'),
+  completions: document.getElementById('completions'),
   fileInput: document.getElementById('fileInput'),
 };
 
@@ -279,8 +281,10 @@ function renderMarkdown(text) {
   let html = '';
   for (const chunk of chunks) {
     if (chunk.code) {
-      html += '<pre><code' + (chunk.lang || '') + '>' + escapeHtml(chunk.body.replace(/\n$/, '')) +
-        '</code></pre>';
+      const code = chunk.body.replace(/\n$/, '');
+      html += '<div class="code-block"><button class="code-copy" data-code="' +
+        escapeAttr(encodeURIComponent(code)) + '">复制</button><pre><code>' + escapeHtml(code) +
+        '</code></pre></div>';
     } else {
       html += renderBlocks(chunk.body);
     }
@@ -806,6 +810,7 @@ function renderHeader() {
     el.compactBtn.hidden = true;
     el.ctxUsage.hidden = true;
     el.renameBtn.hidden = true;
+    el.exportBtn.hidden = true;
     return;
   }
 
@@ -870,6 +875,7 @@ function renderHeader() {
 
   el.compactBtn.hidden = false;
   el.renameBtn.hidden = false;
+  el.exportBtn.hidden = false;
   renderContext();
 }
 
@@ -1255,14 +1261,173 @@ function autoGrow() {
   el.input.style.height = Math.min(el.input.scrollHeight, 220) + 'px';
 }
 
-el.input.addEventListener('input', autoGrow);
+el.input.addEventListener('input', () => {
+  autoGrow();
+  queueCompletion();
+});
 
 el.input.addEventListener('keydown', (event) => {
+  if (completionOpen()) {
+    if (event.key === 'ArrowDown') { event.preventDefault(); moveCompletion(1); return; }
+    if (event.key === 'ArrowUp') { event.preventDefault(); moveCompletion(-1); return; }
+    if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
+      event.preventDefault();
+      acceptCompletion();
+      return;
+    }
+    if (event.key === 'Escape') { event.preventDefault(); closeCompletion(); return; }
+  }
+
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault();
     submitPrompt();
   }
 });
+
+el.input.addEventListener('blur', () => setTimeout(closeCompletion, 120));
+
+/* ------------------------------------------------------------------ *
+ * 输入补全：@ 找文件，/ 找命令
+ * ------------------------------------------------------------------ */
+
+const completion = { kind: '', items: [], index: 0, start: 0, end: 0, query: '' };
+let completionTimer = 0;
+
+function completionOpen() {
+  return !el.completions.hidden && completion.items.length > 0;
+}
+
+function closeCompletion() {
+  completion.items = [];
+  completion.kind = '';
+  el.completions.hidden = true;
+  el.completions.innerHTML = '';
+}
+
+function queueCompletion() {
+  const value = el.input.value;
+  const caret = el.input.selectionStart ?? value.length;
+  const before = value.slice(0, caret);
+
+  if (value.startsWith('/') && !value.slice(0, caret).includes(' ')) {
+    requestCommands(before.slice(1));
+    return;
+  }
+
+  const match = /(^|\s)@([^\s@]*)$/.exec(before);
+  const session = current();
+  if (!match || !session) {
+    closeCompletion();
+    return;
+  }
+
+  const query = match[2];
+  completion.kind = 'file';
+  completion.start = caret - query.length - 1;
+  completion.end = caret;
+  completion.query = query;
+
+  window.clearTimeout(completionTimer);
+  completionTimer = window.setTimeout(() => {
+    send({ type: 'complete_files', key: session.key, query });
+  }, 120);
+}
+
+function requestCommands(prefix) {
+  const session = current();
+  if (!session) {
+    closeCompletion();
+    return;
+  }
+
+  completion.kind = 'command';
+  completion.start = 0;
+  completion.end = (el.input.selectionStart ?? prefix.length + 1);
+  completion.query = prefix;
+
+  const items = (session.commands || []).filter((command) =>
+    String(command.name || '').toLowerCase().startsWith(prefix.toLowerCase()));
+  renderCompletions(items);
+
+  if (!session.commands) {
+    send({ type: 'list_commands', key: session.key });
+  }
+}
+
+function renderCompletions(items) {
+  completion.items = items.slice(0, 60);
+  completion.index = 0;
+
+  if (!completion.items.length) {
+    el.completions.innerHTML =
+      '<div class="empty-hint">' +
+      (completion.kind === 'command' ? '这里没有匹配的命令' : '没有匹配的文件') +
+      '</div>';
+    el.completions.hidden = false;
+    return;
+  }
+
+  el.completions.innerHTML = '';
+  completion.items.forEach((item, index) => {
+    const row = document.createElement('button');
+    row.className = 'completion-item' + (index === 0 ? ' is-active' : '');
+
+    if (completion.kind === 'file') {
+      row.innerHTML =
+        '<span class="path">' + escapeHtml(item.path) + '</span>' +
+        '<span class="kind">' + (item.dir ? '目录' : '文件') + '</span>';
+    } else {
+      row.innerHTML =
+        '<span class="path">/' + escapeHtml(item.name || '') + '</span>' +
+        '<span class="desc">' + escapeHtml(item.description || '') + '</span>' +
+        '<span class="kind">' + escapeHtml(item.source || '') + '</span>';
+    }
+
+    row.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      completion.index = index;
+      acceptCompletion();
+    });
+    el.completions.appendChild(row);
+  });
+
+  el.completions.hidden = false;
+}
+
+function moveCompletion(step) {
+  const count = completion.items.length;
+  if (!count) return;
+  completion.index = (completion.index + step + count) % count;
+  [...el.completions.querySelectorAll('.completion-item')].forEach((node, index) => {
+    node.classList.toggle('is-active', index === completion.index);
+    if (index === completion.index) node.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function acceptCompletion() {
+  const item = completion.items[completion.index];
+  if (!item) {
+    closeCompletion();
+    return;
+  }
+
+  const value = el.input.value;
+  const before = value.slice(0, completion.start);
+  const after = value.slice(completion.end);
+  const insert = completion.kind === 'file' ? '@' + item.path : '/' + item.name + ' ';
+
+  el.input.value = before + insert + after;
+  const caret = (before + insert).length;
+  el.input.setSelectionRange(caret, caret);
+  el.input.focus();
+  closeCompletion();
+  autoGrow();
+
+  // 补完目录接着补里面的内容，省得再打一次 @。
+  if (item.dir) {
+    queueCompletion();
+  }
+}
 
 el.sendBtn.addEventListener('click', () => {
   const session = current();
@@ -1273,6 +1438,52 @@ el.sendBtn.addEventListener('click', () => {
   }
   submitPrompt();
 });
+
+function exportMarkdown() {
+  const session = current();
+  if (!session) return;
+
+  const title = (session.state && session.state.sessionName) || '对话';
+  const lines = [
+    '# ' + title,
+    '',
+    '- 工作区：`' + (session.cwd || '') + '`',
+    '- 导出时间：' + new Date().toLocaleString('zh-CN'),
+    '',
+  ];
+
+  for (const item of session.items) {
+    if (item.kind === 'user') {
+      lines.push('## 我', '', item.text || '（图片）', '');
+      continue;
+    }
+
+    if (item.kind !== 'assistant') continue;
+
+    const text = item.blocks
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n\n')
+      .trim();
+    if (text) {
+      lines.push('## 助手', '', text, '');
+    }
+
+    for (const block of item.blocks.filter((entry) => entry.type === 'toolCall')) {
+      lines.push('> `' + block.name + '` ' + toolSummary(block), '');
+    }
+  }
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) + '.md';
+  link.click();
+  URL.revokeObjectURL(link.href);
+  toast('已导出为 Markdown');
+}
+
+el.exportBtn.addEventListener('click', exportMarkdown);
 
 function submitPrompt() {
   const text = el.input.value.trim();
@@ -1324,7 +1535,71 @@ el.attachBtn.addEventListener('click', () => el.fileInput.click());
 el.fileInput.addEventListener('change', async () => {
   const files = [...el.fileInput.files];
   el.fileInput.value = '';
-  for (const file of files) {
+  await addImageFiles(files);
+});
+
+/* 图片可以直接粘、也可以拖进窗口 */
+document.addEventListener('click', async (event) => {
+  const button = event.target.closest('.code-copy');
+  if (!button) return;
+  event.preventDefault();
+  const code = decodeURIComponent(button.dataset.code || '');
+
+  try {
+    await navigator.clipboard.writeText(code);
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = code;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+  }
+
+  button.textContent = '已复制';
+  window.setTimeout(() => { button.textContent = '复制'; }, 1200);
+});
+
+document.addEventListener('paste', (event) => {
+  const files = [...(event.clipboardData?.files || [])].filter((file) => file.type.startsWith('image/'));
+  if (!files.length) return;
+  event.preventDefault();
+  addImageFiles(files);
+});
+
+let dragDepth = 0;
+document.addEventListener('dragenter', (event) => {
+  if (![...(event.dataTransfer?.types || [])].includes('Files')) return;
+  dragDepth += 1;
+  document.body.classList.add('dragging');
+});
+
+document.addEventListener('dragleave', () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) document.body.classList.remove('dragging');
+});
+
+document.addEventListener('dragover', (event) => {
+  if ([...(event.dataTransfer?.types || [])].includes('Files')) event.preventDefault();
+});
+
+document.addEventListener('drop', async (event) => {
+  const files = [...(event.dataTransfer?.files || [])];
+  if (!files.length) return;
+  event.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove('dragging');
+  await addImageFiles(files);
+});
+
+async function addImageFiles(files) {
+  const images = files.filter((file) => file.type.startsWith('image/'));
+  if (!images.length) {
+    if (files.length) toast('现在只能附加图片。', 'warning');
+    return;
+  }
+
+  for (const file of images) {
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result));
@@ -1333,14 +1608,16 @@ el.fileInput.addEventListener('change', async () => {
     });
     const comma = dataUrl.indexOf(',');
     app.attachments.push({
-      name: file.name,
+      name: file.name || '粘贴的图片',
       mimeType: file.type || 'image/png',
       data: dataUrl.slice(comma + 1),
       dataUrl,
     });
   }
+
   renderAttachments();
-});
+  el.input.focus();
+}
 
 /* ------------------------------------------------------------------ *
  * 宿主消息分发
@@ -1392,6 +1669,23 @@ function dispatch(message) {
     case 'session_state':
       onSessionState(message);
       break;
+
+    case 'file_completions': {
+      const session = app.byKey.get(message.key);
+      if (!session || completion.kind !== 'file') break;
+      // 只认最后一次请求，慢回来的结果丢掉。
+      if (message.query !== completion.query) break;
+      renderCompletions(message.items || []);
+      break;
+    }
+
+    case 'commands': {
+      const session = app.byKey.get(message.key);
+      if (!session) break;
+      session.commands = message.items || [];
+      if (completion.kind === 'command') requestCommands(completion.query);
+      break;
+    }
 
     case 'models':
       onModels(message);

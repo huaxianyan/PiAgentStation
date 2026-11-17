@@ -18,7 +18,15 @@ Pi 的客户端。形态是一个中心加多个薄客户端：中心跑 Pi、�
 需要中心那台机器装好 Pi（`~/.pi/agent`）与 .NET 10 SDK。客户端需要 WebView2 运行时。
 
 ```powershell
-pwsh -File scripts/dev-run.ps1        # 起中心 + 桌面客户端
+pwsh -File scripts/dev-run.ps1        # 开发：构建并起中心 + 桌面客户端
+```
+
+日常用（不构建、不弹窗口）：
+
+```powershell
+pwsh -File scripts/start-center.ps1   # 起中心
+pwsh -File scripts/stop-center.ps1    # 停
+pwsh -File scripts/install-autostart.ps1   # 让中心跟着登录自动起来
 ```
 
 中心会在 `%LOCALAPPDATA%\MAStation\token.txt` 生成访问令牌，客户端自动读取。
@@ -36,6 +44,13 @@ pwsh -File scripts/dev-run.ps1 -Listen http://0.0.0.0:8787
 ```
 
 这一步等于把中心那台机器上 Pi 的 shell 对局域网开放，只在可信网段做，令牌别外发。
+
+## 输入区能干什么
+
+- `@` 补全工作区里的文件，选到目录会接着往下钻
+- `/` 列出 Pi 里的命令（扩展命令、提示词模板、技能），按工作区缓存
+- 图片可以直接粘、也可以拖进窗口
+- 代码块右上角「复制」；头部「导出为 Markdown」把整段对话存下来
 
 ## 调试
 

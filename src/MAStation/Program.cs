@@ -10,7 +10,12 @@ PiAgentStation.Shared.Log.Initialize("MAStation", "center.log");
 var listen = Environment.GetEnvironmentVariable("MASTATION_LISTEN") ?? "http://127.0.0.1:8787";
 var token = TokenStore.Resolve();
 
-var builder = WebApplication.CreateBuilder(args);
+// 静态页永远跟着 exe 走：不管从哪个目录启动，都能找到 wwwroot。
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory,
+});
 builder.WebHost.UseUrls(listen);
 // 日志写自己的文件，控制台只留启动那几行，免得被 ASP.NET 默认日志淹掉。
 builder.Logging.ClearProviders();

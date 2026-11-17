@@ -135,6 +135,14 @@ public sealed class CenterHub
                     await SendModelsAsync(Require(key, "对话标识"), sender);
                     break;
 
+                case "list_commands":
+                    await SendCommandsAsync(Require(key, "对话标识"), sender);
+                    break;
+
+                case "complete_files":
+                    CompleteFiles(Require(key, "对话标识"), message, sender);
+                    break;
+
                 case "extension_response":
                     RespondToExtension(Require(key, "对话标识"), message);
                     break;
@@ -245,6 +253,110 @@ public sealed class CenterHub
         }
 
         return payload;
+    }
+
+    /// <summary>Pi 里能用的 / 命令：扩展命令、提示词模板、技能。跟工作区有关，按目录缓存。</summary>
+    private async Task SendCommandsAsync(string id, CenterConnection sender)
+    {
+        var conversation = RequireConversation(id);
+        var cacheKey = "commands:" + conversation.Cwd.ToLowerInvariant();
+        if (ParseNode(_store.GetSetting(cacheKey)) is JsonArray cached)
+        {
+            sender.Send(new JsonObject
+            {
+                ["type"] = "commands",
+                ["key"] = id,
+                ["items"] = cached.DeepClone(),
+            });
+            return;
+        }
+
+        var live = EnsureLive(conversation);
+        var response = await live.Session.SendAsync(new JsonObject { ["type"] = "get_commands" });
+        var commands = Data(response)?["commands"] as JsonArray;
+        if (commands is not null)
+        {
+            _store.SetSetting(cacheKey, commands.ToJsonString());
+        }
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "commands",
+            ["key"] = id,
+            ["items"] = commands?.DeepClone() ?? new JsonArray(),
+        });
+    }
+
+    /// <summary>
+    /// 输入框里打 @ 时的路径补全。这活不经过 Pi：中心自己扫工作区，
+    /// 会话在哪台机器上，补的就是哪台机器上的文件。
+    /// </summary>
+    private void CompleteFiles(string id, JsonObject message, CenterConnection sender)
+    {
+        var conversation = RequireConversation(id);
+        var query = message["query"]?.GetValue<string>() ?? string.Empty;
+        var items = new JsonArray();
+
+        var normalized = query.Replace('\\', '/');
+        var slash = normalized.LastIndexOf('/');
+        var dirPart = slash >= 0 ? normalized[..(slash + 1)] : string.Empty;
+        var prefix = slash >= 0 ? normalized[(slash + 1)..] : normalized;
+
+        var root = Path.GetFullPath(conversation.Cwd);
+        var baseDir = Path.GetFullPath(Path.Combine(root, dirPart.TrimEnd('/')));
+
+        // 只允许在工作区里面找。
+        var rootWithSep = root.EndsWith(Path.DirectorySeparatorChar)
+            ? root
+            : root + Path.DirectorySeparatorChar;
+        if (!baseDir.StartsWith(rootWithSep, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(baseDir, root, StringComparison.OrdinalIgnoreCase))
+        {
+            sender.Send(new JsonObject { ["type"] = "file_completions", ["key"] = id, ["query"] = query, ["items"] = items });
+            return;
+        }
+
+        if (Directory.Exists(baseDir))
+        {
+            var entries = new List<(string Name, bool IsDirectory)>();
+            try
+            {
+                foreach (var directory in Directory.EnumerateDirectories(baseDir))
+                {
+                    entries.Add((Path.GetFileName(directory), true));
+                }
+
+                foreach (var file in Directory.EnumerateFiles(baseDir))
+                {
+                    entries.Add((Path.GetFileName(file), false));
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"补全时读目录失败：{baseDir}", ex);
+            }
+
+            foreach (var entry in entries
+                         .Where(entry => entry.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                         .OrderBy(entry => entry.IsDirectory ? 0 : 1)
+                         .ThenBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+                         .Take(60))
+            {
+                items.Add(new JsonObject
+                {
+                    ["path"] = dirPart + entry.Name + (entry.IsDirectory ? "/" : string.Empty),
+                    ["dir"] = entry.IsDirectory,
+                });
+            }
+        }
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "file_completions",
+            ["key"] = id,
+            ["query"] = query,
+            ["items"] = items,
+        });
     }
 
     /// <summary>只发用量，不碰线程内容：收尾后界面会来问一次，不能拿库里的旧副本覆盖流式结果。</summary>
@@ -652,6 +764,23 @@ public sealed class CenterHub
         foreach (var entry in entries)
         {
             await entry.Session.DisposeAsync();
+        }
+    }
+
+    private static JsonNode? ParseNode(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonNode.Parse(json);
+        }
+        catch
+        {
+            return null;
         }
     }
 
