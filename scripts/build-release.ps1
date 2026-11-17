@@ -4,7 +4,7 @@
 #   pwsh -File scripts/build-release.ps1              # 按 csproj 里的版本号打
 #   pwsh -File scripts/build-release.ps1 -SkipPublish # 用已有 publish 输出直接打包
 #
-# 产物落在 dist/：PiAgentStation-center-<版本>-win-x64.zip 与 PiAgentStation-client-<版本>-win-x64.zip，
+# 产物落在 dist/：SevenStation-center-<版本>-win-x64.zip 与 SevenStation-client-<版本>-win-x64.zip，
 # 各带一个同名 .sha256（sha256sum 能直接 -c 验证）。
 param(
     [switch]$SkipPublish
@@ -21,8 +21,8 @@ function Read-Version([string]$project) {
     return $match.Groups[1].Value.Trim()
 }
 
-$centerVersion = Read-Version (Join-Path $root "src/MAStation/MAStation.csproj")
-$clientVersion = Read-Version (Join-Path $root "src/PiAgentStation.Desktop/PiAgentStation.Desktop.csproj")
+$centerVersion = Read-Version (Join-Path $root "src/SevenStation.Core/SevenStation.Core.csproj")
+$clientVersion = Read-Version (Join-Path $root "src/SevenStation.Desktop/SevenStation.Desktop.csproj")
 if ($centerVersion -ne $clientVersion) {
     throw "两个项目的版本号不一致：中心 $centerVersion / 客户端 $clientVersion"
 }
@@ -35,15 +35,15 @@ if (-not (Test-Path $notes)) {
 
 Write-Host "版本 $version"
 
-$centerOut = Join-Path $root "src/MAStation/bin/Release/net10.0/win-x64/publish"
-$clientOut = Join-Path $root "src/PiAgentStation.Desktop/bin/Release/net10.0-windows/win-x64/publish"
+$centerOut = Join-Path $root "src/SevenStation.Core/bin/Release/net10.0/win-x64/publish"
+$clientOut = Join-Path $root "src/SevenStation.Desktop/bin/Release/net10.0-windows/win-x64/publish"
 
 if (-not $SkipPublish) {
-    dotnet publish (Join-Path $root "src/MAStation/MAStation.csproj") `
+    dotnet publish (Join-Path $root "src/SevenStation.Core/SevenStation.Core.csproj") `
         -c Release -r win-x64 --self-contained -o $centerOut -v q --nologo
     if ($LASTEXITCODE -ne 0) { throw "中心发布失败" }
 
-    dotnet publish (Join-Path $root "src/PiAgentStation.Desktop/PiAgentStation.Desktop.csproj") `
+    dotnet publish (Join-Path $root "src/SevenStation.Desktop/SevenStation.Desktop.csproj") `
         -c Release -r win-x64 --self-contained -o $clientOut -v q --nologo
     if ($LASTEXITCODE -ne 0) { throw "客户端发布失败" }
 }
@@ -54,8 +54,8 @@ foreach ($output in @($centerOut, $clientOut)) {
 
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 
-$centerName = "PiAgentStation-center-$version-win-x64"
-$clientName = "PiAgentStation-client-$version-win-x64"
+$centerName = "SevenStation-center-$version-win-x64"
+$clientName = "SevenStation-client-$version-win-x64"
 
 # 打包前清掉上一次的同名 zip，否则 Compress-Archive 会把新内容塞进旧包。
 foreach ($name in @($centerName, $clientName)) {
@@ -67,7 +67,7 @@ foreach ($name in @($centerName, $clientName)) {
 $launcher = @(
     '@echo off',
     'cd /d "%~dp0"',
-    'start "" "MAStation.exe"'
+    'start "" "SevenStation.Core.exe"'
 ) -join "`r`n"
 Set-Content -Path (Join-Path $centerOut "启动中心.cmd") -Value $launcher -Encoding ascii
 

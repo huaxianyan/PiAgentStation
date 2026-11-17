@@ -1,4 +1,4 @@
-# PiAgentStation
+# SevenStation
 
 Pi 的客户端。形态是一个中心加多个薄客户端：中心跑 Pi、管会话，PC 上的桌面窗口和手机上的浏览器
 连的是同一个中心，看到的也是同一份会话。
@@ -29,7 +29,7 @@ pwsh -File scripts/stop-center.ps1    # 停
 pwsh -File scripts/install-autostart.ps1   # 让中心跟着登录自动起来
 ```
 
-中心会在 `%LOCALAPPDATA%\MAStation\token.txt` 生成访问令牌，客户端自动读取。
+中心会在 `%LOCALAPPDATA%\SevenStation.Core\token.txt` 生成访问令牌，客户端自动读取。
 想隔离会话记录，不污染真实会话：
 
 ```powershell
@@ -65,16 +65,16 @@ pwsh -File scripts/dev-run.ps1 -Listen http://0.0.0.0:8787
 node scripts/ui-smoke.mjs --cwd E:\tmp\pigui-smoke-ws   # 主链路冒烟，会真调一次模型
 ```
 
-日志在 `%LOCALAPPDATA%\PiAgentStation\logs\`。桌面整屏截图抓不到 WebView2 的画面，
+日志在 `%LOCALAPPDATA%\SevenStation\logs\`。桌面整屏截图抓不到 WebView2 的画面，
 要看界面用 CDP 的 `Page.captureScreenshot`。
 
 ## 结构
 
 ```text
-src/MAStation/                中心：对话库、pi 子进程、WebSocket、托管前端
-src/MAStation/Storage/        对话库（SQLite）
-src/MAStation/wwwroot/        前端（桌面与手机共用）
-src/PiAgentStation.Desktop/   客户端：WebView2 壳，只加载中心地址
+src/SevenStation.Core/                中心：对话库、pi 子进程、WebSocket、托管前端
+src/SevenStation.Core/Storage/        对话库（SQLite）
+src/SevenStation.Core/wwwroot/        前端（桌面与手机共用）
+src/SevenStation.Desktop/   客户端：WebView2 壳，只加载中心地址
 src/Shared/Log.cs             两边共用的文件日志
 ```
 

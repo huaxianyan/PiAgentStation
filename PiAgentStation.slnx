@@ -1,6 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/MAStation/MAStation.csproj" />
-    <Project Path="src/PiAgentStation.Desktop/PiAgentStation.Desktop.csproj" />
-  </Folder>
-</Solution>

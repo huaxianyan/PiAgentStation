@@ -2,7 +2,7 @@ using System.IO;
 using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 
-namespace MAStation.Storage;
+namespace SevenStation.Core.Storage;
 
 public sealed record Conversation(
     string Id,
@@ -17,7 +17,7 @@ public sealed record Conversation(
     string? ThinkingLevel);
 
 /// <summary>
-/// MAStation 自己的对话存储。客户端只读这里，不去碰 Pi 的会话目录。
+/// SevenStation.Core 自己的对话存储。客户端只读这里，不去碰 Pi 的会话目录。
 /// Pi 那边的会话文件只在这个类里当绑定字段用：续聊时传给 Pi，界面看不到。
 /// </summary>
 public sealed class ConversationStore : IDisposable

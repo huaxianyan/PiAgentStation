@@ -1,5 +1,5 @@
 ﻿# 停掉中心。
-$running = Get-Process MAStation -ErrorAction SilentlyContinue
+$running = Get-Process SevenStation.Core -ErrorAction SilentlyContinue
 if (-not $running) {
     Write-Host "中心没在跑。"
     exit 0

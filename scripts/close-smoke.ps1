@@ -1,8 +1,8 @@
 ﻿# 关窗口回归：客户端开窗再关，不能留下崩溃记录。
 # 用法：pwsh -NoProfile -File scripts/close-smoke.ps1
-# 前置：客户端已构建（bin\Debug\net10.0-windows\PiAgentStation.exe）。
+# 前置：客户端已构建（bin\Debug\net10.0-windows\SevenStation.exe）。
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot '../src/PiAgentStation.Desktop/bin/Debug/net10.0-windows/PiAgentStation.exe'),
+    [string]$Exe = (Join-Path $PSScriptRoot '../src/SevenStation.Desktop/bin/Debug/net10.0-windows/SevenStation.exe'),
     [int]$WaitSeconds = 12
 )
 
@@ -37,9 +37,9 @@ public class CloseSmoke {
 '@
 
 $Exe = (Resolve-Path $Exe).Path
-$logPath = Join-Path $env:LOCALAPPDATA 'PiAgentStation/logs/app.log'
+$logPath = Join-Path $env:LOCALAPPDATA 'SevenStation/logs/app.log'
 
-Get-Process PiAgentStation -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process SevenStation -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 4
 
 $mark = Get-Date
@@ -48,13 +48,13 @@ Start-Sleep -Seconds $WaitSeconds
 
 if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
     Write-Output ('✗ 窗口没开起来（pid=' + $process.Id + '，还在的客户端进程 ' +
-        @(Get-Process PiAgentStation -ErrorAction SilentlyContinue).Count + ' 个）')
+        @(Get-Process SevenStation -ErrorAction SilentlyContinue).Count + ' 个）')
     Write-Output '日志尾部：'
     Get-Content $logPath -Tail 3 -ErrorAction SilentlyContinue
     exit 1
 }
 
-$sent = [CloseSmoke]::CloseWindow($process.Id, 'PiAgentStation')
+$sent = [CloseSmoke]::CloseWindow($process.Id, 'SevenStation')
 if ($sent -lt 1) {
     Write-Output '✗ 没找到主窗口'
     exit 1
@@ -72,7 +72,7 @@ if (Get-Process -Id $process.Id -ErrorAction SilentlyContinue) {
 
 Start-Sleep -Seconds 3
 $crashes = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $mark } -ErrorAction SilentlyContinue |
-    Where-Object { $_.Message -like '*PiAgentStation*' -and ($_.Id -eq 1000 -or $_.Id -eq 1001) })
+    Where-Object { $_.Message -like '*SevenStation*' -and ($_.Id -eq 1000 -or $_.Id -eq 1001) })
 
 if ($crashes.Count -gt 0) {
     foreach ($crash in $crashes) {

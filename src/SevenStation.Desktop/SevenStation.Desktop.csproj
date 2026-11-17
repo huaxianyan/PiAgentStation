@@ -6,8 +6,8 @@
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>PiAgentStation</AssemblyName>
-    <RootNamespace>PiAgentStation.Desktop</RootNamespace>
+    <AssemblyName>SevenStation</AssemblyName>
+    <RootNamespace>SevenStation.Desktop</RootNamespace>
     <Version>0.3.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>

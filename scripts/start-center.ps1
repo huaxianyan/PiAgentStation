@@ -24,13 +24,13 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 
-$logDir = Join-Path $env:LOCALAPPDATA "MAStation\logs"
+$logDir = Join-Path $env:LOCALAPPDATA "SevenStation\logs"
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
 
 
-$running = Get-Process MAStation -ErrorAction SilentlyContinue
+$running = Get-Process SevenStation.Core -ErrorAction SilentlyContinue
 
 if ($running) {
 
@@ -44,13 +44,13 @@ if ($running) {
 
 $configuration = if ($Release) { "Release" } else { "Debug" }
 
-$exe = Join-Path $root "src/MAStation/bin/$configuration/net10.0/MAStation.exe"
+$exe = Join-Path $root "src/SevenStation.Core/bin/$configuration/net10.0/SevenStation.Core.exe"
 
 if (-not (Test-Path $exe)) {
 
     Write-Host "还没构建：$exe"
 
-    Write-Host "先跑：dotnet build src/MAStation/MAStation.csproj -c $configuration"
+    Write-Host "先跑：dotnet build src/SevenStation.Core/SevenStation.Core.csproj -c $configuration"
 
     exit 1
 
@@ -58,7 +58,7 @@ if (-not (Test-Path $exe)) {
 
 
 
-if ($Listen) { $env:MASTATION_LISTEN = $Listen }
+if ($Listen) { $env:SEVENSTATION_LISTEN = $Listen }
 
 
 
@@ -74,8 +74,8 @@ $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $e
 
 # 起来要几秒，等它真的在听再报成功。
 $port = 8787
-if ($env:MASTATION_LISTEN) {
-    $match = [regex]::Match($env:MASTATION_LISTEN, ':(\d+)')
+if ($env:SEVENSTATION_LISTEN) {
+    $match = [regex]::Match($env:SEVENSTATION_LISTEN, ':(\d+)')
     if ($match.Success) { $port = [int]$match.Groups[1].Value }
 }
 

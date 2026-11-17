@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace PiAgentStation.Shared;
+namespace SevenStation.Shared;
 
 /// <summary>
 /// 极简运行日志。两个进程都没有控制台，出问题时只能靠文件留证据。
@@ -13,7 +13,7 @@ public static class Log
 
     public static string FilePath => _path;
 
-    /// <summary>例：<c>Log.Initialize("MAStation", "center.log")</c>。</summary>
+    /// <summary>例：<c>Log.Initialize("SevenStation", "center.log")</c>。</summary>
     public static void Initialize(string folder, string fileName = "app.log")
     {
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -57,6 +57,6 @@ public static class Log
     private static string DefaultPath()
     {
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(local, "PiAgentStation", "logs", "app.log");
+        return Path.Combine(local, "SevenStation", "logs", "app.log");
     }
 }

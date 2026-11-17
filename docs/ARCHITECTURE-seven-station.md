@@ -18,18 +18,18 @@ Seven Station 是一个本机单用户的 agent 工作口。Host 是唯一的管
 
 | 现在 | 目标 |
 | --- | --- |
-| 产品 PiAgentStation | 产品 Seven Station |
-| 仓库 `PiAgentStation` | 仓库 `SevenStation` |
-| `src/MAStation`（中心） | `src/SevenStation.Host` |
-| `src/PiAgentStation.Desktop`（WPF 壳） | `src/SevenStation.Desktop`（Tauri 壳，重写） |
-| `%LOCALAPPDATA%\MAStation\` | `%LOCALAPPDATA%\SevenStation\` |
-| `MASTATION_LISTEN` / `MASTATION_TOKEN` | `SEVENSTATION_LISTEN` / `SEVENSTATION_TOKEN` |
+| 产品 SevenStation | 产品 Seven Station |
+| 仓库 `SevenStation` | 仓库 `SevenStation` |
+| `src/SevenStation.Core`（中心） | `src/SevenStation.Host` |
+| `src/SevenStation.Desktop`（WPF 壳） | `src/SevenStation.Desktop`（Tauri 壳，重写） |
+| `%LOCALAPPDATA%\SevenStation.Core\` | `%LOCALAPPDATA%\SevenStation\` |
+| `SEVENSTATION_LISTEN` / `SEVENSTATION_TOKEN` | `SEVENSTATION_LISTEN` / `SEVENSTATION_TOKEN` |
 
 中心这个词在文档里换成 Host，界面文案里仍只说「中心」或「服务」，不出现工程词。
 
 ## 分层
 
-### Host（现在的 MAStation）
+### Host（现在的 SevenStation.Core）
 
 - 持有工作列表与生命周期：新建、恢复、停止、重命名、删除。
 - 单写者：一份工作只有一个 Agent 进程在跑，多个客户端共享同一份事件流。

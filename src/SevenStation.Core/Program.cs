@@ -1,13 +1,13 @@
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
-using MAStation;
-using MAStation.Storage;
-using PiAgentStation.Shared;
+using SevenStation.Core;
+using SevenStation.Core.Storage;
+using SevenStation.Shared;
 
-PiAgentStation.Shared.Log.Initialize("MAStation", "center.log");
+SevenStation.Shared.Log.Initialize("SevenStation", "center.log");
 
-var listen = Environment.GetEnvironmentVariable("MASTATION_LISTEN") ?? "http://127.0.0.1:8787";
+var listen = Environment.GetEnvironmentVariable("SEVENSTATION_LISTEN") ?? "http://127.0.0.1:8787";
 var token = TokenStore.Resolve();
 
 // 静态页永远跟着 exe 走：不管从哪个目录启动，都能找到 wwwroot。
@@ -23,9 +23,9 @@ builder.Logging.AddProvider(new FileLoggerProvider());
 
 var app = builder.Build();
 
-var dataDirectory = Environment.GetEnvironmentVariable("MASTATION_DATA_DIR")
-    ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MAStation", "data");
-var store = new ConversationStore(Path.Combine(dataDirectory, "mastation.db"));
+var dataDirectory = Environment.GetEnvironmentVariable("SEVENSTATION_DATA_DIR")
+    ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SevenStation", "data");
+var store = new ConversationStore(Path.Combine(dataDirectory, "sevenstation.db"));
 Log.Write($"对话库：{store.DatabasePath}");
 var hub = new CenterHub(store, listen);
 
@@ -72,7 +72,7 @@ app.Lifetime.ApplicationStopping.Register(() =>
 });
 
 Log.Write($"中心启动 {listen}，对话库 {store.DatabasePath}");
-Console.WriteLine($"MAStation 已启动：{listen}");
+Console.WriteLine($"SevenStation.Core 已启动：{listen}");
 Console.WriteLine($"打开地址：{listen.TrimEnd('/')}/");
 Console.WriteLine($"访问令牌：见 {TokenStore.FilePath}（桌面客户端会自动读取；手机用 ?token= 拼在地址后）");
 
@@ -82,11 +82,11 @@ internal static class TokenStore
 {
     public static string FilePath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "MAStation", "token.txt");
+        "SevenStation", "token.txt");
 
     public static string Resolve()
     {
-        var fromEnvironment = Environment.GetEnvironmentVariable("MASTATION_TOKEN");
+        var fromEnvironment = Environment.GetEnvironmentVariable("SEVENSTATION_TOKEN");
         if (!string.IsNullOrWhiteSpace(fromEnvironment))
         {
             return fromEnvironment.Trim();

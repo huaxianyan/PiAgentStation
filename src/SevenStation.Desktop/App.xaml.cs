@@ -1,14 +1,14 @@
 using System.Windows;
 using System.Windows.Threading;
-using PiAgentStation.Shared;
+using SevenStation.Shared;
 
-namespace PiAgentStation.Desktop;
+namespace SevenStation.Desktop;
 
 public partial class App : Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
-        Log.Initialize("PiAgentStation", "app.log");
+        Log.Initialize("SevenStation", "app.log");
         Log.Write($"启动：{Environment.ProcessPath}");
 
         DispatcherUnhandledException += (_, args) =>

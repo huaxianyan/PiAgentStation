@@ -2,7 +2,7 @@
 
 ## 当前主线
 
-- 现在在做什么：对话归 MAStation 所有，存在本地 SQLite 里；客户端只读这份数据，看历史不经过 Pi。
+- 现在在做什么：对话归 SevenStation.Core 所有，存在本地 SQLite 里；客户端只读这份数据，看历史不经过 Pi。
   MA 按需跟 Pi 建会话并绑定，每轮结束把消息取回来存档。
 - 下一步：手机端能用（现在只是同一页面能打开，还要按窄屏调）、中心常驻运行（开机自启或服务化）、
   `@文件` 补全、终端面板、会话重命名与删除。
@@ -23,9 +23,9 @@
   select / confirm / input / editor 四种上验证了渲染路径，没有真实扩展触发过全流程。
 - 证据：`dotnet build` 0 警告 0 错误；界面截图在当时的临时目录，未入库。
 
-## STATUS-002：仓库定名 PiAgentStation 并推到公开远端
+## STATUS-002：仓库定名 SevenStation 并推到公开远端
 
-- 按用户要求把项目搬到当前工作目录，仓库名与目录同名（均为 PiAgentStation），
+- 按用户要求把项目搬到当前工作目录，仓库名与目录同名（均为 SevenStation），
   程序集、命名空间、exe、日志与界面品牌一并改名，避免同一产品留两个名字。
 - 验证：`dotnet build` 通过，`scripts/ui-smoke.mjs` 在改名后重跑通过；`git log` 保留原有提交。
 - 记录：那次 `gdi32full.dll` 崩溃（`0xc0000409`）由用户指认为本机 MacType 注入所致，
@@ -35,10 +35,10 @@
 
 - 用户 2026-11-17 定下目标形态：一套中心负责跟 Pi 打交道，PC 与手机都连这套中心；日后客户端再加
   host 能力，用中心的 Pi 操作别的设备。原「只做 PC 端」的约束作废，见 `docs/DECISIONS.md`。
-- 改了什么：新增 `src/MAStation`（ASP.NET Core，管 pi 子进程、会话扫描、`/ws`、
+- 改了什么：新增 `src/SevenStation.Core`（ASP.NET Core，管 pi 子进程、会话扫描、`/ws`、
   托管前端）；桌面端退化成 WebView2 壳，加载中心地址；`AppBridge` 变成 `CenterHub`，
   命令应答回发起连接、会话事件广播给所有连接。前端从 `chrome.webview` 桥换成 WebSocket。
-- 安全：中心默认只监听 `127.0.0.1:8787`；`/ws` 要令牌，令牌文件在 `%LOCALAPPDATA%\MAStation\token.txt`。
+- 安全：中心默认只监听 `127.0.0.1:8787`；`/ws` 要令牌，令牌文件在 `%LOCALAPPDATA%\SevenStation.Core\token.txt`。
 - 验证（2026-11-17，真窗口 + CDP + 第二个 WebSocket 客户端）：
   - `scripts/ui-smoke.mjs` 通过：连接状态「已连接」、新会话、流式、收尾、侧栏刷新。
   - 第二个客户端 `list_sessions` 拿到同一份会话（1 条），`open_session` 拿到 3 条历史。
@@ -46,23 +46,23 @@
   - 同一会话打开两次只产生 1 个 key，即一个子进程，满足单写者。
 - 边界：局域网与 TLS 没做；手机端只验证了同一页面能被打开（未做窄屏适配）。
 
-## STATUS-004：中心定名 MAStation，与客户端分家
+## STATUS-004：中心定名 SevenStation.Core，与客户端分家
 
-- 用户 2026-11-17 定名：中心叫 MAStation（MA 既是 Main 也是 Main Agent），客户端仍是 PiAgentStation。
-- 改了什么：`src/PiAgentStation.Server` → `src/MAStation`，程序集与 exe 变成 `MAStation`；
-  中心日志写 `%LOCALAPPDATA%\MAStation\logs\center.log`，令牌文件 `%LOCALAPPDATA%\MAStation	oken.txt`；
-  环境变量改为 `MASTATION_LISTEN` / `MASTATION_TOKEN`；客户端从中心的令牌文件自动读取。
-- 界面：连接状态显示成「已连接 · MAStation」；新建会话语义改为「填中心机器上的目录」；
+- 用户 2026-11-17 定名：中心叫 SevenStation.Core（MA 既是 Main 也是 Main Agent），客户端仍是 SevenStation。
+- 改了什么：`src/SevenStation.Server` → `src/SevenStation.Core`，程序集与 exe 变成 `SevenStation.Core`；
+  中心日志写 `%LOCALAPPDATA%\SevenStation.Core\logs\center.log`，令牌文件 `%LOCALAPPDATA%\SevenStation.Core	oken.txt`；
+  环境变量改为 `SEVENSTATION_LISTEN` / `SEVENSTATION_TOKEN`；客户端从中心的令牌文件自动读取。
+- 界面：连接状态显示成「已连接 · SevenStation.Core」；新建会话语义改为「填中心机器上的目录」；
   空状态文案不再说「本机」。
-- 验证：`dotnet build PiAgentStation.slnx` 0 警告 0 错误；`dev-run.ps1` 起中心与客户端，
+- 验证：`dotnet build SevenStation.slnx` 0 警告 0 错误；`dev-run.ps1` 起中心与客户端，
   health 返回真实会话根目录，界面连上后列出 170 个会话。
 
-## STATUS-005：对话归 MAStation，客户端只读 MA 的数据
+## STATUS-005：对话归 SevenStation.Core，客户端只读 MA 的数据
 
 - 用户 2026-11-17 定：不再全盘使用 Pi 的会话管理。Pi 的会话目录太乱（一百多条结束未清理），
-  点开旧会话要等很久、还有加载失败的。对话改成 MAStation 自己的概念，客户端只跟 MA 通讯。
+  点开旧会话要等很久、还有加载失败的。对话改成 SevenStation.Core 自己的概念，客户端只跟 MA 通讯。
   记在 `docs/DECISIONS.md` 的 D5。
-- 数据：SQLite（`%LOCALAPPDATA%\MAStation\data\mastation.db`，`MASTATION_DATA_DIR` 可覆盖），
+- 数据：SQLite（`%LOCALAPPDATA%\SevenStation.Core\data\sevenstation.db`，`SEVENSTATION_DATA_DIR` 可覆盖），
   两张表 `conversations` / `messages`，加一张 `settings` 放模型列表这类缓存。
 - 绑定：新建对话时只建一条记录；第一次发消息才起 Pi 子进程，把 Pi 的 `sessionFile` 记进
   `pi_session_file` 字段，续聊时拿它 resume。这个字段不出现在任何客户端响应里。
@@ -163,7 +163,7 @@
 
 ## STATUS-013：窗口记忆与图片压缩
 
-- 客户端记住窗口大小与位置（`%LOCALAPPDATA%\PiAgentStation\window.json`）；
+- 客户端记住窗口大小与位置（`%LOCALAPPDATA%\SevenStation\window.json`）；
   换了显示器导致坐标跑出屏幕时只恢复尺寸，位置仍回到居中。
 - 粘进来或拖进来的图片超过 1600 像素就先等比缩小再发（4000×2000 的截图从 157 KB 降到 39 KB）；
   透明图仍存 PNG，GIF 不动。

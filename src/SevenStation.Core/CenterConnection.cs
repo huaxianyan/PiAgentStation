@@ -2,9 +2,9 @@ using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json.Nodes;
-using PiAgentStation.Shared;
+using SevenStation.Shared;
 
-namespace MAStation;
+namespace SevenStation.Core;
 
 /// <summary>一条客户端连接。命令的应答回到这条连接，会话事件广播给所有连接。</summary>
 public sealed class CenterConnection

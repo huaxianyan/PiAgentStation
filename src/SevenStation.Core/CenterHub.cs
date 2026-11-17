@@ -1,14 +1,14 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using MAStation.Rpc;
-using MAStation.Storage;
-using PiAgentStation.Shared;
+using SevenStation.Core.Rpc;
+using SevenStation.Core.Storage;
+using SevenStation.Shared;
 
-namespace MAStation;
+namespace SevenStation.Core;
 
 /// <summary>
-/// 对话中心。对话是 MAStation 自己的概念：存在本地数据库里，客户端只跟这里打交道。
+/// 对话中心。对话是 SevenStation.Core 自己的概念：存在本地数据库里，客户端只跟这里打交道。
 /// 每个对话在需要时对应一个 <c>pi --mode rpc</c> 子进程，Pi 的会话文件只是一条内部绑定，
 /// 用来续聊，不暴露给客户端。每轮结束把消息取回来存进数据库，之后看历史不再经过 Pi。
 /// </summary>
@@ -52,7 +52,7 @@ public sealed class CenterHub
         connection.Send(new JsonObject
         {
             ["type"] = "hello",
-            ["center"] = "MAStation",
+            ["center"] = "SevenStation",
             ["version"] = typeof(CenterHub).Assembly.GetName().Version?.ToString() ?? "0",
             ["data"] = _store.DatabasePath,
             ["pi"] = PiStatus(),
@@ -1292,7 +1292,7 @@ public sealed class CenterHub
         var resume = conversation.PiSessionFile;
         if (!string.IsNullOrEmpty(resume) && !File.Exists(resume))
         {
-            // Pi 那边的记录被清掉了：历史还在 MAStation，只是接不上原来那段上下文。
+            // Pi 那边的记录被清掉了：历史还在 SevenStation.Core，只是接不上原来那段上下文。
             Log.Write($"对话 {conversation.Id} 的 Pi 会话文件已不存在，改开新会话：{resume}");
             resume = null;
         }
@@ -1354,7 +1354,7 @@ public sealed class CenterHub
         return live;
     }
 
-    /// <summary>一轮结束后把 Pi 那边的消息取回来，存成 MAStation 自己的副本。</summary>
+    /// <summary>一轮结束后把 Pi 那边的消息取回来，存成 SevenStation.Core 自己的副本。</summary>
     private async Task PersistTurnAsync(Live live)
     {
         try

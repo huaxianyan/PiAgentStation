@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
-using FileLog = PiAgentStation.Shared.Log;
+using FileLog = SevenStation.Shared.Log;
 
-namespace MAStation;
+namespace SevenStation.Core;
 
 /// <summary>
 /// 把框架日志（Kestrel、中间件、异常）写进同一个文件。

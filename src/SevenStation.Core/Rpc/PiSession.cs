@@ -4,7 +4,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json.Nodes;
 
-namespace MAStation.Rpc;
+namespace SevenStation.Core.Rpc;
 
 /// <summary>
 /// 一个 <c>pi --mode rpc</c> 子进程。协议是严格 JSONL：一行一条记录，只按 LF 切分。

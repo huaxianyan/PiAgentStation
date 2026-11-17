@@ -4,9 +4,9 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Interop;
 using Microsoft.Web.WebView2.Core;
-using PiAgentStation.Shared;
+using SevenStation.Shared;
 
-namespace PiAgentStation.Desktop;
+namespace SevenStation.Desktop;
 
 /// <summary>
 /// 桌面客户端只是一层壳：连中心、把中心发来的页面显示出来。
@@ -84,7 +84,6 @@ public partial class MainWindow : Window
     private IntPtr WindowProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         const int WmGetMinMaxInfo = 0x0024;
-        const int WmSize = 0x0005;
 
         if (message != WmGetMinMaxInfo)
         {
@@ -419,7 +418,7 @@ public partial class MainWindow : Window
         {
             var userData = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "PiAgentStation", "WebView2");
+                "SevenStation", "WebView2");
             Directory.CreateDirectory(userData);
 
             var environment = await CreateEnvironmentAsync(userData);
@@ -451,10 +450,10 @@ public partial class MainWindow : Window
             var busy = ex is System.Runtime.InteropServices.COMException { HResult: unchecked((int)0x800700AA) };
             MessageBox.Show(
                 busy
-                    ? "没能打开界面：还有旧的 PiAgentStation 占着缓存目录。" + Environment.NewLine + Environment.NewLine +
+                    ? "没能打开界面：还有旧的 SevenStation 占着缓存目录。" + Environment.NewLine + Environment.NewLine +
                       "先把之前的窗口都关掉（任务管理器里残留的 msedgewebview2 也一起结束），再打开一次。"
                     : $"界面没能启动：{ex.Message}",
-                "PiAgentStation",
+                "SevenStation",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Close();
@@ -536,7 +535,7 @@ public partial class MainWindow : Window
             <div class="card">
               <h1>连不上中心</h1>
               <p>要连的地址是 <code>{{display}}</code>。</p>
-              <p>中心那台机器上的 PiAgentStation 中心没起来，或者这个地址写错了。
+              <p>中心那台机器上的 SevenStation 中心没起来，或者这个地址写错了。
                  中心用 <code>scripts/start-center.ps1</code> 起；装过自启的话，登录后它会自己起来。</p>
               <p>地址与令牌在这个文件里：<br><code>{{config}}</code></p>
               <p>5 秒后自动重试。</p>
@@ -560,25 +559,25 @@ public partial class MainWindow : Window
 }
 
 /// <summary>
-/// 中心地址与访问令牌。默认本机中心；配置文件放在 <c>%LOCALAPPDATA%\PiAgentStation\center.json</c>，
+/// 中心地址与访问令牌。默认本机中心；配置文件放在 <c>%LOCALAPPDATA%\SevenStation\center.json</c>，
 /// 换远程中心时只改这里。
 /// </summary>
 internal static class CenterUrl
 {
     public static string DirectoryPath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PiAgentStation");
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SevenStation");
 
     public static string ConfigPath { get; } = Path.Combine(DirectoryPath, "center.json");
 
     /// <summary>中心与本机同一台机器时，直接读中心写下的令牌文件。</summary>
     public static string TokenPath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MAStation", "token.txt");
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SevenStation", "token.txt");
 
     public static string Resolve()
     {
         var (baseUrl, token) = ReadConfig();
         token ??= TryRead(TokenPath)
-            ?? Environment.GetEnvironmentVariable("MASTATION_TOKEN")?.Trim();
+            ?? Environment.GetEnvironmentVariable("SEVENSTATION_TOKEN")?.Trim();
 
         if (string.IsNullOrEmpty(token))
         {

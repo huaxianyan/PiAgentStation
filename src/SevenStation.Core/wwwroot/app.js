@@ -1652,7 +1652,7 @@ function openSession(conversation) {
     return;
   }
 
-  // 历史直接从 MAStation 的库里读，不再为它起 Pi 进程，所以旧对话也是秒开。
+  // 历史直接从 SevenStation.Core 的库里读，不再为它起 Pi 进程，所以旧对话也是秒开。
   setOverlay('正在打开对话…');
   send({ type: 'open_conversation', id: conversation.id });
   app.pendingCwd = conversation.cwd || '';
@@ -3866,7 +3866,7 @@ function onExtensionRequest(session, request) {
   }
 
   if (method === 'setTitle') {
-    document.title = request.title ? 'PiAgentStation · ' + stripAnsi(request.title) : 'PiAgentStation';
+    document.title = request.title ? 'SevenStation · ' + stripAnsi(request.title) : 'SevenStation';
     return;
   }
 

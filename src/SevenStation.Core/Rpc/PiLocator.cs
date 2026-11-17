@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 
-namespace MAStation.Rpc;
+namespace SevenStation.Core.Rpc;
 
 /// <summary>
 /// 定位本机已安装的 Pi。不打包自己的 Pi，只用 ~/.pi/agent 下那一份。

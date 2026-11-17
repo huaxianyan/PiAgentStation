@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
-using PiAgentStation.Shared;
+using SevenStation.Shared;
 
-namespace MAStation;
+namespace SevenStation.Core;
 
 /// <summary>
 /// 一条对话背后的常驻 shell。
