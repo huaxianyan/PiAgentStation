@@ -1953,6 +1953,49 @@ document.addEventListener('drop', async (event) => {
   await addImageFiles(files);
 });
 
+/**
+ * 截图动辄 4K，原样塞进去对话会变得很重。超过 1600 像素就等比缩一下，
+ * 透明图仍存 PNG，其它转 JPEG。
+ */
+async function prepareImage(file) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
+  const mimeType = file.type || 'image/png';
+  if (mimeType === 'image/gif') {
+    return { dataUrl, mimeType };
+  }
+
+  const image = await new Promise((resolve) => {
+    const probe = new Image();
+    probe.onload = () => resolve(probe);
+    probe.onerror = () => resolve(null);
+    probe.src = dataUrl;
+  });
+
+  if (!image) {
+    return { dataUrl, mimeType };
+  }
+
+  const longest = Math.max(image.width, image.height);
+  if (longest <= 1600 && file.size < 1.5 * 1024 * 1024) {
+    return { dataUrl, mimeType };
+  }
+
+  const scale = Math.min(1, 1600 / longest);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(image.width * scale);
+  canvas.height = Math.round(image.height * scale);
+  canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const output = mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
+  return { dataUrl: canvas.toDataURL(output, 0.9), mimeType: output };
+}
+
 async function addImageFiles(files) {
   const images = files.filter((file) => file.type.startsWith('image/'));
   if (!images.length) {
@@ -1961,18 +2004,13 @@ async function addImageFiles(files) {
   }
 
   for (const file of images) {
-    const dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
-    const comma = dataUrl.indexOf(',');
+    const prepared = await prepareImage(file);
+    const comma = prepared.dataUrl.indexOf(',');
     app.attachments.push({
       name: file.name || '粘贴的图片',
-      mimeType: file.type || 'image/png',
-      data: dataUrl.slice(comma + 1),
-      dataUrl,
+      mimeType: prepared.mimeType,
+      data: prepared.dataUrl.slice(comma + 1),
+      dataUrl: prepared.dataUrl,
     });
   }
 

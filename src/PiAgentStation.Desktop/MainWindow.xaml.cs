@@ -21,6 +21,73 @@ public partial class MainWindow : Window
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        RestoreWindowBounds();
+        await StartWebViewAsync();
+    }
+
+    private void RestoreWindowBounds()
+    {
+        try
+        {
+            var path = Path.Combine(CenterUrl.DirectoryPath, "window.json");
+            if (!File.Exists(path))
+            {
+                return;
+            }
+
+            var saved = System.Text.Json.JsonSerializer.Deserialize<WindowBounds>(File.ReadAllText(path));
+            if (saved is null || saved.Width < MinWidth || saved.Height < MinHeight)
+            {
+                return;
+            }
+
+            // 换了显示器就可能有坐标落在屏幕外，先确认还能看见。
+            var left = saved.Left;
+            var top = saved.Top;
+            var visible = left >= SystemParameters.VirtualScreenLeft - saved.Width + 120
+                && left <= SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - 120
+                && top >= SystemParameters.VirtualScreenTop - 40
+                && top <= SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - 120;
+
+            Width = saved.Width;
+            Height = saved.Height;
+            if (visible)
+            {
+                Left = left;
+                Top = top;
+                WindowStartupLocation = WindowStartupLocation.Manual;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write("窗口位置读不出来", ex);
+        }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        try
+        {
+            var bounds = WindowState == WindowState.Normal
+                ? new WindowBounds(Left, Top, Width, Height)
+                : new WindowBounds(RestoreBounds.Left, RestoreBounds.Top, RestoreBounds.Width, RestoreBounds.Height);
+
+            var path = Path.Combine(CenterUrl.DirectoryPath, "window.json");
+            Directory.CreateDirectory(CenterUrl.DirectoryPath);
+            File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(bounds));
+        }
+        catch (Exception ex)
+        {
+            Log.Write("窗口位置存不下来", ex);
+        }
+
+        base.OnClosed(e);
+    }
+
+    private sealed record WindowBounds(double Left, double Top, double Width, double Height);
+
+    private async Task StartWebViewAsync()
+    {
         try
         {
             var userData = Path.Combine(
@@ -166,7 +233,7 @@ public partial class MainWindow : Window
 /// </summary>
 internal static class CenterUrl
 {
-    private static readonly string DirectoryPath = Path.Combine(
+    public static string DirectoryPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PiAgentStation");
 
     public static string ConfigPath { get; } = Path.Combine(DirectoryPath, "center.json");
