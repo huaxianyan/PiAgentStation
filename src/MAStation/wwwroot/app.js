@@ -7,6 +7,22 @@
  * 用的是同一套前端代码。令牌由中心生成，桌面壳拼在地址上，手机手动带上。
  * ------------------------------------------------------------------ */
 
+/* 界面偏好：放本地，换设备不跟着走。 */
+const prefs = { interrupt: false };
+try {
+  prefs.interrupt = localStorage.getItem('piagentstation.interruptCtrlEnter') === '1';
+} catch {
+  prefs.interrupt = false;
+}
+
+function savePrefs() {
+  try {
+    localStorage.setItem('piagentstation.interruptCtrlEnter', prefs.interrupt ? '1' : '0');
+  } catch {
+    /* 隐私模式下存不了，本次会话内生效就够。 */
+  }
+}
+
 const transport = {
   socket: null,
   connected: false,
@@ -29,7 +45,8 @@ function send(message) {
 }
 
 function setConnectionState(text, ok) {
-  el.connStatus.textContent = app.centerName ? text + ' · ' + app.centerName : text;
+  el.connStatus.textContent = text;
+  el.connStatus.title = app.centerName ? '中心：' + app.centerName : '';
   el.connStatus.className = 'conn' + (ok === true ? ' ok' : ok === false ? ' off' : '');
 }
 
@@ -142,6 +159,8 @@ const el = {
   extensionsNav: document.getElementById('extensionsNav'),
   skillsCount: document.getElementById('skillsCount'),
   extensionsCount: document.getElementById('extensionsCount'),
+  windowControls: document.getElementById('windowControls'),
+  topbar: document.querySelector('.topbar'),
   pageView: document.getElementById('pageView'),
   pageInner: document.getElementById('pageInner'),
   collapseBtn: document.getElementById('collapseBtn'),
@@ -182,7 +201,11 @@ const el = {
   attachBtn: document.getElementById('attachBtn'),
   attachments: document.getElementById('attachments'),
   hint: document.getElementById('hint'),
-  modelSelect: document.getElementById('modelSelect'),
+  modelPill: document.getElementById('modelPill'),
+  modelPillRoute: document.getElementById('modelPillRoute'),
+  modelPillSlash: document.getElementById('modelPillSlash'),
+  modelPillText: document.getElementById('modelPillText'),
+  modelPanel: document.getElementById('modelPanel'),
   thinkingSelect: document.getElementById('thinkingSelect'),
   compactBtn: document.getElementById('compactBtn'),
   ctxUsage: document.getElementById('ctxUsage'),
@@ -642,15 +665,19 @@ function renderSessionList() {
 
       const open = document.createElement('button');
       open.className = 'session-open';
+      const marker = conversation.working
+        ? '<span class="session-spin" aria-hidden="true"></span>'
+        : '<span class="session-dot"></span>';
       open.innerHTML =
-        '<div class="row1"><span class="name">' + escapeHtml(conversation.title || '新对话') + '</span>' +
-        '<span class="time">' + relativeTime(conversation.updatedAt) + '</span></div>' +
-        '<div class="row2"><span class="ws">' + escapeHtml(baseName(conversation.cwd) || '未知目录') + '</span>' +
-        (conversation.working ? '<span class="working"><span class="dot"></span>正在运行</span>' : '') +
-        '</div>' +
+        '<span class="session-gutter">' + marker + '</span>' +
+        '<span class="session-text">' +
+        '<span class="name">' + escapeHtml(conversation.title || '新对话') + '</span>' +
+        '<span class="row2"><span class="ws">' + escapeHtml(baseName(conversation.cwd) || '未知目录') + '</span>' +
+        '<span class="time">' + relativeTime(conversation.updatedAt) + '</span></span>' +
         (conversation.snippet
-          ? '<div class="row3">' + escapeHtml(conversation.snippet) + '</div>'
-          : '');
+          ? '<span class="row3">' + escapeHtml(conversation.snippet) + '</span>'
+          : '') +
+        '</span>';
       open.addEventListener('click', () => openSession(conversation));
       item.appendChild(open);
 
@@ -814,7 +841,7 @@ function turnNode(turn, session, isLast) {
   assistant.className = 'msg assistant';
 
   if (hasWork) {
-    assistant.appendChild(workGroup(work, answered && !streaming, streaming));
+    assistant.appendChild(workGroup(work, answered && !streaming));
   }
 
   for (const text of texts) {
@@ -839,22 +866,19 @@ function turnNode(turn, session, isLast) {
   return node;
 }
 
-function workGroup(work, collapsed, streaming) {
+function workGroup(work, collapsed) {
   const wrap = document.createElement('div');
   wrap.className = 'work';
 
-  const tools = work.filter((entry) => entry.kind === 'tool').length;
-  const metaText = [
-    work.length + ' 步',
-    tools ? tools + ' 次工具调用' : '只有思考',
-  ].join(' · ');
+  const totalMs = work.reduce((sum, entry) => sum + (entry.block.durationMs || 0), 0);
+  const spent = totalMs >= 1000 ? Math.round(totalMs / 1000) + ' 秒' : '';
+  const label = ['工作', spent, work.length + ' 步'].filter(Boolean).join(' ');
 
   const head = document.createElement('button');
   head.className = 'work-head';
   head.innerHTML =
     '<span class="work-caret">▸</span>' +
-    '<span class="work-title">' + (streaming && !collapsed ? '正在处理' : '工作过程') + '</span>' +
-    '<span class="work-meta">' + escapeHtml(metaText) + '</span>';
+    '<span class="work-title">' + escapeHtml(label) + '</span>';
 
   const body = document.createElement('div');
   body.className = 'work-body';
@@ -885,16 +909,17 @@ function stepRow(entry) {
   const head = document.createElement('button');
   head.className = 'step-head';
 
-  const label = entry.kind === 'thinking' ? '思考' : (entry.block.name || '工具');
+  const label = entry.kind === 'thinking' ? '思考' : toolLabel(entry.block.name);
   const summary = entry.kind === 'thinking'
-    ? String(entry.block.text).replace(/\s+/g, ' ').slice(0, 90)
+    ? String(entry.block.text).replace(/\s+/g, ' ').slice(0, 46)
     : toolSummary(entry.block);
 
   const running = entry.kind === 'tool' && !entry.block.done;
   head.innerHTML =
-    '<span class="step-dot' + (running ? ' is-running' : '') + '"></span>' +
     '<span class="step-name">' + escapeHtml(label) + '</span>' +
+    '<span class="step-dot' + (running ? ' is-running' : '') + '"></span>' +
     '<span class="step-text">' + escapeHtml(summary) + '</span>' +
+    '<span class="step-status">' + (running ? '运行中' : '完成') + '</span>' +
     (entry.block.durationMs != null
       ? '<span class="step-time">' + escapeHtml(formatDuration(entry.block.durationMs)) + '</span>'
       : '');
@@ -1009,6 +1034,27 @@ function toolCard(block) {
   return card;
 }
 
+const TOOL_LABELS = {
+  read: '读',
+  write: '写',
+  edit: '改',
+  multi_edit: '改',
+  bash: 'bash',
+  shell: 'bash',
+  web_search: '搜索',
+  fetch_content: '取网页',
+  get_search_content: '读搜索结果',
+  list_dir: '列目录',
+  grep: '搜文件',
+  glob: '找文件',
+  todo: '列计划',
+};
+
+function toolLabel(name) {
+  if (!name) return '工具';
+  return TOOL_LABELS[name] || name;
+}
+
 function toolSummary(block) {
   const args = block.args || {};
   const pick = args.command || args.path || args.file_path || args.pattern || args.query || args.url;
@@ -1100,10 +1146,13 @@ function renderHeader() {
     el.sessionTitle.textContent = '新对话';
     el.sessionCwd.textContent = '';
     el.crumbSep.hidden = true;
-    el.workspacePill.hidden = true;
-    el.wsSelectText.textContent = baseName(app.lastCwd || app.activeCwd) || '选择工作区';
+    // 还没有会话时也能先挑工作区，模型和思考等级得等会话建好才有地方写。
+    el.workspacePill.hidden = false;
+    el.workspacePillText.textContent = baseName(app.lastCwd || app.activeCwd) || '选择工作区';
     el.workspacePill.title = app.lastCwd || app.activeCwd || '';
-    el.modelSelect.hidden = true;
+    el.wsSelectText.textContent = baseName(app.lastCwd || app.activeCwd) || '选择工作区';
+    el.modelPill.hidden = true;
+    closeModelPanel();
     el.thinkingSelect.hidden = true;
     el.compactBtn.hidden = true;
     el.ctxUsage.hidden = true;
@@ -1127,30 +1176,7 @@ function renderHeader() {
   el.workspacePill.title = session.cwd || '';
   el.wsSelectText.textContent = baseName(session.cwd) || '选择工作区';
 
-  // 新对话还没跟 Pi 打过交道时，先按模型列表的第一项显示。
-  const model = state.model
-    || ((session.models && session.models.models && session.models.models[0]) || null);
-  if (model) {
-    const list = (session.models && session.models.models) || [];
-    if (list.length > 1) {
-      const wanted = model.provider + '/' + model.id;
-      const signature = list.map((entry) => entry.provider + '/' + entry.id).join('|');
-      if (el.modelSelect.dataset.signature !== signature) {
-        fillModelSelect(list);
-        el.modelSelect.dataset.signature = signature;
-      }
-      if (state.model) {
-        el.modelSelect.value = wanted;
-        el.modelSelect.title = model.name && model.name !== model.id ? wanted + '  ' + model.name : wanted;
-      } else {
-        el.modelSelect.value = '';
-        el.modelSelect.title = '还没定，跟着 Pi 的默认走';
-      }
-      el.modelSelect.hidden = false;
-    } else {
-      el.modelSelect.hidden = true;
-    }
-  }
+  renderModelPill();
 
   const levels = (session.levels && session.levels.levels) || [];
   if (levels.length > 1) {
@@ -1181,34 +1207,301 @@ function renderHeader() {
   renderContext();
 }
 
-function fillModelSelect(list) {
-  // 同一个模型可能通过不同路由提供（magpie 的 auto / workbuddy / amd…），
-  // 只显示名字会分不清是哪一条，所以按 provider 分组，名字后面补上路由。
-  const groups = new Map();
-  for (const entry of list) {
+/* -------------------------------- 模型选择 -------------------------------- */
+
+const modelState = { open: false, provider: '全部', query: '', focus: 0, rows: [] };
+
+function modelEntries() {
+  const session = current();
+  return (session && session.models && session.models.models) || [];
+}
+
+/** id 带前缀（magpie 的 auto、workbuddy…）就是路由，没有前缀返回空。 */
+function routeOf(entry) {
+  const segments = String(entry.id || '').split('/');
+  return segments.length > 1 ? segments[0] : '';
+}
+
+function modelName(entry) {
+  const name = entry.name || entry.id || '';
+  const cut = name.indexOf(' · ');
+  return cut > 0 ? name.slice(0, cut) : name;
+}
+
+function formatContext(size) {
+  if (!size) return '';
+  if (size >= 100000) {
+    return Math.round(size / 10000) + ' 万';
+  }
+  if (size >= 10000) {
+    return Math.round(size / 1000) / 10 + ' 万';
+  }
+  return Math.round(size / 1000) + ' 千';
+}
+
+/** 只摆模型自带的字段：上下文、看图、思考，没有就不写。 */
+function modelMeta(entry) {
+  const parts = [];
+  const context = formatContext(entry.contextWindow);
+  if (context) parts.push(context);
+  if ((entry.input || []).includes('image')) parts.push('看图');
+  if (entry.reasoning) parts.push('思考');
+  return parts.join(' · ');
+}
+
+function modelPrice(entry) {
+  const cost = entry.cost || {};
+  const input = Number(cost.input || 0);
+  const output = Number(cost.output || 0);
+  if (!input && !output) return '';
+  return '$' + input + ' / $' + output;
+}
+
+function currentModel() {
+  const session = current();
+  const entries = modelEntries();
+  const state = (session && session.state) || {};
+  return state.model || entries[0] || null;
+}
+
+function renderModelPill() {
+  const session = current();
+  const entries = modelEntries();
+  if (!session || entries.length < 2) {
+    el.modelPill.hidden = true;
+    closeModelPanel();
+    return;
+  }
+
+  const model = currentModel();
+  if (!model) {
+    el.modelPill.hidden = true;
+    return;
+  }
+
+  const route = routeOf(model);
+  el.modelPill.hidden = false;
+  el.modelPillRoute.hidden = !route;
+  el.modelPillSlash.hidden = !route;
+  el.modelPillRoute.textContent = route;
+  el.modelPillText.textContent = modelName(model);
+  el.modelPill.title = route ? route + '/' + model.id : String(model.id || '');
+}
+
+function modelProviders(entries) {
+  const counts = new Map();
+  for (const entry of entries) {
     const provider = entry.provider || '其它';
-    if (!groups.has(provider)) groups.set(provider, []);
-    groups.get(provider).push(entry);
+    counts.set(provider, (counts.get(provider) || 0) + 1);
+  }
+  return [['全部', entries.length], ...counts];
+}
+
+function visibleModels() {
+  const entries = modelEntries();
+  const query = modelState.query.trim().toLowerCase();
+  if (query) {
+    return entries.filter((entry) => {
+      const hay = ((entry.provider || '') + ' ' + entry.id + ' ' + (entry.name || '')).toLowerCase();
+      return hay.includes(query);
+    });
+  }
+  if (modelState.provider === '全部') return entries;
+  return entries.filter((entry) => (entry.provider || '其它') === modelState.provider);
+}
+
+function buildModelRow(entry, index, selectedKey) {
+  const row = document.createElement('button');
+  row.className = 'model-row';
+  row.type = 'button';
+  const key = entry.provider + '/' + entry.id;
+  if (key === selectedKey) row.classList.add('is-selected');
+  if (index === modelState.focus) row.classList.add('is-focus');
+  row.dataset.key = key;
+
+  const text = document.createElement('span');
+  text.className = 'model-row-text';
+  const name = document.createElement('span');
+  name.className = 'model-row-name';
+  name.textContent = modelName(entry);
+  const meta = document.createElement('span');
+  meta.className = 'model-row-meta';
+  const provider = modelState.provider === '全部' && !modelState.query
+    ? (entry.provider || '') + ' · '
+    : '';
+  meta.textContent = provider + modelMeta(entry);
+  text.appendChild(name);
+  text.appendChild(meta);
+  row.appendChild(text);
+
+  const price = modelPrice(entry);
+  if (price) {
+    const tag = document.createElement('span');
+    tag.className = 'model-row-price';
+    tag.textContent = price;
+    row.appendChild(tag);
   }
 
-  el.modelSelect.innerHTML = '';
-  const placeholder = document.createElement('option');
-  placeholder.value = '';
-  placeholder.textContent = '默认模型';
-  el.modelSelect.appendChild(placeholder);
+  if (key === selectedKey) {
+    const check = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    check.setAttribute('class', 'model-row-check');
+    check.setAttribute('viewBox', '0 0 24 24');
+    check.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M5 12.6 9.6 17.2 19 7.8');
+    check.appendChild(path);
+    row.appendChild(check);
+  } else {
+    const pad = document.createElement('span');
+    pad.className = 'model-row-pad';
+    row.appendChild(pad);
+  }
 
-  for (const [provider, entries] of groups) {
-    const group = document.createElement('optgroup');
-    group.label = provider;
-    for (const entry of entries) {
-      const option = document.createElement('option');
-      option.value = entry.provider + '/' + entry.id;
-      option.textContent = modelLabel(entry);
-      option.title = entry.provider + '/' + entry.id;
-      group.appendChild(option);
+  row.addEventListener('click', () => pickModel(entry));
+  return row;
+}
+
+function renderModelPanel() {
+  const entries = modelEntries();
+  el.modelPanel.innerHTML = '';
+
+  const search = document.createElement('div');
+  search.className = 'model-search';
+  search.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.2 16.2 21 21"/></svg>';
+  const input = document.createElement('input');
+  input.type = 'search';
+  input.id = 'modelSearchInput';
+  input.placeholder = '搜索模型';
+  input.setAttribute('aria-label', '搜索模型');
+  input.value = modelState.query;
+  input.addEventListener('input', () => {
+    modelState.query = input.value;
+    modelState.focus = 0;
+    renderModelPanel();
+    const again = document.getElementById('modelSearchInput');
+    if (again) {
+      again.focus();
+      again.setSelectionRange(again.value.length, again.value.length);
     }
-    el.modelSelect.appendChild(group);
+  });
+  search.appendChild(input);
+  el.modelPanel.appendChild(search);
+
+  const body = document.createElement('div');
+  body.className = 'model-body';
+
+  if (!modelState.query) {
+    const providers = document.createElement('div');
+    providers.className = 'model-providers';
+    for (const [name, count] of modelProviders(entries)) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'model-provider' + (name === modelState.provider ? ' is-active' : '');
+      const label = document.createElement('span');
+      label.textContent = name;
+      const badge = document.createElement('span');
+      badge.className = 'count';
+      badge.textContent = String(count);
+      button.appendChild(label);
+      button.appendChild(badge);
+      button.addEventListener('click', () => {
+        modelState.provider = name;
+        modelState.focus = 0;
+        renderModelPanel();
+      });
+      providers.appendChild(button);
+    }
+    body.appendChild(providers);
   }
+
+  const list = document.createElement('div');
+  list.className = 'model-list';
+
+  const session = current();
+  const chosen = (session && session.state && session.state.model) || null;
+  const selectedKey = chosen ? chosen.provider + '/' + chosen.id : '';
+
+  const rows = visibleModels();
+  modelState.rows = rows;
+
+  if (!rows.length) {
+    const empty = document.createElement('p');
+    empty.className = 'model-empty';
+    empty.textContent = '没有匹配的模型。';
+    list.appendChild(empty);
+  } else {
+    let lastRoute = null;
+    rows.forEach((entry, index) => {
+      const route = routeOf(entry);
+      if (route && route !== lastRoute) {
+        const head = document.createElement('div');
+        head.className = 'model-group';
+        head.textContent = route;
+        list.appendChild(head);
+      }
+      lastRoute = route;
+      list.appendChild(buildModelRow(entry, index, selectedKey));
+    });
+  }
+
+  body.appendChild(list);
+  el.modelPanel.appendChild(body);
+
+  const foot = document.createElement('div');
+  foot.className = 'model-foot';
+  const keys = document.createElement('span');
+  keys.textContent = '↑↓ 移动 · Enter 选中 · Esc 关闭';
+  const count = document.createElement('span');
+  count.textContent = rows.length + ' 个模型';
+  foot.appendChild(keys);
+  foot.appendChild(count);
+  el.modelPanel.appendChild(foot);
+}
+
+function pickModel(entry) {
+  const session = current();
+  if (!session) return;
+  send({ type: 'set_model', key: session.key, provider: entry.provider, modelId: entry.id });
+  closeModelPanel();
+}
+
+/* 面板挂到 body 上用 fixed 定位，免得被输入区的裁剪和层叠顺序吃掉。 */
+function placeModelPanel() {
+  const rect = el.modelPill.getBoundingClientRect();
+  el.modelPanel.style.left = Math.max(8, rect.left) + 'px';
+  el.modelPanel.style.bottom = Math.round(window.innerHeight - rect.top + 10) + 'px';
+}
+
+function openModelPanel() {
+  if (!modelEntries().length) return;
+  modelState.open = true;
+  modelState.focus = 0;
+  modelState.query = '';
+  modelState.provider = '全部';
+  if (el.modelPanel.parentElement !== document.body) {
+    document.body.appendChild(el.modelPanel);
+  }
+  el.modelPanel.hidden = false;
+  el.modelPill.setAttribute('aria-expanded', 'true');
+  placeModelPanel();
+  renderModelPanel();
+  const input = document.getElementById('modelSearchInput');
+  if (input) input.focus();
+}
+
+function closeModelPanel() {
+  if (!modelState.open) return;
+  modelState.open = false;
+  modelState.query = '';
+  el.modelPanel.hidden = true;
+  el.modelPill.setAttribute('aria-expanded', 'false');
+}
+
+function moveModelFocus(delta) {
+  const rows = modelState.rows || [];
+  if (!rows.length) return;
+  modelState.focus = (modelState.focus + delta + rows.length) % rows.length;
+  renderModelPanel();
 }
 
 function modelLabel(entry) {
@@ -1238,13 +1531,54 @@ function renderContext() {
   el.ctxUsage.title = '上下文用量';
 }
 
+/* 工作中时在输入卡片下面走一条「工作 X 秒 · Enter 排队」。 */
+let workTicker = null;
+let workStartedAt = 0;
+
+function stopWorkTicker() {
+  if (workTicker) {
+    window.clearInterval(workTicker);
+    workTicker = null;
+  }
+  workStartedAt = 0;
+}
+
+function paintWorkHint() {
+  if (!workStartedAt) return;
+  const seconds = Math.max(1, Math.round((Date.now() - workStartedAt) / 1000));
+  el.hint.textContent = '工作 ' + seconds + ' 秒 · Enter 排队';
+}
+
+function startWorkTicker() {
+  if (workTicker) return;
+  workStartedAt = Date.now();
+  paintWorkHint();
+  workTicker = window.setInterval(paintWorkHint, 1000);
+}
+
+/* 有没有内容决定发送键是黑的还是灰的，跟流式状态无关。 */
+function updateSendReady() {
+  const session = current();
+  const streaming = Boolean(session && session.streaming);
+  el.sendBtn.classList.toggle('ready', !streaming && el.input.value.trim().length > 0);
+}
+
 function renderComposerState() {
   const session = current();
   const streaming = Boolean(session && session.streaming);
-  el.sendBtn.textContent = streaming ? '■' : '↑';
+  // 停止是圆底里一个白方块，发送是同尺寸的圆底加箭头。
+  el.sendBtn.innerHTML = streaming
+    ? '<span class="send-stop-mark"></span>'
+    : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3.4"/><path d="M4.2 7.2 8 3.4l3.8 3.8"/></svg>';
   el.sendBtn.title = streaming ? '停止' : '发送';
   el.sendBtn.classList.toggle('stop', streaming);
-  if (!streaming) el.hint.textContent = '';
+  updateSendReady();
+  if (streaming) {
+    startWorkTicker();
+  } else {
+    stopWorkTicker();
+    el.hint.textContent = '';
+  }
 }
 
 function renderAttachments() {
@@ -1558,6 +1892,7 @@ function startSession(cwd) {
 
 /* 侧栏：折叠状态记在本地，重开还是上次的样子 */
 function setSidebar(open) {
+  closeModelPanel();
   el.windowEl.classList.toggle('sidebar-collapsed', !open);
   el.sidebarToggle.hidden = open;
   try {
@@ -1569,6 +1904,49 @@ function setSidebar(open) {
 
 el.collapseBtn.addEventListener('click', () => setSidebar(false));
 el.sidebarToggle.addEventListener('click', () => setSidebar(true));
+
+/* ------------------------------------------------------------------ *
+ * 窗口边框：桌面客户端没有系统标题栏，拖动和三个按钮都由这里发给客户端
+ * ------------------------------------------------------------------ */
+
+const hostWindow = window.chrome && window.chrome.webview ? window.chrome.webview : null;
+
+function sendWindowAction(action) {
+  if (hostWindow) hostWindow.postMessage({ type: 'window', action });
+}
+
+function bindWindowChrome() {
+  if (!hostWindow) return;
+
+  document.body.classList.add('has-window-chrome');
+  el.windowControls.hidden = false;
+
+  // 顶栏空白处按住就交给系统的拖动循环，双击切换最大化。
+  el.topbar.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    if (event.target.closest('button, input, select, textarea, a')) return;
+    sendWindowAction('drag');
+  });
+
+  el.topbar.addEventListener('dblclick', (event) => {
+    if (event.target.closest('button, input, select, textarea, a')) return;
+    sendWindowAction('toggle-maximize');
+  });
+
+  el.windowControls.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-window-action]');
+    if (button) sendWindowAction(button.dataset.windowAction);
+  });
+
+  hostWindow.addEventListener('message', (event) => {
+    const message = event.data;
+    if (message && message.type === 'window-state') {
+      document.body.classList.toggle('is-maximized', Boolean(message.maximized));
+    }
+  });
+}
+
+bindWindowChrome();
 
 let sidebarOpen = true;
 try {
@@ -1601,6 +1979,7 @@ const PAGE_TITLES = { settings: '设置', skills: '技能', extensions: '扩展'
 
 function switchView(view) {
   app.view = view;
+  closeModelPanel();
   const chat = view === 'chat';
 
   el.main.classList.toggle('is-page', !chat);
@@ -1679,6 +2058,43 @@ function makePageCard(title, note) {
   return card;
 }
 
+/** 打字时误按不会停：默认关，开了才会在模型干活时打断。 */
+function makeInterruptToggle() {
+  const row = document.createElement('div');
+  row.className = 'kv-row kv-row-toggle';
+
+  const left = document.createElement('div');
+  left.className = 'kv-toggle-text';
+  const label = document.createElement('span');
+  label.className = 'kv-toggle-label';
+  label.textContent = 'Ctrl+Enter 直接打断';
+  const note = document.createElement('span');
+  note.className = 'kv-toggle-note';
+  note.textContent = '关掉后只有停止键能停下，打字不会误中止。';
+  left.appendChild(label);
+  left.appendChild(note);
+
+  const toggle = document.createElement('button');
+  toggle.className = 'switch' + (prefs.interrupt ? ' is-on' : '');
+  toggle.type = 'button';
+  toggle.setAttribute('role', 'switch');
+  toggle.setAttribute('aria-checked', prefs.interrupt ? 'true' : 'false');
+  toggle.setAttribute('aria-label', 'Ctrl+Enter 直接打断');
+  const knob = document.createElement('span');
+  knob.className = 'switch-knob';
+  toggle.appendChild(knob);
+  toggle.addEventListener('click', () => {
+    prefs.interrupt = !prefs.interrupt;
+    savePrefs();
+    toggle.classList.toggle('is-on', prefs.interrupt);
+    toggle.setAttribute('aria-checked', prefs.interrupt ? 'true' : 'false');
+  });
+
+  row.appendChild(left);
+  row.appendChild(toggle);
+  return row;
+}
+
 function addKeyValues(card, rows) {
   const list = document.createElement('div');
   list.className = 'kv';
@@ -1728,27 +2144,27 @@ function listenText() {
 /* -------------------------------- 设置 -------------------------------- */
 
 function renderSettingsPage() {
-  el.pageInner.appendChild(makePageHead('设置', '中心、Pi 和界面偏好都在这一页。'));
+  el.pageInner.appendChild(makePageHead('设置'));
 
   const connection = makePageCard('连接');
   addKeyValues(connection, [
     ['中心', location.origin],
     ['版本', app.centerVersion || '未知'],
     ['状态', transport.connected ? '已连接' : '未连接'],
-    ['对话库', app.storePath || '未知'],
-    ['监听', listenText()],
+    ['数据文件', app.storePath || '未知'],
+    ['访问', '只本机能连'],
   ]);
   el.pageInner.appendChild(connection);
 
   const pi = makePageCard('Pi');
   addKeyValues(pi, [
-    ['本体', app.pi ? (app.pi.ready ? '已装好' : '没找到') : '未知'],
-    ['目录', app.pi ? app.pi.agentDir : ''],
-    ['会话', app.pi ? app.pi.sessions : ''],
+    ['版本', (app.pi && app.pi.version) || '未知'],
+    ['程序目录', app.pi ? app.pi.agentDir : ''],
+    ['会话目录', app.pi ? app.pi.sessions : ''],
   ]);
   el.pageInner.appendChild(pi);
 
-  const recent = makePageCard('最近工作区', '点一个就在那个目录里开新对话。');
+  const recent = makePageCard('最近工作区', '点一下在那个目录里开新对话。');
   if (!app.recentWorkspaces || !app.recentWorkspaces.length) {
     const empty = document.createElement('p');
     empty.className = 'page-note';
@@ -1772,12 +2188,12 @@ function renderSettingsPage() {
   }
   el.pageInner.appendChild(recent);
 
-  const keys = makePageCard('快捷键');
+  const keys = makePageCard('快捷键与操作');
   const shortcutRows = [
+    ['Enter', '发送'],
+    ['Shift+Enter', '换行'],
     ['Ctrl+K', '新建对话'],
     ['Ctrl+B', '收起侧栏'],
-    ['Ctrl+J', '终端'],
-    ['Ctrl+E', '文件面板'],
     ['Ctrl+F', '搜索对话'],
     ['Esc', '关掉弹层'],
   ];
@@ -1797,9 +2213,10 @@ function renderSettingsPage() {
     shortcutList.appendChild(row);
   });
   keys.appendChild(shortcutList);
+  keys.appendChild(makeInterruptToggle());
   el.pageInner.appendChild(keys);
 
-  const style = makePageCard('自定义样式', '这段 CSS 贴在页面最后，保存后所有设备一起生效。');
+  const style = makePageCard('自定义样式', '保存后所有设备一起生效。');
   const editor = document.createElement('textarea');
   editor.className = 'css-editor';
   editor.spellcheck = false;
@@ -1873,7 +2290,7 @@ function renderSkillsPage() {
 
   el.pageInner.appendChild(makePageHead(
     '技能',
-    data ? '中心这台机器上能用的技能，来自用户目录和你当前的工作区。' : '正在读技能清单…',
+    data ? '' : '正在读技能清单…',
     refresh,
   ));
 
@@ -1954,13 +2371,13 @@ function renderExtensionsPage() {
 
   el.pageInner.appendChild(makePageHead(
     '扩展',
-    data ? 'Pi 配置里装的扩展包，以及它们在这个工作区注册的命令。' : '正在读扩展清单…',
+    data ? '' : '正在读扩展清单…',
     refresh,
   ));
 
   if (!data) return;
 
-  const packages = makePageCard('扩展包', data.settingsPath ? '来自 ' + data.settingsPath : '');
+  const packages = makePageCard('扩展包', data.settingsPath ? '读的是 ' + data.settingsPath : '');
   if (!data.packages.length) {
     const empty = document.createElement('p');
     empty.className = 'page-note';
@@ -2008,7 +2425,7 @@ function renderExtensionsPage() {
 
   el.pageInner.appendChild(packages);
 
-  const commands = makePageCard('扩展命令', '在对话里用 / 加上命令名就能跑。');
+  const commands = makePageCard('扩展命令', '只列当前工作区里能用的命令。');
   if (!data.commands.length) {
     const empty = document.createElement('p');
     empty.className = 'page-note';
@@ -2028,7 +2445,7 @@ function renderExtensionsPage() {
       name.className = 'item-name';
       name.textContent = '/' + item.name;
       top.appendChild(name);
-      if (item.scope) top.appendChild(makeBadge(item.scope, 'soft'));
+      if (item.scope && item.scope !== '扩展') top.appendChild(makeBadge(item.scope, 'soft'));
       row.appendChild(top);
 
       if (item.description) {
@@ -2137,12 +2554,51 @@ el.sessionFilter.addEventListener('input', () => {
   searchTimer = window.setTimeout(() => send({ type: 'search', query }), 240);
 });
 
-el.modelSelect.addEventListener('change', () => {
-  const session = current();
-  if (!session) return;
-  if (!el.modelSelect.value) return;
-  const [provider, ...rest] = el.modelSelect.value.split('/');
-  send({ type: 'set_model', key: session.key, provider, modelId: rest.join('/') });
+el.modelPill.addEventListener('click', () => {
+  if (modelState.open) {
+    closeModelPanel();
+  } else {
+    openModelPanel();
+  }
+});
+
+el.modelPill.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Enter') {
+    event.preventDefault();
+    openModelPanel();
+  }
+});
+
+el.modelPanel.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeModelPanel();
+    el.modelPill.focus();
+    return;
+  }
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    moveModelFocus(1);
+    return;
+  }
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    moveModelFocus(-1);
+    return;
+  }
+  if (event.key === 'Enter') {
+    const entry = (modelState.rows || [])[modelState.focus];
+    if (entry) {
+      event.preventDefault();
+      pickModel(entry);
+    }
+  }
+});
+
+document.addEventListener('mousedown', (event) => {
+  if (!modelState.open) return;
+  if (el.modelPanel.contains(event.target) || el.modelPill.contains(event.target)) return;
+  closeModelPanel();
 });
 
 el.thinkingSelect.addEventListener('change', () => {
@@ -2169,6 +2625,7 @@ function autoGrow() {
 
 el.input.addEventListener('input', () => {
   autoGrow();
+  updateSendReady();
   queueCompletion();
 });
 
@@ -2200,6 +2657,16 @@ document.addEventListener('keydown', (event) => {
   if (key === 'k') {
     event.preventDefault();
     askCwd();
+    return;
+  }
+
+  if (key === 'enter' && prefs.interrupt) {
+    const session = current();
+    if (session && session.streaming) {
+      event.preventDefault();
+      send({ type: 'abort', key: session.key });
+      toast('已请求停止');
+    }
     return;
   }
 

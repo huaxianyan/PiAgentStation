@@ -1,6 +1,8 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Interop;
 using Microsoft.Web.WebView2.Core;
 using PiAgentStation.Shared;
 
@@ -13,10 +15,78 @@ namespace PiAgentStation.Desktop;
 public partial class MainWindow : Window
 {
     private bool _showingOffline;
+
     public MainWindow()
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        SourceInitialized += OnSourceInitialized;
+        StateChanged += (_, _) => PostWindowState();
+    }
+
+    /// <summary>
+    /// 窗口没有系统标题栏：最大化要自己收进工作区（别盖住任务栏），
+    /// 边框由窗口自己的缩放边缘负责，所以这里只处理最大化的边界。
+    /// </summary>
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        if (PresentationSource.FromVisual(this) is HwndSource source)
+        {
+            source.AddHook(WindowProc);
+        }
+    }
+
+    private IntPtr WindowProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int WmGetMinMaxInfo = 0x0024;
+
+        if (message != WmGetMinMaxInfo)
+        {
+            return IntPtr.Zero;
+        }
+
+        var monitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
+        if (monitor == IntPtr.Zero)
+        {
+            return IntPtr.Zero;
+        }
+
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        if (!GetMonitorInfo(monitor, ref info))
+        {
+            return IntPtr.Zero;
+        }
+
+        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+        var scaleX = dpi.DpiScaleX <= 0 ? 1 : dpi.DpiScaleX;
+        var scaleY = dpi.DpiScaleY <= 0 ? 1 : dpi.DpiScaleY;
+
+        var minMax = Marshal.PtrToStructure<MinMaxInfo>(lParam);
+        minMax.MaxPosition.X = (int)Math.Round((info.Work.Left - info.Monitor.Left) / scaleX);
+        minMax.MaxPosition.Y = (int)Math.Round((info.Work.Top - info.Monitor.Top) / scaleY);
+        minMax.MaxSize.X = (int)Math.Round((info.Work.Right - info.Work.Left) / scaleX);
+        minMax.MaxSize.Y = (int)Math.Round((info.Work.Bottom - info.Work.Top) / scaleY);
+        Marshal.StructureToPtr(minMax, lParam, true);
+
+        handled = true;
+        return IntPtr.Zero;
+    }
+
+    /// <summary>把当前是不是最大化告诉页面，好让自己画的按钮换成还原图标。</summary>
+    private void PostWindowState()
+    {
+        try
+        {
+            Web?.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new
+            {
+                type = "window-state",
+                maximized = WindowState == WindowState.Maximized,
+            }));
+        }
+        catch (Exception ex)
+        {
+            Log.Write("窗口状态发不出去", ex);
+        }
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -82,6 +152,114 @@ public partial class MainWindow : Window
         base.OnClosing(e);
     }
 
+    /// <summary>
+    /// 页面顶栏里自己画的拖动区、最小化/最大化/关闭按钮，都从这条通道进来。
+    /// </summary>
+    private void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        string? action = null;
+        try
+        {
+            using var document = JsonDocument.Parse(e.WebMessageAsJson);
+            if (document.RootElement.TryGetProperty("action", out var kind))
+            {
+                action = kind.GetString();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write("看不懂页面发来的窗口指令", ex);
+            return;
+        }
+
+        Log.Write($"窗口指令：{action}");
+
+        switch (action)
+        {
+            case "drag":
+                StartSystemDrag();
+                break;
+
+            case "minimize":
+                WindowState = WindowState.Minimized;
+                break;
+
+            case "toggle-maximize":
+                WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+                PostWindowState();
+                break;
+
+            case "close":
+                Close();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 把自己画的顶栏交给系统的拖动循环：鼠标一松系统自己完成贴边分屏，
+    /// 不用在页面里算坐标。
+    /// </summary>
+    private void StartSystemDrag()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        ReleaseCapture();
+        SendMessage(hwnd, 0x00A1, (IntPtr)0x0002, IntPtr.Zero); // WM_NCLBUTTONDOWN + HTCAPTION
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int Size;
+        public NativeRect Monitor;
+        public NativeRect Work;
+        public uint Flags;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MinMaxInfo
+    {
+        public NativePoint Reserved;
+        public NativePoint MaxSize;
+        public NativePoint MaxPosition;
+        public NativePoint MinTrackSize;
+        public NativePoint MaxTrackSize;
+    }
+
+    private const uint MonitorDefaultToNearest = 0x00000002;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
+
     protected override void OnClosed(EventArgs e)
     {
         try
@@ -130,10 +308,12 @@ public partial class MainWindow : Window
             };
             core.NavigationStarting += OnNavigationStarting;
             core.NavigationCompleted += OnNavigationCompleted;
+            core.WebMessageReceived += OnWebMessage;
 
             var center = CenterUrl.Resolve();
             core.Navigate(center);
             Log.Write($"客户端加载中心页面：{center}");
+            PostWindowState();
         }
         catch (Exception ex)
         {

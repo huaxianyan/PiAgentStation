@@ -24,17 +24,17 @@
 
         <nav class="nav">
           <button class="nav-item is-active" id="threadsNav">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5.2c0-.9.7-1.6 1.6-1.6h2l1.4 1.6h4.4c.9 0 1.6.7 1.6 1.6v4.6c0 .9-.7 1.6-1.6 1.6H4.1c-.9 0-1.6-.7-1.6-1.6z"/></svg>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.6 4.2A1.6 1.6 0 0 1 4.2 2.6h7.6a1.6 1.6 0 0 1 1.6 1.6v5.2a1.6 1.6 0 0 1-1.6 1.6H6.2l-3.6 2.6z"/></svg>
             <span>对话</span>
             <span class="nav-count" id="navCount"></span>
           </button>
           <button class="nav-item" id="skillsNav">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.9l1.3 3 3 1.3-3 1.3L8 10.6 6.7 7.5l-3-1.3 3-1.3z"/><path d="M4.2 11.2 5 13l.8-1.8L7.6 10l-1.8-.8L5 7.4l-.8 1.8L2.4 10z"/></svg>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 14 5.1v5.8L8 14.2 2 10.9V5.1z"/><path d="M8 8.1 14 5.1M8 8.1 2 5.1M8 8.1v6.1"/></svg>
             <span>技能</span>
             <span class="nav-count" id="skillsCount"></span>
           </button>
           <button class="nav-item" id="extensionsNav">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="2.2" width="4.6" height="4.6" rx="1.2"/><rect x="9.2" y="2.2" width="4.6" height="4.6" rx="1.2"/><rect x="2.2" y="9.2" width="4.6" height="4.6" rx="1.2"/><rect x="9.2" y="9.2" width="4.6" height="4.6" rx="1.2"/></svg>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2.2v3.2M10 2.2v3.2M4.2 5.4h7.6v2.2a3.8 3.8 0 0 1-7.6 0z"/><path d="M8 11.4v2.4"/></svg>
             <span>扩展</span>
             <span class="nav-count" id="extensionsCount"></span>
           </button>
@@ -65,6 +65,9 @@
 
       <main class="main">
         <header class="topbar">
+          <button class="icon-btn topbar-toggle" id="sidebarToggle" title="展开边栏" aria-label="展开边栏" hidden>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2.5"/><path d="M6.5 2.5v11"/></svg>
+          </button>
           <div class="crumbs">
             <span class="crumb-ws" id="sessionCwd"></span>
             <span class="crumb-sep" id="crumbSep" hidden>/</span>
@@ -85,8 +88,19 @@
             <button class="icon-btn" id="exportBtn" title="导出为 Markdown" aria-label="导出为 Markdown" hidden>
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v8"/><path d="M4.8 7.4 8 10.6l3.2-3.2"/><path d="M3 13h10"/></svg>
             </button>
-            <button class="icon-btn" id="sidebarToggle" title="展开边栏" aria-label="展开边栏" hidden>
-              <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2.5"/><path d="M6.5 2.5v11"/></svg>
+          </div>
+
+          <!-- 窗口按钮自己画：最小化、最大化/还原、关闭。只在桌面客户端里显示。 -->
+          <div class="window-controls" id="windowControls" hidden>
+            <button class="win-btn" data-window-action="minimize" title="最小化" aria-label="最小化">
+              <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5h7"/></svg>
+            </button>
+            <button class="win-btn" data-window-action="toggle-maximize" title="最大化" aria-label="最大化">
+              <svg class="ico-max" viewBox="0 0 12 12" aria-hidden="true"><rect x="2.5" y="2.5" width="7" height="7" rx="1"/></svg>
+              <svg class="ico-restore" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="3.5" width="6" height="6" rx="1"/><path d="M4.5 3.5V2.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1"/></svg>
+            </button>
+            <button class="win-btn win-close" data-window-action="close" title="关闭" aria-label="关闭">
+              <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg>
             </button>
           </div>
         </header>
@@ -104,7 +118,6 @@
               <span id="wsSelectText">选择工作区</span>
               <span class="chev">⌄</span>
             </button>
-            <p class="empty-note">对话存在中心，换台设备打开，看到的还是这一份。</p>
           </div>
 
           <section class="page" id="pageView" hidden>
@@ -154,9 +167,19 @@
               <div class="composer-row">
                 <div class="pills">
                   <button class="pill pill-primary" id="workspacePill">
+                    <svg class="pill-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5h5l1.8 2.2h9.2v9.3H3.5z"/></svg>
                     <span class="pill-label" id="workspacePillText">选择工作区</span>
                   </button>
-                  <select class="pill pill-select" id="modelSelect" title="模型" hidden></select>
+                  <div class="pill-model-wrap">
+                    <button class="pill pill-primary pill-model" id="modelPill" title="模型"
+                            aria-haspopup="dialog" aria-expanded="false" hidden>
+                      <span class="pill-route" id="modelPillRoute" hidden></span><span
+                        class="pill-slash" id="modelPillSlash" hidden>/</span><span
+                        class="pill-label" id="modelPillText">默认模型</span>
+                      <svg class="pill-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.2 6.6 8 10.4l3.8-3.8"/></svg>
+                    </button>
+                    <div class="model-panel" id="modelPanel" role="dialog" aria-label="选择模型" hidden></div>
+                  </div>
                   <select class="pill pill-select" id="thinkingSelect" title="思考等级" hidden></select>
                 </div>
                 <div class="composer-actions">

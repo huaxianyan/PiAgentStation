@@ -362,9 +362,33 @@ public sealed class CenterHub
         {
             ["agentDir"] = agentDirectory,
             ["ready"] = File.Exists(launcher),
+            ["version"] = InstalledPiVersion(agentDirectory),
             ["sessions"] = Environment.GetEnvironmentVariable("PI_CODING_AGENT_SESSION_DIR")
                 ?? Path.Combine(home, ".pi", "sessions"),
         };
+    }
+
+    /// <summary>装了几个版本时，报最近装的那个；读不到就留空，界面显示未知。</summary>
+    private static string InstalledPiVersion(string agentDirectory)
+    {
+        try
+        {
+            var releases = Path.Combine(agentDirectory, "install", "releases");
+            if (!Directory.Exists(releases))
+            {
+                return "";
+            }
+
+            return Directory.GetDirectories(releases)
+                .Select(Path.GetFileName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .OrderByDescending(name => name, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault() ?? "";
+        }
+        catch (Exception)
+        {
+            return "";
+        }
     }
 
     /// <summary>
