@@ -1663,6 +1663,19 @@ function newSession() {
 }
 
 /**
+ * 选目录：能交给系统就用系统的，浏览器里没有这条路，退回页面里那棵目录树。
+ */
+function pickFolder(initial, onPick) {
+  if (hostWindow && nativeFolderPicker) {
+    folderPickCallback = onPick;
+    hostWindow.postMessage({ type: 'window', action: 'pick-folder', initial: initial || '' });
+    return;
+  }
+
+  openDirPicker(initial, onPick);
+}
+
+/**
  * 选工作区用的目录选择器：目录列表由中心给（browse_dir），
  * 浏览器里也能用，不依赖桌面客户端的原生对话框。
  */
@@ -1779,6 +1792,14 @@ function renderDirListing(payload) {
 }
 
 function askCwd() {
+  // 桌面客户端连本机中心：直接用系统的选目录对话框，省掉中间那层自己画的。
+  if (hostWindow && nativeFolderPicker) {
+    pickFolder(app.cwdDraft || app.lastCwd || app.activeCwd || '', (picked) => {
+      if (picked) startSession(picked);
+    });
+    return;
+  }
+
   closeModal();
   const card = document.createElement('div');
   card.className = 'modal';
@@ -1806,7 +1827,8 @@ function askCwd() {
   browse.className = 'ghost-btn';
   browse.textContent = '浏览…';
   browse.addEventListener('click', () => {
-    openDirPicker(input.value, (picked) => {
+    pickFolder(input.value, (picked) => {
+      if (!picked) return;
       app.cwdDraft = picked;
       askCwd();
     });
@@ -1911,6 +1933,10 @@ el.sidebarToggle.addEventListener('click', () => setSidebar(true));
 
 const hostWindow = window.chrome && window.chrome.webview ? window.chrome.webview : null;
 
+// 桌面客户端连的是本机中心时，选目录才由系统对话框负责：选出来的是这台机器的路径。
+let nativeFolderPicker = false;
+let folderPickCallback = null;
+
 function sendWindowAction(action) {
   if (hostWindow) hostWindow.postMessage({ type: 'window', action });
 }
@@ -1940,8 +1966,18 @@ function bindWindowChrome() {
 
   hostWindow.addEventListener('message', (event) => {
     const message = event.data;
-    if (message && message.type === 'window-state') {
+    if (!message) return;
+
+    if (message.type === 'window-state') {
       document.body.classList.toggle('is-maximized', Boolean(message.maximized));
+      nativeFolderPicker = Boolean(message.local);
+      return;
+    }
+
+    if (message.type === 'folder-picked') {
+      const callback = folderPickCallback;
+      folderPickCallback = null;
+      if (callback) callback(message.path || '');
     }
   });
 }

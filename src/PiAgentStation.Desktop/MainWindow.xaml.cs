@@ -16,12 +16,41 @@ public partial class MainWindow : Window
 {
     private bool _showingOffline;
 
+    /// <summary>窗口圆角半径（逻辑像素）。</summary>
+    private const int CornerRadius = 12;
+
+    /// <summary>Win11 上圆角由 DWM 负责，就不必再裁窗口区域。</summary>
+    private bool _cornersByDwm;
+
+    private IntPtr _hwnd;
+
+    private bool _pickingFolder;
+
+    /// <summary>
+    /// 窗口区域在每轮布局里都会被 WPF 自己覆盖，所以等它忙完再裁，
+    /// 而且尺寸、最大化状态一变就重裁。
+    /// </summary>
+    private void ScheduleCornerRegion()
+    {
+        if (_cornersByDwm || _hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(new Action(() => ApplyCornerRegion(_hwnd)), System.Windows.Threading.DispatcherPriority.Background);
+    }
+
     public MainWindow()
     {
         InitializeComponent();
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
-        StateChanged += (_, _) => PostWindowState();
+        StateChanged += (_, _) =>
+        {
+            PostWindowState();
+            ScheduleCornerRegion();
+        };
+        SizeChanged += (_, _) => ScheduleCornerRegion();
     }
 
     /// <summary>
@@ -32,13 +61,90 @@ public partial class MainWindow : Window
     {
         if (PresentationSource.FromVisual(this) is HwndSource source)
         {
+            _hwnd = source.Handle;
             source.AddHook(WindowProc);
+            RoundWindowCorners(_hwnd);
+        }
+    }
+
+    /// <summary>
+    /// 圆角：Windows 11 有 DWM 这个属性，一句就行；Windows 10 没有，
+    /// 只能给窗口裁一个圆角区域（裁出来的边缘没有平滑，但角是圆的）。
+    /// 最大化时贴满工作区，必须是直角。
+    /// </summary>
+    private void RoundWindowCorners(IntPtr hwnd)
+    {
+        const int DwmwaWindowCornerPreference = 33;
+        const int DwmwcpRound = 2;
+
+        try
+        {
+            var preference = DwmwcpRound;
+            if (DwmSetWindowAttribute(hwnd, DwmwaWindowCornerPreference, ref preference, sizeof(int)) == 0)
+            {
+                _cornersByDwm = true;
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write("窗口圆角设置不上", ex);
+        }
+
+        ApplyCornerRegion(hwnd);
+    }
+
+    /// <summary>Windows 10 的办法：按当前尺寸裁一个圆角窗口区域。</summary>
+    private void ApplyCornerRegion(IntPtr hwnd)
+    {
+        if (_cornersByDwm || hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        try
+        {
+            if (WindowState == WindowState.Maximized)
+            {
+                SetWindowRgn(hwnd, IntPtr.Zero, true);
+                return;
+            }
+
+            if (!GetWindowRect(hwnd, out var rect))
+            {
+                return;
+            }
+
+            var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+            var scale = dpi.DpiScaleX <= 0 ? 1 : dpi.DpiScaleX;
+            var radius = (int)Math.Round(CornerRadius * scale);
+            var width = rect.Right - rect.Left;
+            var height = rect.Bottom - rect.Top;
+            if (width <= 0 || height <= 0)
+            {
+                return;
+            }
+
+            // 加 1 像素，否则右下两边会少一行、一列。
+            var region = CreateRoundRectRgn(0, 0, width + 1, height + 1, radius * 2, radius * 2);
+            if (region == IntPtr.Zero)
+            {
+                return;
+            }
+
+            // 交给系统接管以后不能再 DeleteObject。
+            SetWindowRgn(hwnd, region, true);
+        }
+        catch (Exception ex)
+        {
+            Log.Write("窗口圆角区域没裁上", ex);
         }
     }
 
     private IntPtr WindowProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         const int WmGetMinMaxInfo = 0x0024;
+        const int WmSize = 0x0005;
 
         if (message != WmGetMinMaxInfo)
         {
@@ -81,6 +187,9 @@ public partial class MainWindow : Window
             {
                 type = "window-state",
                 maximized = WindowState == WindowState.Maximized,
+
+                // 中心在本机时，选目录才轮得到系统的对话框：选出来的是这台机器的路径。
+                local = CenterUrl.IsLocal,
             }));
         }
         catch (Exception ex)
@@ -92,6 +201,7 @@ public partial class MainWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         RestoreWindowBounds();
+        ScheduleCornerRegion();
         await StartWebViewAsync();
     }
 
@@ -158,12 +268,18 @@ public partial class MainWindow : Window
     private void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
         string? action = null;
+        string? initial = null;
         try
         {
             using var document = JsonDocument.Parse(e.WebMessageAsJson);
             if (document.RootElement.TryGetProperty("action", out var kind))
             {
                 action = kind.GetString();
+            }
+
+            if (document.RootElement.TryGetProperty("initial", out var start))
+            {
+                initial = start.GetString();
             }
         }
         catch (Exception ex)
@@ -192,6 +308,63 @@ public partial class MainWindow : Window
             case "close":
                 Close();
                 break;
+
+            case "pick-folder":
+                PickFolder(initial);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 新建对话时的选目录交给系统：用惯了资源管理器那一套，自己画的树只是负担。
+    /// 选完把路径发回页面，取消就发空。
+    /// </summary>
+    private void PickFolder(string? initial)
+    {
+        // 对话框自己会跑消息循环，期间再点一次「新建对话」会又开一个，挡住。
+        if (_pickingFolder)
+        {
+            return;
+        }
+
+        _pickingFolder = true;
+        string? picked = null;
+        try
+        {
+            var dialog = new Microsoft.Win32.OpenFolderDialog
+            {
+                Title = "选一个目录当工作区",
+                Multiselect = false,
+            };
+
+            if (!string.IsNullOrWhiteSpace(initial) && Directory.Exists(initial))
+            {
+                dialog.InitialDirectory = initial;
+            }
+
+            if (dialog.ShowDialog(this) == true)
+            {
+                picked = dialog.FolderName;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write("选目录的对话框没能打开", ex);
+        }
+
+        _pickingFolder = false;
+
+        try
+        {
+            Web?.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new
+            {
+                type = "folder-picked",
+                path = picked,
+            }));
+        }
+        catch (Exception ex)
+        {
+            Log.Write("选好的目录发不回页面", ex);
         }
     }
 
@@ -226,7 +399,6 @@ public partial class MainWindow : Window
         public int Right;
         public int Bottom;
     }
-
     [StructLayout(LayoutKind.Sequential)]
     private struct MonitorInfo
     {
@@ -247,6 +419,18 @@ public partial class MainWindow : Window
     }
 
     private const uint MonitorDefaultToNearest = 0x00000002;
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int width, int height);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
 
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
@@ -308,6 +492,9 @@ public partial class MainWindow : Window
             };
             core.NavigationStarting += OnNavigationStarting;
             core.NavigationCompleted += OnNavigationCompleted;
+
+            // 页面加载完再报一次：刚导航时那条消息页面还没开始听。
+            core.NavigationCompleted += (_, _) => PostWindowState();
             core.WebMessageReceived += OnWebMessage;
 
             var center = CenterUrl.Resolve();
@@ -473,6 +660,22 @@ internal static class CenterUrl
 
         return string.Equals(center.Host, target.Host, StringComparison.OrdinalIgnoreCase) &&
                center.Port == target.Port;
+    }
+
+    /// <summary>中心跟客户端是不是同一台机器：决定选目录时给谁的路径。</summary>
+    public static bool IsLocal
+    {
+        get
+        {
+            if (!Uri.TryCreate(ReadConfig().BaseUrl, UriKind.Absolute, out var center))
+            {
+                return true;
+            }
+
+            return center.IsLoopback ||
+                   string.Equals(center.Host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(center.Host, Environment.MachineName, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private static (string BaseUrl, string? Token) ReadConfig()
