@@ -12,6 +12,7 @@ namespace PiAgentStation.Desktop;
 /// </summary>
 public partial class MainWindow : Window
 {
+    private bool _showingOffline;
     public MainWindow()
     {
         InitializeComponent();
@@ -39,6 +40,7 @@ public partial class MainWindow : Window
                 OpenExternal(args.Uri);
             };
             core.NavigationStarting += OnNavigationStarting;
+            core.NavigationCompleted += OnNavigationCompleted;
 
             var center = CenterUrl.Resolve();
             core.Navigate(center);
@@ -83,12 +85,66 @@ public partial class MainWindow : Window
 
     private void OnNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
     {
+        if (_showingOffline)
+        {
+            return;
+        }
+
         // 只让中心页面留在窗口里，其余链接交给系统浏览器。
         if (!CenterUrl.IsCenterPage(e.Uri))
         {
             e.Cancel = true;
             OpenExternal(e.Uri);
         }
+    }
+
+    /// <summary>
+    /// 中心没起来时 WebView2 只会给一片空白。换成一页能读的说明：连的哪个地址、配置在哪、多久重试一次。
+    /// </summary>
+    private void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+    {
+        if (_showingOffline)
+        {
+            _showingOffline = false;
+            return;
+        }
+
+        if (e.IsSuccess)
+        {
+            return;
+        }
+
+        var center = CenterUrl.Resolve();
+        var config = CenterUrl.ConfigPath;
+        var display = CenterUrl.DisplayUrl;
+        Log.Write($"连不上中心 {center}：{e.WebErrorStatus}");
+
+        _showingOffline = true;
+        Web.CoreWebView2.NavigateToString($$"""
+            <!doctype html>
+            <meta charset="utf-8">
+            <style>
+              body { margin: 0; font-family: "Microsoft YaHei UI", system-ui, sans-serif; background: #f6f6f8;
+                     color: #1c1c22; display: flex; min-height: 100vh; align-items: center; justify-content: center; }
+              .card { max-width: 520px; padding: 32px; background: #fff; border: 1px solid #e6e6ea;
+                       border-radius: 14px; box-shadow: 0 12px 32px rgba(16,16,20,.08); }
+              h1 { font-size: 20px; margin: 0 0 10px; }
+              p { margin: 0 0 14px; line-height: 1.7; color: #4b4b56; font-size: 13.5px; }
+              code { font-family: Consolas, monospace; background: #f2f2f5; padding: 1px 5px; border-radius: 4px; }
+              a { display: inline-block; margin-top: 6px; padding: 8px 16px; border-radius: 8px;
+                   background: #1c1c22; color: #fff; text-decoration: none; font-size: 13px; }
+            </style>
+            <div class="card">
+              <h1>连不上中心</h1>
+              <p>要连的地址是 <code>{{display}}</code>。</p>
+              <p>中心那台机器上的 PiAgentStation 中心没起来，或者这个地址写错了。
+                 中心用 <code>scripts/start-center.ps1</code> 起；装过自启的话，登录后它会自己起来。</p>
+              <p>地址与令牌在这个文件里：<br><code>{{config}}</code></p>
+              <p>5 秒后自动重试。</p>
+              <a href="{{center}}">现在重试</a>
+            </div>
+            <script>setTimeout(function () { location.href = "{{center}}"; }, 5000);</script>
+            """);
     }
 
     private static void OpenExternal(string uri)
@@ -133,6 +189,9 @@ internal static class CenterUrl
         var separator = baseUrl.Contains('?') ? '&' : '?';
         return $"{baseUrl}{separator}token={Uri.EscapeDataString(token)}";
     }
+
+    /// <summary>给人看的地址：不带令牌，方便截图与报错。</summary>
+    public static string DisplayUrl => ReadConfig().BaseUrl;
 
     public static bool IsCenterPage(string uri)
     {

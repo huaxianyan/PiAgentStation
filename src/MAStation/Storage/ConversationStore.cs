@@ -61,9 +61,12 @@ public sealed class ConversationStore : IDisposable
                 conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
                 seq INTEGER NOT NULL,
                 payload TEXT NOT NULL,
+                text TEXT NULL,
                 PRIMARY KEY (conversation_id, seq)
             );
             """);
+
+        EnsureMessageTextColumn();
         Execute(@"
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -114,6 +117,118 @@ public sealed class ConversationStore : IDisposable
 
             return items;
         }
+    }
+
+    /// <summary>
+    /// 标题与正文一起搜。正文命中时给出命中位置附近的一小段，界面拿来当摘要。
+    /// </summary>
+    public IReadOnlyList<(Conversation Conversation, string? Snippet)> Search(string keyword, int limit = 40)
+    {
+        var needle = keyword.Trim();
+        if (needle.Length == 0)
+        {
+            return Array.Empty<(Conversation, string?)>();
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT c.id, c.title, c.cwd, c.pi_session_file, c.created_at, c.updated_at, c.message_count,
+                       c.stats, c.model, c.thinking_level,
+                       (SELECT m.text FROM messages m
+                          WHERE m.conversation_id = c.id AND m.text LIKE $like
+                          ORDER BY m.seq DESC LIMIT 1) AS hit
+                FROM conversations c
+                WHERE c.title LIKE $like
+                   OR EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.text LIKE $like)
+                ORDER BY c.updated_at DESC
+                LIMIT $limit;
+                """;
+            command.Parameters.AddWithValue("$like", "%" + needle + "%");
+            command.Parameters.AddWithValue("$limit", limit);
+
+            using var reader = command.ExecuteReader();
+            var items = new List<(Conversation, string?)>();
+            while (reader.Read())
+            {
+                var conversation = Read(reader);
+                var hit = reader.IsDBNull(10) ? null : reader.GetString(10);
+                items.Add((conversation, Snippet(hit, needle)));
+            }
+
+            return items;
+        }
+    }
+
+    /// <summary>消息是按原始 JSON 存的，搜出来要还原成人读的文字再截。</summary>
+    private static string PayloadText(string? payload)
+    {
+        if (string.IsNullOrEmpty(payload))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(payload);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("content", out var content))
+            {
+                return payload;
+            }
+
+            if (content.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                return content.GetString() ?? string.Empty;
+            }
+
+            if (content.ValueKind != System.Text.Json.JsonValueKind.Array)
+            {
+                return payload;
+            }
+
+            var builder = new System.Text.StringBuilder();
+            foreach (var part in content.EnumerateArray())
+            {
+                if (part.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    builder.Append(part.GetString());
+                    continue;
+                }
+
+                if (part.TryGetProperty("text", out var text) &&
+                    text.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    builder.Append(text.GetString());
+                }
+            }
+
+            return builder.ToString();
+        }
+        catch
+        {
+            return payload;
+        }
+    }
+
+    private static string? Snippet(string? content, string needle)
+    {
+        if (string.IsNullOrEmpty(content))
+        {
+            return null;
+        }
+
+        var index = content.IndexOf(needle, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var start = Math.Max(0, index - 30);
+        var length = Math.Min(content.Length - start, needle.Length + 80);
+        var text = content.Substring(start, length).ReplaceLineEndings(" ");
+        return (start > 0 ? "…" : string.Empty) + text + (start + length < content.Length ? "…" : string.Empty);
     }
 
     public Conversation? Get(string id)
@@ -185,11 +300,13 @@ public sealed class ConversationStore : IDisposable
                     using var insert = _connection.CreateCommand();
                     insert.Transaction = transaction;
                     insert.CommandText = """
-                        INSERT INTO messages (conversation_id, seq, payload) VALUES ($id, $seq, $payload);
+                        INSERT INTO messages (conversation_id, seq, payload, text)
+                        VALUES ($id, $seq, $payload, $text);
                         """;
                     insert.Parameters.AddWithValue("$id", id);
                     insert.Parameters.AddWithValue("$seq", index);
                     insert.Parameters.AddWithValue("$payload", messages[index]!.ToJsonString());
+                    insert.Parameters.AddWithValue("$text", PayloadText(messages[index]!.ToJsonString()));
                     insert.ExecuteNonQuery();
                 }
             }
@@ -303,6 +420,53 @@ public sealed class ConversationStore : IDisposable
         reader.IsDBNull(7) ? null : reader.GetString(7),
         reader.IsDBNull(8) ? null : reader.GetString(8),
         reader.IsDBNull(9) ? null : reader.GetString(9));
+
+    /// <summary>
+    /// payload 里的中文按 \uXXXX 转义，直接 LIKE 搜不到；另存一份解好的正文，
+    /// 顺便让搜索不必每次解析 JSON。老库在启动时补这一列并回填。
+    /// </summary>
+    private void EnsureMessageTextColumn()
+    {
+        var hasColumn = false;
+        using (var command = _connection.CreateCommand())
+        {
+            command.CommandText = "PRAGMA table_info(messages);";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), "text", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasColumn = true;
+                }
+            }
+        }
+
+        if (!hasColumn)
+        {
+            Execute("ALTER TABLE messages ADD COLUMN text TEXT NULL;");
+        }
+
+        var pending = new List<(string Id, long Seq, string Text)>();
+        using (var command = _connection.CreateCommand())
+        {
+            command.CommandText = "SELECT conversation_id, seq, payload FROM messages WHERE text IS NULL;";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                pending.Add((reader.GetString(0), reader.GetInt64(1), PayloadText(reader.GetString(2))));
+            }
+        }
+
+        foreach (var (id, seq, text) in pending)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = "UPDATE messages SET text = $text WHERE conversation_id = $id AND seq = $seq;";
+            command.Parameters.AddWithValue("$text", text);
+            command.Parameters.AddWithValue("$id", id);
+            command.Parameters.AddWithValue("$seq", seq);
+            command.ExecuteNonQuery();
+        }
+    }
 
     private void Execute(string sql)
     {

@@ -504,35 +504,50 @@ function dateGroup(ms) {
 }
 
 function renderSessionList() {
-  const filter = app.filter.trim().toLowerCase();
+  const typed = app.filter.trim();
+  const filter = typed.toLowerCase();
+  // 中心带回搜索结果时按内容命中显示，否则只在本地按标题过滤。
+  const searching = Boolean(typed) && app.searchResults?.query === typed;
+  const pool = searching ? app.searchResults.items : app.sessions;
   const groups = new Map();
 
-  for (const conversation of app.sessions) {
-    if (filter) {
+  for (const conversation of pool) {
+    if (filter && !searching) {
       const haystack = [(conversation.title || ''), conversation.cwd].join(' ').toLowerCase();
       if (!haystack.includes(filter)) continue;
     }
-    const label = dateGroup(conversation.updatedAt);
+    const label = searching ? '搜索结果' : dateGroup(conversation.updatedAt);
     if (!groups.has(label)) groups.set(label, []);
     groups.get(label).push(conversation);
   }
 
   el.navCount.textContent = app.sessions.length ? String(app.sessions.length) : '';
 
+
   el.sessionList.innerHTML = '';
+
+  if (searching && groups.size) {
+    const hint = document.createElement('div');
+    hint.className = 'group-label';
+    hint.textContent = '按内容命中 ' + pool.length + ' 条';
+    el.sessionList.appendChild(hint);
+  }
+
   if (!groups.size) {
     const empty = document.createElement('div');
     empty.className = 'group-label';
-    empty.textContent = app.sessions.length ? '没有匹配的对话' : '还没有对话';
+    empty.textContent = typed ? '没有匹配的对话' : '还没有对话';
     el.sessionList.appendChild(empty);
     return;
   }
 
   for (const [label, conversations] of groups) {
-    const groupLabel = document.createElement('div');
-    groupLabel.className = 'group-label';
-    groupLabel.textContent = label;
-    el.sessionList.appendChild(groupLabel);
+    if (!searching) {
+      const groupLabel = document.createElement('div');
+      groupLabel.className = 'group-label';
+      groupLabel.textContent = label;
+      el.sessionList.appendChild(groupLabel);
+    }
 
     for (const conversation of conversations) {
       const item = document.createElement('div');
@@ -546,7 +561,10 @@ function renderSessionList() {
         '<span class="time">' + relativeTime(conversation.updatedAt) + '</span></div>' +
         '<div class="row2"><span class="ws">' + escapeHtml(baseName(conversation.cwd) || '未知目录') + '</span>' +
         (conversation.working ? '<span class="working"><span class="dot"></span>正在运行</span>' : '') +
-        '</div>';
+        '</div>' +
+        (conversation.snippet
+          ? '<div class="row3">' + escapeHtml(conversation.snippet) + '</div>'
+          : '');
       open.addEventListener('click', () => openSession(conversation));
       item.appendChild(open);
 
@@ -693,6 +711,24 @@ function toolCard(block) {
   const args = document.createElement('span');
   args.className = 'tool-args';
   args.textContent = toolSummary(block);
+
+  // 工具读写的路径点一下就能在文件面板里看，省得自己去目录里翻。
+  const target = block.args?.path || block.args?.file_path;
+  if (typeof target === 'string' && target) {
+    args.classList.add('is-link');
+    args.title = '在文件面板里打开 ' + target;
+    args.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const session = current();
+      if (!session) return;
+      el.filePanel.hidden = false;
+      document.querySelector('.main').classList.add('files-open');
+      el.filesPath.textContent = '/' + target;
+      el.filesPath.title = '/' + target;
+      el.filesBody.innerHTML = '<div class="files-note">读取中…</div>';
+      send({ type: 'read_file', key: session.key, path: target });
+    });
+  }
 
   head.appendChild(state);
   head.appendChild(name);
@@ -1061,7 +1097,9 @@ function askCwd() {
   input.value = app.lastCwd || app.activeCwd || '';
   card.appendChild(input);
 
-  const recent = [...new Set(app.sessions.map((session) => session.cwd).filter(Boolean))].slice(0, 4);
+  const recent = [...new Set([...(app.recentWorkspaces || []), ...app.sessions.map((session) => session.cwd)])]
+    .filter(Boolean)
+    .slice(0, 6);
   if (recent.length) {
     const list = document.createElement('div');
     list.className = 'options';
@@ -1077,6 +1115,27 @@ function askCwd() {
     }
     card.appendChild(list);
   }
+
+  const check = document.createElement('div');
+  check.className = 'modal-hint';
+  card.appendChild(check);
+
+  const checkPath = (value) => {
+    if (!value) {
+      check.textContent = '';
+      return;
+    }
+
+    app.pathCheck = value;
+    send({ type: 'check_path', path: value });
+  };
+  let checkTimer = 0;
+  input.addEventListener('input', () => {
+    window.clearTimeout(checkTimer);
+    const value = input.value.trim();
+    checkTimer = window.setTimeout(() => checkPath(value), 260);
+  });
+  checkPath(input.value.trim());
 
   const actions = document.createElement('div');
   actions.className = 'modal-actions';
@@ -1161,6 +1220,9 @@ function openSettings() {
     ['版本', app.centerVersion || '未知'],
     ['对话库', app.storePath || '未知'],
     ['连接', transport.connected ? '已连接' : '未连接'],
+    ['Pi', app.pi ? (app.pi.ready ? '已装好 · ' + app.pi.agentDir : '没找到 · ' + app.pi.agentDir) : '未知'],
+    ['会话目录', app.pi?.sessions || '未知'],
+    ['最近工作区', (app.recentWorkspaces || []).join('、') || '还没有'],
   ];
 
   for (const [label, value] of rows) {
@@ -1170,8 +1232,22 @@ function openSettings() {
     card.appendChild(row);
   }
 
+  const shortcuts = document.createElement('div');
+  shortcuts.className = 'modal-message';
+  shortcuts.innerHTML = '<span class="label">快捷键</span><br>' +
+    ['Ctrl+K 新建对话', 'Ctrl+B 收起侧栏', 'Ctrl+J 终端', 'Ctrl+E 文件面板', 'Ctrl+F 搜索', 'Esc 关掉弹层']
+      .map((line) => escapeHtml(line)).join('<br>');
+  card.appendChild(shortcuts);
+
   const actions = document.createElement('div');
   actions.className = 'modal-actions';
+
+  const logButton = document.createElement('button');
+  logButton.className = 'ghost-btn';
+  logButton.textContent = '看最近日志';
+  logButton.addEventListener('click', () => send({ type: 'read_log', lines: 120 }));
+  actions.appendChild(logButton);
+
   const close = document.createElement('button');
   close.className = 'primary-btn';
   close.textContent = '知道了';
@@ -1244,9 +1320,19 @@ function renameConversation() {
   }, 0);
 }
 
+let searchTimer = 0;
 el.sessionFilter.addEventListener('input', () => {
   app.filter = el.sessionFilter.value;
   renderSessionList();
+
+  window.clearTimeout(searchTimer);
+  const query = app.filter.trim();
+  if (!query) {
+    app.searchResults = null;
+    return;
+  }
+
+  searchTimer = window.setTimeout(() => send({ type: 'search', query }), 240);
 });
 
 el.modelSelect.addEventListener('change', () => {
@@ -1303,6 +1389,46 @@ el.input.addEventListener('keydown', (event) => {
 });
 
 el.input.addEventListener('blur', () => setTimeout(closeCompletion, 120));
+
+document.addEventListener('keydown', (event) => {
+  if (!event.ctrlKey || event.altKey || event.metaKey) return;
+  const key = event.key.toLowerCase();
+
+  // 在输入框里也要能用，这几个组合不跟打字冲突。
+  if (key === 'k') {
+    event.preventDefault();
+    askCwd();
+    return;
+  }
+
+  if (key === 'b') {
+    event.preventDefault();
+    el.collapseBtn.click();
+    return;
+  }
+
+  if (key === 'j') {
+    event.preventDefault();
+    if (current()) showTerminal(el.terminalPanel.hidden);
+    return;
+  }
+
+  if (key === 'e') {
+    event.preventDefault();
+    if (current()) {
+      if (el.filePanel.hidden) openFiles(current().filesPath || '');
+      else closeFiles();
+    }
+    return;
+  }
+
+  if (key === 'f' && current()) {
+    event.preventDefault();
+    el.filterToggle.click();
+    el.sessionFilter.focus();
+    el.sessionFilter.select();
+  }
+});
 
 /* ------------------------------------------------------------------ *
  * 输入补全：@ 找文件，/ 找命令
@@ -1748,6 +1874,24 @@ el.fileInput.addEventListener('change', async () => {
 });
 
 /* 图片可以直接粘、也可以拖进窗口 */
+document.addEventListener('click', (event) => {
+  if (event.target.matches('.msg .md img, .attachment img')) {
+    const overlay = document.createElement('div');
+    overlay.className = 'image-zoom';
+    const image = document.createElement('img');
+    image.src = event.target.src;
+    overlay.appendChild(image);
+    overlay.addEventListener('click', () => overlay.remove());
+    document.body.appendChild(overlay);
+    event.preventDefault();
+    return;
+  }
+
+  if (event.target.classList.contains('image-zoom')) {
+    event.target.remove();
+  }
+});
+
 document.addEventListener('click', async (event) => {
   const button = event.target.closest('.code-copy');
   if (!button) return;
@@ -1767,6 +1911,14 @@ document.addEventListener('click', async (event) => {
 
   button.textContent = '已复制';
   window.setTimeout(() => { button.textContent = '复制'; }, 1200);
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  // 别的设备可能改过东西，切回来时对一下。
+  send({ type: 'list_conversations' });
+  const session = current();
+  if (session) send({ type: 'refresh_state', key: session.key });
 });
 
 document.addEventListener('paste', (event) => {
@@ -1847,10 +1999,63 @@ function dispatch(message) {
       if (message.version) {
         app.centerVersion = message.version;
       }
+      if (message.pi) {
+        app.pi = message.pi;
+      }
+      if (Array.isArray(message.workspaces)) {
+        app.recentWorkspaces = message.workspaces;
+      }
+      if (message.pi && message.pi.ready === false) {
+        toast('中心那台机器上没找到 Pi，先把 Pi 装好再开始对话。', 'warning');
+      }
+      break;
+
+    case 'path_check': {
+      const hint = el.modal.querySelector('.modal-hint');
+      const startBtn = [...el.modal.querySelectorAll('.modal-actions button')]
+        .find((button) => button.textContent === '开始');
+      if (hint) {
+        hint.textContent = message.exists ? '' : message.reason || '';
+      }
+      if (startBtn) {
+        startBtn.disabled = !message.exists;
+      }
+      break;
+    }
+
+    case 'log_tail': {
+      const card = document.createElement('div');
+      card.className = 'modal wide';
+      card.innerHTML = '<h3>中心日志</h3><div class="modal-message">' + escapeHtml(message.path || '') + '</div>';
+      const pre = document.createElement('pre');
+      pre.className = 'log-tail';
+      pre.textContent = message.text || '（空）';
+      card.appendChild(pre);
+      const actions = document.createElement('div');
+      actions.className = 'modal-actions';
+      const close = document.createElement('button');
+      close.className = 'primary-btn';
+      close.textContent = '知道了';
+      close.addEventListener('click', closeModal);
+      actions.appendChild(close);
+      card.appendChild(actions);
+      el.modal.innerHTML = '';
+      el.modal.appendChild(card);
+      el.modal.hidden = false;
+      break;
+    }
+
+    case 'search_results':
+      if (message.query !== app.filter.trim()) break;
+      app.searchResults = { query: message.query, items: message.items || [] };
+      renderSessionList();
       break;
 
     case 'conversation_list':
       app.sessions = message.items || [];
+      if (Array.isArray(message.workspaces)) {
+        app.recentWorkspaces = message.workspaces;
+      }
       renderSessionList();
       break;
 

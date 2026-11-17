@@ -806,6 +806,68 @@ body.dragging .composer-box {
   margin-right: var(--files-w);
 }
 
+.row3 {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-mute);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.modal-hint {
+  min-height: 18px;
+  font-size: 12px;
+  color: var(--danger, #b42318);
+}
+
+.tool-args.is-link {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.tool-args.is-link:hover { color: var(--text); }
+
+.modal.wide {
+  max-width: 720px;
+  width: 86vw;
+}
+
+.log-tail {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  max-height: 46vh;
+  overflow: auto;
+  background: #f7f7f9;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.image-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(12, 12, 16, .72);
+  cursor: zoom-out;
+}
+
+.image-zoom img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .35);
+}
+
 .files {
   position: absolute;
   top: 0;

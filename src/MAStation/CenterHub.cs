@@ -51,6 +51,8 @@ public sealed class CenterHub
             ["center"] = "MAStation",
             ["version"] = typeof(CenterHub).Assembly.GetName().Version?.ToString() ?? "0",
             ["data"] = _store.DatabasePath,
+            ["pi"] = PiStatus(),
+            ["workspaces"] = new JsonArray(RecentWorkspaces().Select(entry => (JsonNode?)JsonValue.Create(entry)).ToArray()),
         });
     }
 
@@ -145,6 +147,18 @@ public sealed class CenterHub
                     CompleteFiles(Require(key, "对话标识"), message, sender);
                     break;
 
+                case "read_log":
+                    ReadLog(message["lines"]?.GetValue<int?>() ?? 120, sender);
+                    break;
+
+                case "search":
+                    SearchConversations(Require(message["query"]?.GetValue<string>() ?? string.Empty, "关键词"), sender);
+                    break;
+
+                case "check_path":
+                    CheckPath(Require(message["path"]?.GetValue<string>() ?? string.Empty, "路径"), sender);
+                    break;
+
                 case "list_dir":
                     ListDirectory(Require(key, "对话标识"), message, sender);
                     break;
@@ -230,6 +244,7 @@ public sealed class CenterHub
         {
             ["type"] = "conversation_list",
             ["items"] = items,
+            ["workspaces"] = new JsonArray(RecentWorkspaces().Select(entry => (JsonNode?)JsonValue.Create(entry)).ToArray()),
         });
     }
 
@@ -275,6 +290,160 @@ public sealed class CenterHub
         }
 
         return payload;
+    }
+
+    /// <summary>
+    /// 记住用过的工作区，新建对话时直接挑，不用每次都手打路径。
+    /// </summary>
+    private void RememberWorkspace(string cwd)
+    {
+        if (string.IsNullOrWhiteSpace(cwd))
+        {
+            return;
+        }
+
+        var list = RecentWorkspaces();
+        list.RemoveAll(entry => string.Equals(entry, cwd, StringComparison.OrdinalIgnoreCase));
+        list.Insert(0, cwd);
+
+        var payload = new JsonArray();
+        foreach (var entry in list.Take(8))
+        {
+            payload.Add(entry);
+        }
+
+        _store.SetSetting("recent_workspaces", payload.ToJsonString());
+    }
+
+    private List<string> RecentWorkspaces()
+    {
+        if (ParseNode(_store.GetSetting("recent_workspaces")) is not JsonArray stored)
+        {
+            return new List<string>();
+        }
+
+        return stored
+            .Select(node => node?.GetValue<string>())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .ToList();
+    }
+
+    /// <summary>中心这台机器上的 Pi 装好了没有，界面在设置里给个准话。</summary>
+    private static JsonObject PiStatus()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var agentDirectory = Path.Combine(home, ".pi", "agent");
+        var launcher = Path.Combine(agentDirectory, "bin", "pi-launcher.js");
+
+        return new JsonObject
+        {
+            ["agentDir"] = agentDirectory,
+            ["ready"] = File.Exists(launcher),
+            ["sessions"] = Environment.GetEnvironmentVariable("PI_CODING_AGENT_SESSION_DIR")
+                ?? Path.Combine(home, ".pi", "sessions"),
+        };
+    }
+
+    /// <summary>中心日志的尾巴。手机上出了问题先看这一屏，不用回电脑翻文件。</summary>
+    private static void ReadLog(int lines, CenterConnection sender)
+    {
+        var tail = Math.Clamp(lines, 20, 500);
+        var path = Log.FilePath;
+        var text = string.Empty;
+
+        try
+        {
+            if (File.Exists(path))
+            {
+                text = string.Join('\n', File.ReadLines(path).TakeLast(tail));
+            }
+        }
+        catch (Exception ex)
+        {
+            text = "日志读不出来：" + ex.Message;
+        }
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "log_tail",
+            ["path"] = path,
+            ["text"] = text,
+        });
+    }
+
+    /// <summary>按标题和正文搜对话。</summary>
+    private void SearchConversations(string query, CenterConnection sender)
+    {
+        var hits = _store.Search(query);
+        var items = new JsonArray();
+
+        foreach (var (conversation, snippet) in hits)
+        {
+            items.Add(new JsonObject
+            {
+                ["id"] = conversation.Id,
+                ["title"] = conversation.Title,
+                ["cwd"] = conversation.Cwd,
+                ["updatedAt"] = conversation.UpdatedAt,
+                ["messageCount"] = conversation.MessageCount,
+                ["snippet"] = snippet,
+            });
+        }
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "search_results",
+            ["query"] = query,
+            ["items"] = items,
+        });
+    }
+
+    /// <summary>新建对话前先看看这个目录在不在，别等建完才发现写不进会话。</summary>
+    private static void CheckPath(string path, CenterConnection sender)
+    {
+        var cleaned = path.Trim().Trim('"');
+        var exists = false;
+        var isDirectory = false;
+        var reason = string.Empty;
+
+        if (cleaned.Length == 0)
+        {
+            reason = "先填一个目录";
+        }
+        else
+        {
+            try
+            {
+                var full = Path.GetFullPath(cleaned);
+                exists = Directory.Exists(full) || File.Exists(full);
+                isDirectory = Directory.Exists(full);
+                if (!exists)
+                {
+                    reason = "这个目录不存在";
+                }
+                else if (!isDirectory)
+                {
+                    reason = "这是一个文件，不是目录";
+                }
+                else
+                {
+                    cleaned = full;
+                }
+            }
+            catch (Exception)
+            {
+                reason = "这个路径写不出合法路径";
+            }
+        }
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "path_check",
+            ["path"] = cleaned,
+            ["exists"] = exists && isDirectory,
+            ["reason"] = reason,
+        });
     }
 
     /// <summary>工作区文件浏览：只读，只允许在工作区里走。</summary>
@@ -586,6 +755,7 @@ public sealed class CenterHub
 
         var title = message["title"]?.GetValue<string>();
         var conversation = _store.Create(cwd, title);
+        RememberWorkspace(conversation.Cwd);
         Log.Write($"新对话 {conversation.Id} cwd={cwd}");
         SendState(conversation.Id, sender);
         SendConversationList(sender);
