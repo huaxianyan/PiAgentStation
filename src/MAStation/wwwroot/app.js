@@ -796,16 +796,13 @@ function renderHeader() {
     const list = (session.models && session.models.models) || [];
     if (list.length > 1) {
       const wanted = model.provider + '/' + model.id;
-      if (![...el.modelSelect.options].some((option) => option.value === wanted)) {
-        el.modelSelect.innerHTML = '';
-        for (const entry of list) {
-          const option = document.createElement('option');
-          option.value = entry.provider + '/' + entry.id;
-          option.textContent = entry.name || entry.id;
-          el.modelSelect.appendChild(option);
-        }
+      const signature = list.map((entry) => entry.provider + '/' + entry.id).join('|');
+      if (el.modelSelect.dataset.signature !== signature) {
+        fillModelSelect(list);
+        el.modelSelect.dataset.signature = signature;
       }
       el.modelSelect.value = wanted;
+      el.modelSelect.title = model.name && model.name !== model.id ? wanted + '  ' + model.name : wanted;
       el.modelSelect.hidden = false;
     } else {
       el.modelSelect.hidden = true;
@@ -836,6 +833,43 @@ function renderHeader() {
   el.compactBtn.hidden = false;
   el.renameBtn.hidden = false;
   renderContext();
+}
+
+function fillModelSelect(list) {
+  // 同一个模型可能通过不同路由提供（magpie 的 auto / workbuddy / amd…），
+  // 只显示名字会分不清是哪一条，所以按 provider 分组，名字后面补上路由。
+  const groups = new Map();
+  for (const entry of list) {
+    const provider = entry.provider || '其它';
+    if (!groups.has(provider)) groups.set(provider, []);
+    groups.get(provider).push(entry);
+  }
+
+  el.modelSelect.innerHTML = '';
+  for (const [provider, entries] of groups) {
+    const group = document.createElement('optgroup');
+    group.label = provider;
+    for (const entry of entries) {
+      const option = document.createElement('option');
+      option.value = entry.provider + '/' + entry.id;
+      option.textContent = modelLabel(entry);
+      option.title = entry.provider + '/' + entry.id;
+      group.appendChild(option);
+    }
+    el.modelSelect.appendChild(group);
+  }
+}
+
+function modelLabel(entry) {
+  const name = entry.name || entry.id;
+  const segments = String(entry.id || '').split('/');
+  if (segments.length < 2) {
+    return name;
+  }
+
+  // id 带路由前缀（magpie 的 auto / workbuddy / amd…）。名字里已经写了路由就不再重复。
+  const route = segments[0];
+  return name.toLowerCase().includes(route.toLowerCase()) ? name : name + ' · ' + route;
 }
 
 function renderContext() {

@@ -92,4 +92,15 @@
 - 验证（2026-11-17，真窗口 + CDP）：切模型后消息数保持 2、线程文本不丢，下拉显示新模型；
   重开后标题、模型 `v2ex/coder-m3`、思考等级 `medium`、消息数都对；重命名后头部与侧栏同步，消息不丢。
 
+## STATUS-007：模型下拉按 provider 分组，标签带上路由
+
+- 用户的困惑：终端里看到的是 `magpie/auto/deepseek-v4.1-flash`，界面只显示
+  `Deepseek-V4.1-Flash · routing group`，两者对不上，也不直观。
+- 原因：Pi 的模型列表同时给 `provider`、`id`、`name`，界面只用了 `name`，`id` 只藏在选项值里。
+- 改法：下拉按 provider 分组（`v2ex` / `explabs` / `magpie` / `oneapi`）；标签是 `name`，
+  若 `id` 带路由前缀而名字里没体现，再补 ` · 路由`（如 `· auto`）；悬停提示给完整 `provider/id`。
+  分组标签本身就对应终端里那串前缀。
+- 验证：17 个模型分 4 组；当前项显示 `Deepseek-V4.1-Flash · routing group · auto`，
+  title 为 `magpie/auto/deepseek-v4.1-flash`。
+
 ## 归档索引

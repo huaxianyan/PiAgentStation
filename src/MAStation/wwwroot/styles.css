@@ -260,7 +260,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--border);
   border-radius: 7px;
   padding: 5px 6px;
-  max-width: 210px;
+  max-width: 300px;
   color: var(--text-dim);
 }
 
