@@ -28,6 +28,8 @@ public sealed class CenterHub
 
     private readonly object _gate = new();
     private readonly Dictionary<string, Live> _live = new();
+    private readonly Dictionary<string, TerminalSession> _terminals = new();
+    private readonly object _terminalGate = new();
     private readonly List<CenterConnection> _clients = new();
     private readonly ConversationStore _store;
 
@@ -141,6 +143,18 @@ public sealed class CenterHub
 
                 case "complete_files":
                     CompleteFiles(Require(key, "对话标识"), message, sender);
+                    break;
+
+                case "terminal_start":
+                    StartTerminal(Require(key, "对话标识"), sender);
+                    break;
+
+                case "terminal_input":
+                    WriteTerminal(Require(key, "对话标识"), message);
+                    break;
+
+                case "terminal_stop":
+                    StopTerminal(Require(key, "对话标识"), sender);
                     break;
 
                 case "extension_response":
@@ -435,6 +449,7 @@ public sealed class CenterHub
             await live.Session.DisposeAsync();
         }
 
+        StopTerminalInternal(id);
         _store.Delete(id);
         Log.Write($"删除对话 {id}（Pi 那边的会话文件保留在原处）");
     }
@@ -765,6 +780,121 @@ public sealed class CenterHub
         {
             await entry.Session.DisposeAsync();
         }
+
+        TerminalSession[] terminals;
+        lock (_terminalGate)
+        {
+            terminals = _terminals.Values.ToArray();
+            _terminals.Clear();
+        }
+
+        foreach (var terminal in terminals)
+        {
+            terminal.Dispose();
+        }
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 终端：每条对话一个常驻 shell，多端看到的是同一份输出
+     * ------------------------------------------------------------------ */
+
+    private void StartTerminal(string id, CenterConnection sender)
+    {
+        var conversation = RequireConversation(id);
+        var terminal = EnsureTerminal(conversation);
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "terminal_state",
+            ["key"] = id,
+            ["running"] = terminal.Running,
+            ["cwd"] = terminal.Cwd,
+            ["shell"] = terminal.ShellName,
+        });
+
+        // 另一个设备先开过，就把已经跑出来的输出补上。
+        var tail = terminal.Tail;
+        if (tail.Length > 0)
+        {
+            sender.Send(new JsonObject
+            {
+                ["type"] = "terminal_output",
+                ["key"] = id,
+                ["text"] = tail,
+                ["replay"] = true,
+            });
+        }
+    }
+
+    private void WriteTerminal(string id, JsonObject message)
+    {
+        var conversation = RequireConversation(id);
+        var line = message["text"]?.GetValue<string>() ?? string.Empty;
+        var terminal = EnsureTerminal(conversation);
+        terminal.Write(line);
+    }
+
+    private void StopTerminal(string id, CenterConnection sender)
+    {
+        StopTerminalInternal(id);
+        sender.Send(new JsonObject
+        {
+            ["type"] = "terminal_state",
+            ["key"] = id,
+            ["running"] = false,
+        });
+    }
+
+    private void StopTerminalInternal(string id)
+    {
+        TerminalSession? terminal;
+        lock (_terminalGate)
+        {
+            _terminals.Remove(id, out terminal);
+        }
+
+        terminal?.Dispose();
+    }
+
+    private TerminalSession EnsureTerminal(Conversation conversation)
+    {
+        lock (_terminalGate)
+        {
+            if (_terminals.TryGetValue(conversation.Id, out var existing) && existing.Running)
+            {
+                return existing;
+            }
+        }
+
+        var terminal = new TerminalSession(
+            conversation.Cwd,
+            onOutput: (text) => Broadcast(new JsonObject
+            {
+                ["type"] = "terminal_output",
+                ["key"] = conversation.Id,
+                ["text"] = text,
+            }),
+            onExit: (code) =>
+            {
+                lock (_terminalGate)
+                {
+                    _terminals.Remove(conversation.Id);
+                }
+
+                Broadcast(new JsonObject
+                {
+                    ["type"] = "terminal_exit",
+                    ["key"] = conversation.Id,
+                    ["code"] = code,
+                });
+            });
+
+        lock (_terminalGate)
+        {
+            _terminals[conversation.Id] = terminal;
+        }
+
+        return terminal;
     }
 
     private static JsonNode? ParseNode(string? json)

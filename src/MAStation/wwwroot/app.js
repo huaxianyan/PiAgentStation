@@ -136,6 +136,14 @@ const el = {
   collapseBtn: document.getElementById('collapseBtn'),
   sidebarToggle: document.getElementById('sidebarToggle'),
   exportBtn: document.getElementById('exportBtn'),
+  terminalBtn: document.getElementById('terminalBtn'),
+  terminalPanel: document.getElementById('terminalPanel'),
+  terminalShell: document.getElementById('terminalShell'),
+  terminalBody: document.getElementById('terminalBody'),
+  terminalInput: document.getElementById('terminalInput'),
+  terminalClear: document.getElementById('terminalClear'),
+  terminalStop: document.getElementById('terminalStop'),
+  terminalClose: document.getElementById('terminalClose'),
   workspacePill: document.getElementById('workspacePill'),
   workspacePillText: document.getElementById('workspacePillText'),
   wsSelectText: document.getElementById('wsSelectText'),
@@ -811,6 +819,7 @@ function renderHeader() {
     el.ctxUsage.hidden = true;
     el.renameBtn.hidden = true;
     el.exportBtn.hidden = true;
+    el.terminalBtn.hidden = true;
     return;
   }
 
@@ -876,6 +885,7 @@ function renderHeader() {
   el.compactBtn.hidden = false;
   el.renameBtn.hidden = false;
   el.exportBtn.hidden = false;
+  el.terminalBtn.hidden = false;
   renderContext();
 }
 
@@ -1485,6 +1495,92 @@ function exportMarkdown() {
 
 el.exportBtn.addEventListener('click', exportMarkdown);
 
+/* ------------------------------------------------------------------ *
+ * 终端：每条对话一个常驻 shell，输出是中心广播过来的
+ * ------------------------------------------------------------------ */
+
+const terminal = { history: [], cursor: -1 };
+
+function terminalText(session) {
+  if (!session) return '';
+  if (session.terminalText === undefined) session.terminalText = '';
+  return session.terminalText;
+}
+
+function appendTerminal(text) {
+  const session = current();
+  if (!session) return;
+
+  const body = el.terminalBody;
+  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 24;
+
+  session.terminalText = (terminalText(session) + text).slice(-200000);
+  body.textContent = session.terminalText;
+  body.scrollTop = atBottom ? body.scrollHeight : body.scrollTop;
+}
+
+function showTerminal(visible) {
+  el.terminalPanel.hidden = !visible;
+  if (!visible) return;
+
+  const session = current();
+  if (session) {
+    el.terminalBody.textContent = terminalText(session);
+    el.terminalBody.scrollTop = el.terminalBody.scrollHeight;
+    send({ type: 'terminal_start', key: session.key });
+  }
+
+  el.terminalInput.focus();
+}
+
+function runTerminalLine() {
+  const session = current();
+  const line = el.terminalInput.value;
+  if (!session || !line.trim()) return;
+
+  terminal.history.push(line);
+  terminal.cursor = terminal.history.length;
+  el.terminalInput.value = '';
+
+  // PowerShell 读标准输入时不会回显命令，界面上自己补一行。
+  appendTerminal('> ' + line + '\n');
+  send({ type: 'terminal_input', key: session.key, text: line });
+}
+
+el.terminalBtn.addEventListener('click', () => showTerminal(el.terminalPanel.hidden));
+el.terminalClose.addEventListener('click', () => showTerminal(false));
+el.terminalClear.addEventListener('click', () => {
+  const session = current();
+  if (session) session.terminalText = '';
+  el.terminalBody.textContent = '';
+});
+
+el.terminalStop.addEventListener('click', () => {
+  const session = current();
+  if (session) send({ type: 'terminal_stop', key: session.key });
+});
+
+el.terminalInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    runTerminalLine();
+    return;
+  }
+
+  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+    if (!terminal.history.length) return;
+    event.preventDefault();
+    terminal.cursor = Math.max(0, Math.min(terminal.history.length, terminal.cursor + (event.key === 'ArrowUp' ? -1 : 1)));
+    el.terminalInput.value = terminal.cursor === terminal.history.length ? '' : terminal.history[terminal.cursor];
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    showTerminal(false);
+  }
+});
+
 function submitPrompt() {
   const text = el.input.value.trim();
   if (!text) return;
@@ -1669,6 +1765,28 @@ function dispatch(message) {
     case 'session_state':
       onSessionState(message);
       break;
+
+    case 'terminal_state': {
+      const session = app.byKey.get(message.key);
+      if (!session) break;
+      session.terminalShell = message.shell || '';
+      session.terminalRunning = Boolean(message.running);
+      if (current() === session && !el.terminalPanel.hidden) {
+        el.terminalShell.textContent = [session.terminalShell, message.cwd].filter(Boolean).join(' · ');
+      }
+      break;
+    }
+
+    case 'terminal_output': {
+      if (current()?.key !== message.key) break;
+      appendTerminal(message.text || '');
+      break;
+    }
+
+    case 'terminal_exit': {
+      if (current()?.key !== message.key) break;
+      appendTerminal('[进程已结束，退出码 ' + message.code + ']\n');
+    }
 
     case 'file_completions': {
       const session = app.byKey.get(message.key);

@@ -65,6 +65,9 @@
           <div class="controls">
             <span class="ctx" id="ctxUsage" hidden></span>
             <button class="ghost-btn" id="compactBtn" title="压缩上下文" hidden>压缩</button>
+            <button class="icon-btn" id="terminalBtn" title="终端" aria-label="终端" hidden>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2.5"/><path d="M4.4 6 6.6 8l-2.2 2"/><path d="M8 10.2h3.2"/></svg>
+            </button>
             <button class="icon-btn" id="exportBtn" title="导出为 Markdown" aria-label="导出为 Markdown" hidden>
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v8"/><path d="M4.8 7.4 8 10.6l3.2-3.2"/><path d="M3 13h10"/></svg>
             </button>
@@ -89,6 +92,25 @@
             </button>
             <p class="empty-note">对话存在中心，换台设备打开，看到的还是这一份。</p>
           </div>
+
+          <section class="terminal" id="terminalPanel" hidden>
+            <div class="terminal-head">
+              <span class="terminal-title">终端</span>
+              <span class="terminal-shell" id="terminalShell"></span>
+              <div class="terminal-actions">
+                <button class="ghost-btn small" id="terminalClear">清空</button>
+                <button class="ghost-btn small" id="terminalStop">结束进程</button>
+                <button class="icon-btn small" id="terminalClose" title="收起终端" aria-label="收起终端">
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+                </button>
+              </div>
+            </div>
+            <pre class="terminal-body" id="terminalBody"></pre>
+            <div class="terminal-line">
+              <span class="terminal-prompt">></span>
+              <input id="terminalInput" placeholder="输入命令，回车执行" spellcheck="false" autocomplete="off" />
+            </div>
+          </section>
 
           <div class="composer" id="composer">
             <div class="widget-strip" id="widgetStrip" hidden></div>
