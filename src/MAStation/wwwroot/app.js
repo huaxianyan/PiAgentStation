@@ -143,6 +143,8 @@ const el = {
   filesUp: document.getElementById('filesUp'),
   filesClose: document.getElementById('filesClose'),
   terminalBtn: document.getElementById('terminalBtn'),
+  jumpBottom: document.getElementById('jumpBottom'),
+  content: document.getElementById('content'),
   terminalPanel: document.getElementById('terminalPanel'),
   terminalShell: document.getElementById('terminalShell'),
   terminalBody: document.getElementById('terminalBody'),
@@ -1220,6 +1222,7 @@ function openSettings() {
     ['版本', app.centerVersion || '未知'],
     ['对话库', app.storePath || '未知'],
     ['连接', transport.connected ? '已连接' : '未连接'],
+    ['监听', (app.listen || '未知') + (/127\.0\.0\.1|localhost/.test(app.listen || '') ? '（只本机能连）' : '（局域网可连）')],
     ['Pi', app.pi ? (app.pi.ready ? '已装好 · ' + app.pi.agentDir : '没找到 · ' + app.pi.agentDir) : '未知'],
     ['会话目录', app.pi?.sessions || '未知'],
     ['最近工作区', (app.recentWorkspaces || []).join('、') || '还没有'],
@@ -1913,6 +1916,15 @@ document.addEventListener('click', async (event) => {
   window.setTimeout(() => { button.textContent = '复制'; }, 1200);
 });
 
+el.content.addEventListener('scroll', () => {
+  const distance = el.content.scrollHeight - el.content.scrollTop - el.content.clientHeight;
+  el.jumpBottom.hidden = distance < 200;
+});
+
+el.jumpBottom.addEventListener('click', () => {
+  el.content.scrollTo({ top: el.content.scrollHeight, behavior: 'smooth' });
+});
+
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   // 别的设备可能改过东西，切回来时对一下。
@@ -2039,6 +2051,9 @@ function dispatch(message) {
       }
       if (message.pi) {
         app.pi = message.pi;
+      }
+      if (message.listen) {
+        app.listen = message.listen;
       }
       if (Array.isArray(message.workspaces)) {
         app.recentWorkspaces = message.workspaces;

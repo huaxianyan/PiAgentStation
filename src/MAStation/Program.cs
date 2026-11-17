@@ -27,7 +27,7 @@ var dataDirectory = Environment.GetEnvironmentVariable("MASTATION_DATA_DIR")
     ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MAStation", "data");
 var store = new ConversationStore(Path.Combine(dataDirectory, "mastation.db"));
 Log.Write($"对话库：{store.DatabasePath}");
-var hub = new CenterHub(store);
+var hub = new CenterHub(store, listen);
 
 app.UseWebSockets();
 app.UseDefaultFiles();

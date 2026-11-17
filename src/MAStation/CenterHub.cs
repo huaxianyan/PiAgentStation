@@ -33,10 +33,14 @@ public sealed class CenterHub
     private readonly List<CenterConnection> _clients = new();
     private readonly ConversationStore _store;
 
-    public CenterHub(ConversationStore store)
+    public CenterHub(ConversationStore store, string listenUrl)
     {
         _store = store;
+        ListenUrl = listenUrl;
     }
+
+    /// <summary>中心对外报的地址，界面拿去给人看，方便照着连别的设备。</summary>
+    public string ListenUrl { get; }
 
     public void Join(CenterConnection connection)
     {
@@ -52,6 +56,7 @@ public sealed class CenterHub
             ["version"] = typeof(CenterHub).Assembly.GetName().Version?.ToString() ?? "0",
             ["data"] = _store.DatabasePath,
             ["pi"] = PiStatus(),
+            ["listen"] = ListenUrl,
             ["workspaces"] = new JsonArray(RecentWorkspaces().Select(entry => (JsonNode?)JsonValue.Create(entry)).ToArray()),
         });
     }
