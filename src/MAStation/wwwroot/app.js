@@ -136,6 +136,12 @@ const el = {
   collapseBtn: document.getElementById('collapseBtn'),
   sidebarToggle: document.getElementById('sidebarToggle'),
   exportBtn: document.getElementById('exportBtn'),
+  filesBtn: document.getElementById('filesBtn'),
+  filePanel: document.getElementById('filePanel'),
+  filesPath: document.getElementById('filesPath'),
+  filesBody: document.getElementById('filesBody'),
+  filesUp: document.getElementById('filesUp'),
+  filesClose: document.getElementById('filesClose'),
   terminalBtn: document.getElementById('terminalBtn'),
   terminalPanel: document.getElementById('terminalPanel'),
   terminalShell: document.getElementById('terminalShell'),
@@ -820,6 +826,7 @@ function renderHeader() {
     el.renameBtn.hidden = true;
     el.exportBtn.hidden = true;
     el.terminalBtn.hidden = true;
+    el.filesBtn.hidden = true;
     return;
   }
 
@@ -886,6 +893,7 @@ function renderHeader() {
   el.renameBtn.hidden = false;
   el.exportBtn.hidden = false;
   el.terminalBtn.hidden = false;
+  el.filesBtn.hidden = false;
   renderContext();
 }
 
@@ -1548,6 +1556,111 @@ function runTerminalLine() {
 }
 
 el.terminalBtn.addEventListener('click', () => showTerminal(el.terminalPanel.hidden));
+
+/* ------------------------------------------------------------------ *
+ * 工作区文件：只读浏览与预览
+ * ------------------------------------------------------------------ */
+
+function openFiles(path) {
+  const session = current();
+  if (!session) return;
+
+  el.filePanel.hidden = false;
+  document.querySelector('.main').classList.add('files-open');
+  el.filesPath.textContent = '/' + path;
+  el.filesPath.title = '/' + path;
+  el.filesBody.innerHTML = '<div class="files-note">读取中…</div>';
+  session.filesPath = path;
+  send({ type: 'list_dir', key: session.key, path });
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function renderListing(message) {
+  el.filesBody.innerHTML = '';
+
+  if (!message.exists) {
+    el.filesBody.innerHTML = '<div class="files-note">这里没有东西，或者已经不在工作区里了。</div>';
+    return;
+  }
+
+  if (!message.items.length) {
+    el.filesBody.innerHTML = '<div class="files-note">空目录</div>';
+    return;
+  }
+
+  for (const item of message.items) {
+    const row = document.createElement('button');
+    row.className = 'files-row';
+    row.innerHTML =
+      '<span class="mark">' + (item.dir ? '▸' : '·') + '</span>' +
+      '<span class="name">' + escapeHtml(item.name) + '</span>' +
+      '<span class="meta">' + (item.dir ? '' : escapeHtml(formatSize(item.size))) + '</span>';
+
+    row.addEventListener('click', () => {
+      if (item.dir) {
+        openFiles(item.path);
+        return;
+      }
+
+      const session = current();
+      if (!session) return;
+      el.filesPath.textContent = '/' + item.path;
+      el.filesBody.innerHTML = '<div class="files-note">读取中…</div>';
+      send({ type: 'read_file', key: session.key, path: item.path });
+    });
+
+    el.filesBody.appendChild(row);
+  }
+}
+
+function renderFileContent(message) {
+  el.filesBody.innerHTML = '';
+
+  if (message.text === null || message.text === undefined) {
+    const note = document.createElement('div');
+    note.className = 'files-note';
+    note.textContent = message.reason || '打不开这个文件';
+    el.filesBody.appendChild(note);
+    return;
+  }
+
+  const pre = document.createElement('pre');
+  pre.className = 'files-preview';
+  pre.textContent = message.text;
+  el.filesBody.appendChild(pre);
+  el.filesBody.scrollTop = 0;
+}
+
+el.filesBtn.addEventListener('click', () => {
+  if (!el.filePanel.hidden) {
+    closeFiles();
+    return;
+  }
+
+  const session = current();
+  openFiles(session?.filesPath || '');
+});
+
+el.filesClose.addEventListener('click', () => closeFiles());
+
+function closeFiles() {
+  el.filePanel.hidden = true;
+  document.querySelector('.main').classList.remove('files-open');
+}
+
+el.filesUp.addEventListener('click', () => {
+  const session = current();
+  if (!session) return;
+  const parts = (session.filesPath || '').split('/').filter(Boolean);
+  parts.pop();
+  openFiles(parts.join('/'));
+});
 el.terminalClose.addEventListener('click', () => showTerminal(false));
 el.terminalClear.addEventListener('click', () => {
   const session = current();
@@ -1765,6 +1878,20 @@ function dispatch(message) {
     case 'session_state':
       onSessionState(message);
       break;
+
+    case 'dir_listing': {
+      if (current()?.key !== message.key) break;
+      if (el.filePanel.hidden) break;
+      renderListing(message);
+      break;
+    }
+
+    case 'file_content': {
+      if (current()?.key !== message.key) break;
+      if (el.filePanel.hidden) break;
+      renderFileContent(message);
+      break;
+    }
 
     case 'terminal_state': {
       const session = app.byKey.get(message.key);

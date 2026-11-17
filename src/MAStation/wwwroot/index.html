@@ -65,6 +65,9 @@
           <div class="controls">
             <span class="ctx" id="ctxUsage" hidden></span>
             <button class="ghost-btn" id="compactBtn" title="压缩上下文" hidden>压缩</button>
+            <button class="icon-btn" id="filesBtn" title="工作区文件" aria-label="工作区文件" hidden>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.8 4.2h4l1.3 1.6h7.1v7.2a1.2 1.2 0 0 1-1.2 1.2H3a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M1.8 4.2V3a1 1 0 0 1 1-1h3"/></svg>
+            </button>
             <button class="icon-btn" id="terminalBtn" title="终端" aria-label="终端" hidden>
               <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2.5"/><path d="M4.4 6 6.6 8l-2.2 2"/><path d="M8 10.2h3.2"/></svg>
             </button>
@@ -92,6 +95,19 @@
             </button>
             <p class="empty-note">对话存在中心，换台设备打开，看到的还是这一份。</p>
           </div>
+
+          <aside class="files" id="filePanel" hidden>
+            <div class="files-head">
+              <button class="icon-btn small" id="filesUp" title="上一层" aria-label="上一层">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9"/><path d="M7.6 3.6 3.2 8l4.4 4.4"/></svg>
+              </button>
+              <span class="files-path" id="filesPath"></span>
+              <button class="icon-btn small" id="filesClose" title="关闭" aria-label="关闭">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+              </button>
+            </div>
+            <div class="files-body" id="filesBody"></div>
+          </aside>
 
           <section class="terminal" id="terminalPanel" hidden>
             <div class="terminal-head">

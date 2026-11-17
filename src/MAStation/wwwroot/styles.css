@@ -793,6 +793,112 @@ body.dragging .composer-box {
   box-shadow: 0 0 0 3px rgba(201, 197, 246, .45);
 }
 
+.main {
+  position: relative;
+  --files-w: min(460px, 62%);
+}
+
+/* 文件面板占位时把正文整体让开，别压在输入框上面 */
+.main.files-open .topbar,
+.main.files-open .content,
+.main.files-open .terminal,
+.main.files-open .composer {
+  margin-right: var(--files-w);
+}
+
+.files {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--files-w);
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -12px 0 32px rgba(16, 16, 20, .08);
+  z-index: 5;
+}
+
+.files-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.files-path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-soft);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.files-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.files-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.files-row:hover { background: #f4f4f7; }
+
+.files-row .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.files-row .meta {
+  font-size: 11px;
+  color: var(--text-mute);
+}
+
+.files-row .mark {
+  width: 14px;
+  color: var(--text-mute);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.files-preview {
+  margin: 0;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+}
+
+.files-note {
+  padding: 14px 12px;
+  font-size: 12.5px;
+  color: var(--text-mute);
+}
+
 .terminal {
   display: flex;
   flex-direction: column;

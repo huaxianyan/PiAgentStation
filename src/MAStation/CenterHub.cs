@@ -145,6 +145,14 @@ public sealed class CenterHub
                     CompleteFiles(Require(key, "对话标识"), message, sender);
                     break;
 
+                case "list_dir":
+                    ListDirectory(Require(key, "对话标识"), message, sender);
+                    break;
+
+                case "read_file":
+                    ReadFile(Require(key, "对话标识"), message, sender);
+                    break;
+
                 case "terminal_start":
                     StartTerminal(Require(key, "对话标识"), sender);
                     break;
@@ -267,6 +275,168 @@ public sealed class CenterHub
         }
 
         return payload;
+    }
+
+    /// <summary>工作区文件浏览：只读，只允许在工作区里走。</summary>
+    private void ListDirectory(string id, JsonObject message, CenterConnection sender)
+    {
+        const int limit = 500;
+        var conversation = RequireConversation(id);
+        var relative = message["path"]?.GetValue<string>() ?? string.Empty;
+        var target = ResolveInWorkspace(conversation.Cwd, relative);
+        var items = new JsonArray();
+
+        if (target is not null && Directory.Exists(target))
+        {
+            try
+            {
+                var entries = new List<(string Name, bool IsDirectory, long Size, DateTime Modified)>();
+                foreach (var directory in Directory.EnumerateDirectories(target))
+                {
+                    entries.Add((Path.GetFileName(directory), true, 0, SafeModified(directory)));
+                }
+
+                foreach (var file in Directory.EnumerateFiles(target))
+                {
+                    entries.Add((Path.GetFileName(file), false, SafeSize(file), SafeModified(file)));
+                }
+
+                foreach (var entry in entries
+                             .OrderBy(entry => entry.IsDirectory ? 0 : 1)
+                             .ThenBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+                             .Take(limit))
+                {
+                    var childRelative = string.IsNullOrEmpty(relative)
+                        ? entry.Name
+                        : relative.TrimEnd('/') + "/" + entry.Name;
+
+                    items.Add(new JsonObject
+                    {
+                        ["name"] = entry.Name,
+                        ["path"] = childRelative,
+                        ["dir"] = entry.IsDirectory,
+                        ["size"] = entry.Size,
+                        ["modified"] = entry.Modified.ToString("O"),
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"列目录失败：{target}", ex);
+            }
+        }
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "dir_listing",
+            ["key"] = id,
+            ["path"] = relative,
+            ["items"] = items,
+            ["exists"] = target is not null && Directory.Exists(target),
+        });
+    }
+
+    /// <summary>读一个文本文件给界面看。二进制与超大文件不猜，直接说明原因。</summary>
+    private void ReadFile(string id, JsonObject message, CenterConnection sender)
+    {
+        const long maxBytes = 512 * 1024;
+        var conversation = RequireConversation(id);
+        var relative = message["path"]?.GetValue<string>() ?? string.Empty;
+        var target = ResolveInWorkspace(conversation.Cwd, relative);
+
+        string? content = null;
+        string? reason = null;
+
+        if (target is null || !File.Exists(target))
+        {
+            reason = "找不到这个文件";
+        }
+        else
+        {
+            var info = new FileInfo(target);
+            if (info.Length > maxBytes)
+            {
+                reason = "文件超过 512 KB，没有打开";
+            }
+            else
+            {
+                try
+                {
+                    var bytes = File.ReadAllBytes(target);
+                    var probe = bytes.AsSpan(0, Math.Min(bytes.Length, 8 * 1024));
+                    if (probe.IndexOf((byte)0) >= 0)
+                    {
+                        reason = "看起来是二进制文件，没有打开";
+                    }
+                    else
+                    {
+                        content = System.Text.Encoding.UTF8.GetString(bytes);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Write($"读文件失败：{target}", ex);
+                    reason = "读不出来：" + ex.Message;
+                }
+            }
+        }
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "file_content",
+            ["key"] = id,
+            ["path"] = relative,
+            ["text"] = content,
+            ["reason"] = reason,
+        });
+    }
+
+    /// <summary>把相对路径收进工作区。越界（..、绝对路径跑到外面）就返回 null。</summary>
+    private static string? ResolveInWorkspace(string cwd, string relative)
+    {
+        try
+        {
+            var root = Path.GetFullPath(cwd);
+            var rootWithSep = root.EndsWith(Path.DirectorySeparatorChar)
+                ? root
+                : root + Path.DirectorySeparatorChar;
+            var target = Path.GetFullPath(Path.Combine(root, relative.Replace('\\', '/')));
+
+            if (string.Equals(target, root, StringComparison.OrdinalIgnoreCase))
+            {
+                return target;
+            }
+
+            return target.StartsWith(rootWithSep, StringComparison.OrdinalIgnoreCase) ? target : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static long SafeSize(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static DateTime SafeModified(string path)
+    {
+        try
+        {
+            return File.GetLastWriteTime(path);
+        }
+        catch
+        {
+            return DateTime.MinValue;
+        }
     }
 
     /// <summary>Pi 里能用的 / 命令：扩展命令、提示词模板、技能。跟工作区有关，按目录缓存。</summary>
