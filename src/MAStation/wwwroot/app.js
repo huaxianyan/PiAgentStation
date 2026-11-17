@@ -1893,5 +1893,6 @@ renderSessionList();
 renderExtStatus();
 renderComposerState();
 showWorkspace(false);
+renderHeader();
 setConnectionState('正在连接…');
 connect();
