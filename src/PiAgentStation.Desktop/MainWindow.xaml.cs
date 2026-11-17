@@ -16,41 +16,16 @@ public partial class MainWindow : Window
 {
     private bool _showingOffline;
 
-    /// <summary>窗口圆角半径（逻辑像素）。</summary>
-    private const int CornerRadius = 12;
-
-    /// <summary>Win11 上圆角由 DWM 负责，就不必再裁窗口区域。</summary>
-    private bool _cornersByDwm;
-
     private IntPtr _hwnd;
 
     private bool _pickingFolder;
-
-    /// <summary>
-    /// 窗口区域在每轮布局里都会被 WPF 自己覆盖，所以等它忙完再裁，
-    /// 而且尺寸、最大化状态一变就重裁。
-    /// </summary>
-    private void ScheduleCornerRegion()
-    {
-        if (_cornersByDwm || _hwnd == IntPtr.Zero)
-        {
-            return;
-        }
-
-        Dispatcher.BeginInvoke(new Action(() => ApplyCornerRegion(_hwnd)), System.Windows.Threading.DispatcherPriority.Background);
-    }
 
     public MainWindow()
     {
         InitializeComponent();
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
-        StateChanged += (_, _) =>
-        {
-            PostWindowState();
-            ScheduleCornerRegion();
-        };
-        SizeChanged += (_, _) => ScheduleCornerRegion();
+        StateChanged += (_, _) => PostWindowState();
     }
 
     /// <summary>
@@ -64,13 +39,31 @@ public partial class MainWindow : Window
             _hwnd = source.Handle;
             source.AddHook(WindowProc);
             RoundWindowCorners(_hwnd);
+            EnableNativeShadow(_hwnd);
         }
     }
 
     /// <summary>
-    /// 圆角：Windows 11 有 DWM 这个属性，一句就行；Windows 10 没有，
-    /// 只能给窗口裁一个圆角区域（裁出来的边缘没有平滑，但角是圆的）。
-    /// 最大化时贴满工作区，必须是直角。
+    /// 自绘边框的窗口默认没有系统阴影，跟桌面糊成一片。给 DWM 留 1 像素边框，
+    /// 它会照常画投影和一圈边线，窗口边界就清楚了。
+    /// </summary>
+    private void EnableNativeShadow(IntPtr hwnd)
+    {
+        try
+        {
+            var margins = new Margins { Left = 1, Right = 1, Top = 1, Bottom = 1 };
+            DwmExtendFrameIntoClientArea(hwnd, ref margins);
+        }
+        catch (Exception ex)
+        {
+            Log.Write("窗口阴影没开出来", ex);
+        }
+    }
+
+    /// <summary>
+    /// 圆角：Windows 11 有 DWM 这个属性，一句就行。
+    /// Windows 10 没有这个属性，也不给窗口裁区域——裁出来的边缘是硬切的，有锯齿，
+    /// 留给壳层的方案再定。
     /// </summary>
     private void RoundWindowCorners(IntPtr hwnd)
     {
@@ -80,64 +73,11 @@ public partial class MainWindow : Window
         try
         {
             var preference = DwmwcpRound;
-            if (DwmSetWindowAttribute(hwnd, DwmwaWindowCornerPreference, ref preference, sizeof(int)) == 0)
-            {
-                _cornersByDwm = true;
-                return;
-            }
+            DwmSetWindowAttribute(hwnd, DwmwaWindowCornerPreference, ref preference, sizeof(int));
         }
         catch (Exception ex)
         {
             Log.Write("窗口圆角设置不上", ex);
-        }
-
-        ApplyCornerRegion(hwnd);
-    }
-
-    /// <summary>Windows 10 的办法：按当前尺寸裁一个圆角窗口区域。</summary>
-    private void ApplyCornerRegion(IntPtr hwnd)
-    {
-        if (_cornersByDwm || hwnd == IntPtr.Zero)
-        {
-            return;
-        }
-
-        try
-        {
-            if (WindowState == WindowState.Maximized)
-            {
-                SetWindowRgn(hwnd, IntPtr.Zero, true);
-                return;
-            }
-
-            if (!GetWindowRect(hwnd, out var rect))
-            {
-                return;
-            }
-
-            var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
-            var scale = dpi.DpiScaleX <= 0 ? 1 : dpi.DpiScaleX;
-            var radius = (int)Math.Round(CornerRadius * scale);
-            var width = rect.Right - rect.Left;
-            var height = rect.Bottom - rect.Top;
-            if (width <= 0 || height <= 0)
-            {
-                return;
-            }
-
-            // 加 1 像素，否则右下两边会少一行、一列。
-            var region = CreateRoundRectRgn(0, 0, width + 1, height + 1, radius * 2, radius * 2);
-            if (region == IntPtr.Zero)
-            {
-                return;
-            }
-
-            // 交给系统接管以后不能再 DeleteObject。
-            SetWindowRgn(hwnd, region, true);
-        }
-        catch (Exception ex)
-        {
-            Log.Write("窗口圆角区域没裁上", ex);
         }
     }
 
@@ -201,7 +141,6 @@ public partial class MainWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         RestoreWindowBounds();
-        ScheduleCornerRegion();
         await StartWebViewAsync();
     }
 
@@ -392,6 +331,15 @@ public partial class MainWindow : Window
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct Margins
+    {
+        public int Left;
+        public int Right;
+        public int Top;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect
     {
         public int Left;
@@ -399,6 +347,7 @@ public partial class MainWindow : Window
         public int Right;
         public int Bottom;
     }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct MonitorInfo
     {
@@ -423,14 +372,8 @@ public partial class MainWindow : Window
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
-    [DllImport("gdi32.dll")]
-    private static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int width, int height);
-
-    [DllImport("user32.dll")]
-    private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
-
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref Margins margins);
 
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
