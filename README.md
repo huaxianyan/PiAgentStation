@@ -51,8 +51,9 @@ node scripts/ui-smoke.mjs --cwd E:\tmp\pigui-smoke-ws   # 主链路冒烟，会�
 ## 结构
 
 ```text
-src/MAStation/    中心：pi 子进程、会话扫描、WebSocket、托管前端
-src/MAStation/wwwroot/   前端（桌面与手机共用）
+src/MAStation/                中心：对话库、pi 子进程、WebSocket、托管前端
+src/MAStation/Storage/        对话库（SQLite）
+src/MAStation/wwwroot/        前端（桌面与手机共用）
 src/PiAgentStation.Desktop/   客户端：WebView2 壳，只加载中心地址
 src/Shared/Log.cs             两边共用的文件日志
 ```

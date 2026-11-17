@@ -2,7 +2,7 @@ using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
 using MAStation;
-using MAStation.Sessions;
+using MAStation.Storage;
 using PiAgentStation.Shared;
 
 PiAgentStation.Shared.Log.Initialize("MAStation", "center.log");
@@ -17,7 +17,12 @@ builder.Logging.ClearProviders();
 builder.Logging.AddProvider(new FileLoggerProvider());
 
 var app = builder.Build();
-var hub = new CenterHub();
+
+var dataDirectory = Environment.GetEnvironmentVariable("MASTATION_DATA_DIR")
+    ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MAStation", "data");
+var store = new ConversationStore(Path.Combine(dataDirectory, "mastation.db"));
+Log.Write($"对话库：{store.DatabasePath}");
+var hub = new CenterHub(store);
 
 app.UseWebSockets();
 app.UseDefaultFiles();
@@ -51,16 +56,17 @@ app.Map("/ws", async (HttpContext context) =>
 app.MapGet("/health", () => Results.Json(new
 {
     status = "ok",
-    sessionRoot = SessionStore.RootDirectory,
+    database = store.DatabasePath,
 }));
 
 app.Lifetime.ApplicationStopping.Register(() =>
 {
     hub.ShutdownAsync().GetAwaiter().GetResult();
+    store.Dispose();
     Log.Write("中心停止");
 });
 
-Log.Write($"中心启动 {listen}，会话目录 {SessionStore.RootDirectory}");
+Log.Write($"中心启动 {listen}，对话库 {store.DatabasePath}");
 Console.WriteLine($"MAStation 已启动：{listen}");
 Console.WriteLine($"打开地址：{listen.TrimEnd('/')}/");
 Console.WriteLine($"访问令牌：见 {TokenStore.FilePath}（桌面客户端会自动读取；手机用 ?token= 拼在地址后）");

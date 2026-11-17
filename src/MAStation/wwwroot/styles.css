@@ -107,6 +107,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .group-label .folder { color: var(--text-dim); }
 
 .session-item {
+  position: relative;
   display: block;
   width: 100%;
   text-align: left;
@@ -125,6 +126,42 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-color: #33456b;
   color: var(--text);
 }
+
+.session-open {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.session-delete {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 6px;
+  background: #23262d;
+  color: var(--text-mute);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s;
+}
+
+.session-item:hover .session-delete { opacity: 1; }
+.session-delete:hover { background: #3a1f24; color: #f0837f; }
+
+.primary-btn.danger { background: #a93b32; border-color: #a93b32; }
+.primary-btn.danger:hover { background: #c04a40; }
 
 .session-item .row1 {
   display: flex;

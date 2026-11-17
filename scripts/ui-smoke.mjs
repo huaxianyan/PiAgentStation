@@ -84,7 +84,7 @@ if (!connected.includes('已连接')) fail('客户端没有连上中心：' + co
 const listCount = await evaluate('return document.querySelectorAll(".session-item").length');
 console.log('会话列表条目数（起始）：' + listCount);
 
-await evaluate(`if (!window.send({ type: 'new_session', cwd: ${JSON.stringify(cwd)} })) fail('还没连上中心'); return true;`);
+await evaluate(`if (!window.send({ type: 'new_conversation', cwd: ${JSON.stringify(cwd)} })) fail('还没连上中心'); return true;`);
 
 let ready = false;
 for (let i = 0; i < 90; i++) {
@@ -94,7 +94,13 @@ for (let i = 0; i < 90; i++) {
 }
 if (!ready) fail('新建会话没有进入就绪状态');
 
-const modelVisible = await evaluate('return !document.getElementById("modelSelect").hidden');
+// 模型列表是中心从 Pi 那边取一次再缓存的，冷启动要等几秒。
+let modelVisible = false;
+for (let i = 0; i < 40; i++) {
+  modelVisible = await evaluate('return !document.getElementById("modelSelect").hidden');
+  if (modelVisible) break;
+  await sleep(500);
+}
 if (!modelVisible) fail('模型下拉没出现');
 
 await evaluate(`

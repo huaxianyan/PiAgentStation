@@ -2,8 +2,8 @@
 
 ## 当前主线
 
-- 现在在做什么：中心（MAStation）管 Pi 子进程、会话与前端托管，客户端（PiAgentStation）只连中心；
-  桌面壳与手机浏览器跑同一份前端。中心与客户端都已在本机跑起来，可实测。
+- 现在在做什么：对话归 MAStation 所有，存在本地 SQLite 里；客户端只读这份数据，看历史不经过 Pi。
+  MA 按需跟 Pi 建会话并绑定，每轮结束把消息取回来存档。
 - 下一步：手机端能用（现在只是同一页面能打开，还要按窄屏调）、中心常驻运行（开机自启或服务化）、
   `@文件` 补全、终端面板、会话重命名与删除。
 - 已知阻塞：无。中心默认只监听本机，局域网开放要用户明确授权。
@@ -56,5 +56,27 @@
   空状态文案不再说「本机」。
 - 验证：`dotnet build PiAgentStation.slnx` 0 警告 0 错误；`dev-run.ps1` 起中心与客户端，
   health 返回真实会话根目录，界面连上后列出 170 个会话。
+
+## STATUS-005：对话归 MAStation，客户端只读 MA 的数据
+
+- 用户 2026-11-17 定：不再全盘使用 Pi 的会话管理。Pi 的会话目录太乱（一百多条结束未清理），
+  点开旧会话要等很久、还有加载失败的。对话改成 MAStation 自己的概念，客户端只跟 MA 通讯。
+  记在 `docs/DECISIONS.md` 的 D5。
+- 数据：SQLite（`%LOCALAPPDATA%\MAStation\data\mastation.db`，`MASTATION_DATA_DIR` 可覆盖），
+  两张表 `conversations` / `messages`，加一张 `settings` 放模型列表这类缓存。
+- 绑定：新建对话时只建一条记录；第一次发消息才起 Pi 子进程，把 Pi 的 `sessionFile` 记进
+  `pi_session_file` 字段，续聊时拿它 resume。这个字段不出现在任何客户端响应里。
+- 存档：每轮 `agent_settled` 后取一次 `get_messages` / `get_session_stats` / `get_state`，
+  整体替换该对话的消息并更新标题、模型、思考等级、用量。
+- 验证（2026-11-17，真窗口 + CDP + SQLite 直查）：
+  - 新建对话 → 发消息 → 流式 → 收尾，库里落地 5 条消息（含 1 条 system）、标题取首句、
+    `pi_session_file` 已写入。
+  - 关掉中心（子进程一起没）再开，点开同一对话：109 ms 出历史，**没有**起任何 Pi 子进程。
+  - 模型列表改为读缓存后，看历史的路径完全不碰 Pi。
+  - 删除对话：侧栏 2 → 1，库里对应行与消息一起消失，Pi 那边文件保留。
+  - `scripts/ui-smoke.mjs` 通过（用量 `1.1% · 11k/1000k`）。
+- 顺带修：`refresh_stats` 原来回的是整份状态，收尾时会用库里未写完的副本覆盖刚流式出来的内容；
+  现在只回用量。SQLite 原生库有已知高危版本，已钉 `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5。
+- 边界：旧的 170 条 Pi 会话不迁移，MA 从空库开始；对话不能重命名（标题自动取首句）。
 
 ## 归档索引

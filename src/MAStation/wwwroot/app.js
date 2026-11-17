@@ -22,7 +22,7 @@ function send(message) {
   }
 
   // 掉线时只留住能自愈的请求，别的操作直接告诉用户没连上。
-  if (message.type === 'list_sessions' && !transport.queue.some((item) => item.type === 'list_sessions')) {
+  if (message.type === 'list_conversations' && !transport.queue.some((item) => item.type === 'list_conversations')) {
     transport.queue.push(message);
   }
   return false;
@@ -51,7 +51,7 @@ function connect() {
     while (transport.queue.length) {
       socket.send(JSON.stringify(transport.queue.shift()));
     }
-    send({ type: 'list_sessions' });
+    send({ type: 'list_conversations' });
   });
 
   socket.addEventListener('message', (event) => {
@@ -86,11 +86,11 @@ function connect() {
 const app = {
   sessions: [],
   sessionRoot: '',
+  storePath: '',
   centerName: '',
   filter: '',
   currentKey: null,
   byKey: new Map(),
-  activePath: '',
   activeCwd: '',
   lastCwd: '',
   pendingCwd: '',
@@ -107,16 +107,10 @@ function current() {
   return app.currentKey ? app.byKey.get(app.currentKey) : null;
 }
 
-function samePath(a, b) {
-  // 两边的路径都由宿主给出，分隔符一致，只比较大小写差异。
-  return Boolean(a) && String(a).toLowerCase() === String(b || '').toLowerCase();
-}
-
-function makeSession(key, state, messages, cwd, path) {
+function makeSession(key, state, messages, cwd) {
   const built = buildItems(messages || []);
   return {
     key,
-    path: path || '',
     state: state || {},
     cwd: cwd || '',
     items: built.items,
@@ -473,26 +467,26 @@ function renderSessionList() {
   const filter = app.filter.trim().toLowerCase();
   const groups = new Map();
 
-  for (const session of app.sessions) {
-    const label = session.cwd || '未知目录';
+  for (const conversation of app.sessions) {
+    const label = conversation.cwd || '未知目录';
     if (filter) {
-      const haystack = [(session.name || ''), (session.title || ''), session.cwd].join(' ').toLowerCase();
+      const haystack = [(conversation.title || ''), conversation.cwd].join(' ').toLowerCase();
       if (!haystack.includes(filter)) continue;
     }
     if (!groups.has(label)) groups.set(label, []);
-    groups.get(label).push(session);
+    groups.get(label).push(conversation);
   }
 
   el.sessionList.innerHTML = '';
   if (!groups.size) {
     const empty = document.createElement('div');
     empty.className = 'group-label';
-    empty.textContent = app.sessions.length ? '没有匹配的会话' : '还没有会话记录';
+    empty.textContent = app.sessions.length ? '没有匹配的对话' : '还没有对话，点上面的 ＋ 新建';
     el.sessionList.appendChild(empty);
     return;
   }
 
-  for (const [cwd, sessions] of groups) {
+  for (const [cwd, conversations] of groups) {
     const label = document.createElement('div');
     label.className = 'group-label';
     label.title = cwd;
@@ -501,21 +495,77 @@ function renderSessionList() {
     label.innerHTML = '<span class="folder">' + escapeHtml(labelText) + '</span>';
     el.sessionList.appendChild(label);
 
-    for (const session of sessions) {
-      const button = document.createElement('button');
-      button.className = 'session-item' + (samePath(session.path, app.activePath) ? ' active' : '');
-      button.title = session.cwd;
-      const name = session.name || session.title || '未命名会话';
-      button.innerHTML =
-        '<div class="row1"><span class="name">' + escapeHtml(name) + '</span>' +
-        '<span class="time">' + relativeTime(session.updatedAt) + '</span></div>' +
-        (session.name && session.title
-          ? '<div class="snippet">' + escapeHtml(session.title) + '</div>'
-          : '');
-      button.addEventListener('click', () => openSession(session));
-      el.sessionList.appendChild(button);
+    for (const conversation of conversations) {
+      const item = document.createElement('div');
+      item.className = 'session-item' + (conversation.id === app.currentKey ? ' active' : '');
+      item.title = conversation.cwd;
+
+      const open = document.createElement('button');
+      open.className = 'session-open';
+      open.innerHTML =
+        '<div class="row1"><span class="name">' + escapeHtml(conversation.title || '未命名对话') + '</span>' +
+        '<span class="time">' + relativeTime(conversation.updatedAt) + '</span></div>';
+      open.addEventListener('click', () => openSession(conversation));
+      item.appendChild(open);
+
+      const remove = document.createElement('button');
+      remove.className = 'session-delete';
+      remove.title = '删除对话';
+      remove.textContent = '×';
+      remove.addEventListener('click', (event) => {
+        event.stopPropagation();
+        confirmDelete(conversation);
+      });
+      item.appendChild(remove);
+
+      el.sessionList.appendChild(item);
     }
   }
+}
+
+function confirmDelete(conversation) {
+  closeModal();
+  const card = document.createElement('div');
+  card.className = 'modal';
+
+  const title = document.createElement('h3');
+  title.textContent = '删除这个对话';
+  card.appendChild(title);
+
+  const note = document.createElement('div');
+  note.className = 'modal-message';
+  note.textContent = '「' + (conversation.title || '未命名对话') + '」的历史会从这个列表消失。Pi 那边的原始记录不删。';
+  card.appendChild(note);
+
+  const actions = document.createElement('div');
+  actions.className = 'modal-actions';
+
+  const cancel = document.createElement('button');
+  cancel.className = 'ghost-btn';
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', closeModal);
+
+  const remove = document.createElement('button');
+  remove.className = 'primary-btn danger';
+  remove.textContent = '删除';
+  remove.addEventListener('click', () => {
+    closeModal();
+    send({ type: 'delete_conversation', id: conversation.id });
+    if (app.currentKey === conversation.id) {
+      app.currentKey = null;
+      app.sessions = app.sessions.filter((item) => item.id !== conversation.id);
+      showWorkspace(false);
+      renderSessionList();
+    }
+  });
+
+  actions.appendChild(cancel);
+  actions.appendChild(remove);
+  card.appendChild(actions);
+
+  el.modal.innerHTML = '';
+  el.modal.appendChild(card);
+  el.modal.hidden = false;
 }
 
 /* ------------------------------------------------------------------ *
@@ -721,7 +771,7 @@ function schedule(itemId) {
 function renderHeader() {
   const session = current();
   if (!session) {
-    el.sessionTitle.textContent = '未选择会话';
+    el.sessionTitle.textContent = '未选择对话';
     el.sessionCwd.textContent = '';
     el.modelSelect.hidden = true;
     el.thinkingSelect.hidden = true;
@@ -732,12 +782,14 @@ function renderHeader() {
 
   const state = session.state || {};
   const firstUser = session.items.find((item) => item.kind === 'user');
-  const title = state.sessionName || (firstUser && firstUser.text ? firstUser.text.split('\n')[0] : '') || '新会话';
+  const title = state.sessionName || (firstUser && firstUser.text ? firstUser.text.split('\n')[0] : '') || '新对话';
   el.sessionTitle.textContent = title;
   el.sessionTitle.title = title;
   el.sessionCwd.textContent = session.cwd || '';
 
-  const model = state.model;
+  // 新对话还没跟 Pi 打过交道时，先按模型列表的第一项显示。
+  const model = state.model
+    || ((session.models && session.models.models && session.models.models[0]) || null);
   if (model) {
     const list = (session.models && session.models.models) || [];
     if (list.length > 1) {
@@ -856,13 +908,12 @@ function showWorkspace(hasSession) {
  * 会话流程
  * ------------------------------------------------------------------ */
 
-function openSession(session) {
-  if (!session || !session.path) return;
-  const known = [...app.byKey.values()].find((candidate) => samePath(candidate.path, session.path));
+function openSession(conversation) {
+  if (!conversation || !conversation.id) return;
+  const known = app.byKey.get(conversation.id);
   if (known) {
-    app.currentKey = known.key;
-    app.activePath = known.path || session.path;
-    app.activeCwd = session.cwd || '';
+    app.currentKey = conversation.id;
+    app.activeCwd = conversation.cwd || '';
     showWorkspace(true);
     renderThread();
     renderHeader();
@@ -871,9 +922,10 @@ function openSession(session) {
     return;
   }
 
-  setOverlay('正在打开会话…');
-  send({ type: 'open_session', path: session.path });
-  app.pendingCwd = session.cwd || '';
+  // 历史直接从 MAStation 的库里读，不再为它起 Pi 进程，所以旧对话也是秒开。
+  setOverlay('正在打开对话…');
+  send({ type: 'open_conversation', id: conversation.id });
+  app.pendingCwd = conversation.cwd || '';
 }
 
 function newSession() {
@@ -886,12 +938,12 @@ function askCwd() {
   card.className = 'modal';
 
   const title = document.createElement('h3');
-  title.textContent = '在哪个目录开会话';
+  title.textContent = '在哪个工作区新建对话';
   card.appendChild(title);
 
   const note = document.createElement('div');
   note.className = 'modal-message';
-  note.textContent = '填中心那台机器上的绝对路径。';
+  note.textContent = '填中心那台机器上的绝对路径，对话就绑定在这个目录下。';
   card.appendChild(note);
 
   const input = document.createElement('input');
@@ -943,10 +995,10 @@ function askCwd() {
 function startSession(cwd) {
   if (!cwd) return;
   closeModal();
-  setOverlay('正在打开会话…');
+  setOverlay('正在打开对话…');
   pendingCwd = cwd;
   app.lastCwd = cwd;
-  if (!send({ type: 'new_session', cwd })) {
+  if (!send({ type: 'new_conversation', cwd })) {
     setOverlay(null);
     toast('还没连上中心，等连接恢复再试。', 'warning');
   }
@@ -1093,19 +1145,20 @@ function dispatch(message) {
         app.centerName = message.center;
         if (transport.connected) setConnectionState('已连接', true);
       }
-      if (message.sessionRoot) {
-        app.sessionRoot = message.sessionRoot;
-        el.sessionRoot.textContent = app.sessionRoot;
-        el.sessionRoot.title = app.sessionRoot;
+      if (message.data) {
+        app.storePath = message.data;
+        el.sessionRoot.textContent = app.storePath;
+        el.sessionRoot.title = '对话都存在这里，客户端看的就是这一份。';
       }
       break;
 
-    case 'session_list':
+    case 'conversation_list':
       app.sessions = message.items || [];
-      app.sessionRoot = message.root || '';
-      el.sessionRoot.textContent = app.sessionRoot;
-      el.sessionRoot.title = app.sessionRoot;
       renderSessionList();
+      break;
+
+    case 'conversation_saved':
+      send({ type: 'list_conversations' });
       break;
 
     case 'session_state':
@@ -1151,18 +1204,15 @@ function onSessionState(message) {
   const key = message.key;
   const previous = app.byKey.get(key);
   const cwd = message.cwd || (previous && previous.cwd) || pendingCwd || app.pendingCwd || '';
-  const session = makeSession(key, message.state, message.messages, cwd,
-    message.state && message.state.sessionFile);
+  const session = makeSession(key, message.state, message.messages, cwd);
   session.stats = message.stats || null;
   if (previous) {
     session.models = previous.models;
     session.levels = previous.levels;
   }
 
-  const file = message.state && message.state.sessionFile;
   app.byKey.set(key, session);
   app.currentKey = key;
-  app.activePath = file || app.activePath;
   app.activeCwd = cwd;
   pendingCwd = '';
   app.pendingCwd = '';
@@ -1177,10 +1227,7 @@ function onSessionState(message) {
   if (!session.models) {
     send({ type: 'list_models', key });
   }
-  if (file) {
-    // 新建会话后把最新列表补上，让刚产生的会话出现在侧栏。
-    send({ type: 'list_sessions' });
-  }
+  send({ type: 'list_conversations' });
 }
 
 function onModels(message) {
@@ -1195,7 +1242,7 @@ function onProcessExit(message) {
   const session = app.byKey.get(message.key);
   app.byKey.delete(message.key);
   const detail = message.stderr ? '\n' + message.stderr.split('\n').slice(-4).join('\n') : '';
-  toast('Pi 运行时退出了（退出码 ' + message.code + '），点一个会话可以重新启动。' + detail, 'error');
+  toast('Pi 运行时退出了（退出码 ' + message.code + '），发一句话就会自动重连。' + detail, 'error');
   if (app.currentKey === message.key) {
     app.currentKey = null;
     showWorkspace(false);
@@ -1320,8 +1367,7 @@ function onEvent(key, event) {
       if (last && key === app.currentKey) schedule(last.id);
       if (key === app.currentKey) renderComposerState();
       send({ type: 'refresh_stats', key });
-      // 新会话的文件是首次消息后才落盘的，这一轮结束再刷一次列表才能看到它。
-      send({ type: 'list_sessions' });
+      send({ type: 'list_conversations' });
       break;
     }
 
