@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Seven Station</title>
+<style>
+  /* 和主页同一套度量：色值、圆角、字号都照 wwwroot/styles.css 的浅色主题。 */
+  :root {
+    --page: #ececee;
+    --card: #ffffff;
+    --panel: #f7f7f9;
+    --border: #e9e9ee;
+    --border-strong: #dcdce2;
+    --text: #1a1a1d;
+    --text-soft: #55555c;
+    --text-mute: #8a8a92;
+    --text-faint: #a9a9b1;
+    --accent: #1a1a1d;
+    --on-accent: #ffffff;
+    --focus: #c9c5f6;
+    --green: #189a4a;
+    --danger: #cf3b3b;
+    --radius-sm: 8px;
+    --radius-card: 14px;
+    --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, "Inter", "Microsoft YaHei UI", system-ui, sans-serif;
+    --mono: "Cascadia Mono", "Consolas", "SFMono-Regular", ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--card);
+    color: var(--text);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  .mark {
+    width: 46px; height: 46px; border-radius: var(--radius-card);
+    background: var(--accent); color: var(--on-accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 600;
+  }
+  .head { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  h1 { margin: 0; font-size: 22px; font-weight: 600; }
+  .sub { margin: 0; font-size: 13.5px; color: var(--text-mute); }
+
+  .card {
+    width: 470px; padding: 18px;
+    background: var(--card); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-card);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+
+  .row { display: flex; align-items: center; gap: 12px; }
+  .row-label { width: 76px; flex: none; font-size: 13px; color: var(--text-mute); }
+  .row input {
+    flex: 1; min-width: 0; padding: 8px 10px;
+    border: 1px solid var(--border-strong); border-radius: 9px;
+    outline: none; font-size: 13px; font-family: var(--mono);
+    color: var(--text); background: var(--card);
+  }
+  .row input:focus { border-color: var(--focus); box-shadow: 0 0 0 3px rgba(201, 197, 246, .35); }
+
+  .hint { margin: 0 0 0 88px; font-size: 12px; line-height: 1.6; color: var(--text-faint); }
+
+  .foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 2px; }
+  .status { font-size: 12.5px; color: var(--text-mute); }
+  .status.ok { color: var(--green); }
+  .status.bad { color: var(--danger); }
+  .buttons { display: flex; gap: 8px; }
+
+  button { font-family: inherit; cursor: pointer; }
+  .ghost {
+    padding: 5px 10px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--card); color: var(--text-dim, #2c2c31); font-size: 12.5px;
+  }
+  .ghost:hover { background: var(--panel); }
+  .primary {
+    padding: 6px 16px; border: 1px solid var(--accent); border-radius: 8px;
+    background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 500;
+  }
+  .primary[disabled] {
+    background: var(--panel); border-color: var(--border-strong);
+    color: var(--text-faint); cursor: default;
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="mark">π</div>
+  <div class="head">
+    <h1>先连上中心</h1>
+    <p class="sub">这台设备要连到哪台中心？填完就能开始用。</p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <span class="row-label">中心地址</span>
+      <input id="url" type="text" spellcheck="false" placeholder="http://192.168.1.10:8787/">
+    </div>
+    <div class="row">
+      <span class="row-label">访问令牌</span>
+      <input id="token" type="text" spellcheck="false" placeholder="访问令牌">
+    </div>
+    <p class="hint">令牌在中心那台机器的 %ProgramData%\SevenStation.Core\token.txt 里。</p>
+
+    <div class="foot">
+      <span class="status" id="status">填完点「测试连接」。</span>
+      <div class="buttons">
+        <button class="ghost" id="probe">测试连接</button>
+        <button class="primary" id="enter" disabled>开始使用</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+  const urlInput = document.getElementById('url');
+  const tokenInput = document.getElementById('token');
+  const statusLine = document.getElementById('status');
+  const probeBtn = document.getElementById('probe');
+  const enterBtn = document.getElementById('enter');
+
+  function setStatus(text, tone) {
+    statusLine.textContent = text;
+    statusLine.className = 'status' + (tone ? ' ' + tone : '');
+  }
+
+  function normalize(url) {
+    let value = url.trim();
+    if (!value) return '';
+    if (!/^https?:\/\//i.test(value)) value = 'http://' + value;
+    if (!value.endsWith('/')) value += '/';
+    return value;
+  }
+
+  // 用一个临时的 WebSocket 探一下：中心对错的令牌返回 401，连接直接失败。
+  function probe(url, token) {
+    return new Promise((resolve) => {
+      const target = normalize(url) + 'ws?token=' + encodeURIComponent(token);
+      let socket;
+      let settled = false;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try { socket && socket.close(); } catch (error) { /* 已经关了 */ }
+        resolve(result);
+      };
+      const timer = setTimeout(() => finish({ ok: false, error: '中心没有响应，检查地址和它是否在运行' }), 6000);
+
+      try {
+        socket = new WebSocket(target);
+      } catch (error) {
+        finish({ ok: false, error: '地址格式不对' });
+        return;
+      }
+
+      socket.onopen = () => finish({ ok: true });
+      socket.onerror = () => blameTokenOrNetwork(finish, url);
+      socket.onclose = () => blameTokenOrNetwork(finish, url);
+
+    });
+  }
+
+  // WebSocket 被拒时，先看看中心本身通不通：通 -> 是令牌不对；不通 -> 是地址或服务的问题。
+  async function blameTokenOrNetwork(finish, url) {
+    try {
+      const response = await fetch(normalize(url) + 'health', { cache: 'no-store' });
+      if (response.ok) {
+        finish({ ok: false, error: '令牌不对：中心拒绝了这个令牌' });
+        return;
+      }
+    } catch (error) {
+      // 下面的提示更贴切
+    }
+    finish({ ok: false, error: '连不上，检查地址和中心是否在运行' });
+  }
+
+  async function runProbe() {
+    const url = normalize(urlInput.value);
+    const token = tokenInput.value.trim();
+    if (!url) {
+      setStatus('先填中心地址。', 'bad');
+      return null;
+    }
+
+    probeBtn.disabled = true;
+    enterBtn.disabled = true;
+    setStatus('正在连…');
+    const result = await probe(url, token);
+    probeBtn.disabled = false;
+
+    if (result.ok) {
+      setStatus('连上了，可以开始用。', 'ok');
+      enterBtn.disabled = false;
+      return { url, token };
+    }
+
+    setStatus(result.error, 'bad');
+    return null;
+  }
+
+  probeBtn.addEventListener('click', runProbe);
+
+  enterBtn.addEventListener('click', async () => {
+    const ready = await runProbe();
+    if (!ready) return;
+    if (!invoke) {
+      setStatus('这个窗口不是桌面客户端，没法保存设置。', 'bad');
+      return;
+    }
+
+    enterBtn.disabled = true;
+    setStatus('保存中…');
+    try {
+      // 保存完之后壳会自己跳到中心页面。
+      await invoke('client_config_save', { url: ready.url, token: ready.token });
+    } catch (error) {
+      enterBtn.disabled = false;
+      setStatus('保存失败：' + (error && error.message ? error.message : error), 'bad');
+    }
+  });
+
+  for (const input of [urlInput, tokenInput]) {
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') runProbe();
+    });
+  }
+
+  // 以前连过就把地址带上，令牌也带（换中心时改地址即可）。
+  if (invoke) {
+    invoke('client_config_get')
+      .then((config) => {
+        urlInput.value = config.url || 'http://127.0.0.1:8787/';
+        tokenInput.value = config.token || '';
+        if (config.token) setStatus('地址和令牌都还在，点「开始使用」就行。');
+      })
+      .catch(() => {
+        urlInput.value = 'http://127.0.0.1:8787/';
+      });
+  }
+</script>
+</body>
+</html>

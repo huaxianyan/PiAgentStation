@@ -2294,21 +2294,27 @@ function renderClientCenterCard() {
   );
 
   const urlRow = document.createElement('div');
-  urlRow.className = 'path-row';
+  urlRow.className = 'row-edit';
+  const urlLabel = document.createElement('span');
+  urlLabel.className = 'row-label';
+  urlLabel.textContent = '中心地址';
   const urlInput = document.createElement('input');
   urlInput.type = 'text';
   urlInput.placeholder = 'http://192.168.1.10:8787/';
   urlInput.spellcheck = false;
-  urlRow.appendChild(urlInput);
+  urlRow.append(urlLabel, urlInput);
   card.appendChild(urlRow);
 
   const tokenRow = document.createElement('div');
-  tokenRow.className = 'path-row';
+  tokenRow.className = 'row-edit';
+  const tokenLabel = document.createElement('span');
+  tokenLabel.className = 'row-label';
+  tokenLabel.textContent = '访问令牌';
   const tokenInput = document.createElement('input');
   tokenInput.type = 'text';
   tokenInput.placeholder = '访问令牌';
   tokenInput.spellcheck = false;
-  tokenRow.appendChild(tokenInput);
+  tokenRow.append(tokenLabel, tokenInput);
   card.appendChild(tokenRow);
 
   const status = document.createElement('p');
@@ -2316,8 +2322,10 @@ function renderClientCenterCard() {
   status.textContent = '读取中…';
   card.appendChild(status);
 
+  const actions = document.createElement('div');
+  actions.className = 'css-actions';
   const save = document.createElement('button');
-  save.className = 'ghost-btn';
+  save.className = 'ghost-btn small';
   save.textContent = '保存并重连';
   save.addEventListener('click', async () => {
     const url = urlInput.value.trim();
@@ -2337,7 +2345,8 @@ function renderClientCenterCard() {
       status.textContent = '保存失败：' + (error && error.message ? error.message : error);
     }
   });
-  card.appendChild(save);
+  actions.appendChild(save);
+  card.appendChild(actions);
 
   invoke('client_config_get')
     .then((config) => {
@@ -2360,6 +2369,7 @@ function renderClientCenterCard() {
 
   return card;
 }
+
 
 function renderSettingsPage() {
   el.pageInner.appendChild(makePageHead('设置'));
@@ -2484,15 +2494,23 @@ function renderSettingsPage() {
   style.appendChild(styleBar);
   el.pageInner.appendChild(style);
 
-  const logs = makePageCard('日志', '中心那边的运行日志，排查问题时看这里。');
-  const logsBar = document.createElement('div');
-  logsBar.className = 'css-actions';
+  // 按钮跟标题站同一行，卡片里就只剩一条竖向流：标题 → 说明 → 日志。
+  const logs = makePageCard();
+  const logsHead = document.createElement('div');
+  logsHead.className = 'card-head';
+  const logsTitle = document.createElement('h3');
+  logsTitle.textContent = '日志';
   const readLog = document.createElement('button');
   readLog.className = 'ghost-btn small';
   readLog.textContent = '读最近日志';
   readLog.addEventListener('click', () => send({ type: 'read_log', lines: 120 }));
-  logsBar.appendChild(readLog);
-  logs.appendChild(logsBar);
+  logsHead.append(logsTitle, readLog);
+  logs.appendChild(logsHead);
+
+  const logsNote = document.createElement('p');
+  logsNote.className = 'page-note';
+  logsNote.textContent = '中心那边的运行日志，排查问题时看这里。';
+  logs.appendChild(logsNote);
 
   const logBox = document.createElement('pre');
   logBox.className = 'log-tail';

@@ -354,10 +354,18 @@ fn main() {
             let center = read_center();
             log(&format!("启动，中心 {}", center.base_url));
 
+            // 没配过令牌就先给引导页：填完才进主界面，不然打开就是一个连不上的空壳。
+            let start_page = if center.token.is_none() {
+                log("还没有令牌，先显示引导页");
+                "onboard.html"
+            } else {
+                "index.html"
+            };
+
             let mut builder = WebviewWindowBuilder::new(
                 app,
                 "main",
-                WebviewUrl::App("index.html".into()),
+                WebviewUrl::App(start_page.into()),
             )
             .title("Seven Station")
             .inner_size(1240.0, 820.0)
@@ -375,6 +383,11 @@ fn main() {
                 WindowEvent::CloseRequested { .. } => save_bounds(&handle),
                 _ => {}
             });
+
+            if center.token.is_none() {
+                // 引导页自己会在填完后跳到中心页面，这里不再抢先导航。
+                return Ok(());
+            }
 
             let target = center_url(&center);
             let navigator = window.clone();

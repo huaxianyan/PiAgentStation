@@ -1072,6 +1072,28 @@ button { cursor: pointer; }
   letter-spacing: -0.01em;
 }
 
+/* 设置页里可编辑的行：标签与输入同一行，输入用与弹窗输入框同一套度量。 */
+.row-edit { display: flex; align-items: center; gap: 12px; padding: 3px 0; }
+.row-edit .row-label { width: 76px; flex: none; font-size: 13px; color: var(--text-mute); }
+.row-edit input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  outline: none;
+  font-size: 13px;
+  font-family: var(--mono);
+  color: var(--text);
+  background: var(--card);
+}
+.row-edit input:focus { border-color: var(--focus); box-shadow: 0 0 0 3px rgba(201, 197, 246, .35); }
+
+/* 卡片标题和右侧动作同一行（日志卡片用它放「读最近日志」）。 */
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.card-head h3 { margin: 0; }
+.card-head .ghost-btn { padding: 3px 9px; font-size: 12px; }
+
 .page-note {
   margin: 5px 0 0;
   font-size: 12.5px;
@@ -1513,7 +1535,7 @@ body.dragging .composer-box {
 }
 
 .log-tail {
-  margin: 0 0 14px;
+  margin: 6px 0 0;
   padding: 10px 12px;
   max-height: 46vh;
   overflow: auto;
