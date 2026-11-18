@@ -89,7 +89,145 @@ public sealed class CoreSettings
             changed = true;
         }
 
+        // Pi 要用足够新的 node 才跑得起来（1.5.x 要 22 以上）。服务账户的 PATH 和你登录时的
+        // PATH 不是一回事，常常只找到一个旧版 node，于是子进程一起来就语法错误退出。
+        var current = Agent("pi");
+
+        // 配过的 node 也要复核：上一版可能挑中了系统里那个旧 node（Pi 1.5 要 22 以上），
+        // 留在配置里会让子进程一起来就语法错误退出。
+        if (current is not null && !string.IsNullOrWhiteSpace(current.Node))
+        {
+            var version = File.Exists(current.Node) ? NodeVersion(current.Node) : null;
+            if (version is null || version.Major < 22)
+            {
+                Log.Write($"配置里的 node 版本太低或不存在（{current.Node}），重新找");
+                current.Node = null;
+            }
+        }
+
+        if (current is not null && string.IsNullOrWhiteSpace(current.Node))
+        {
+            var node = FindNode();
+            if (node is not null)
+            {
+                current.Node = node;
+                Log.Write($"用这个 node 跑 Pi：{node}");
+                changed = true;
+            }
+        }
+
         return changed;
+    }
+
+    /// <summary>
+    /// 找一个能跑 Pi 的 node：把常见安装位置和 PATH 里的都试一遍，跑 <c>--version</c> 取最高的那个。
+    /// 只在配置里没写 node 的时候调用。
+    /// </summary>
+    private static string? FindNode()
+    {
+        var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var directory in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+                     .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            candidates.Add(Path.Combine(directory.Trim(), "node.exe"));
+        }
+
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var usersRoot = Path.Combine(Path.GetDirectoryName(windows) ?? "C:", "Users");
+
+        foreach (var programFiles in new[]
+                 {
+                     Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                     Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                 })
+        {
+            if (!string.IsNullOrEmpty(programFiles))
+            {
+                candidates.Add(Path.Combine(programFiles, "nodejs", "node.exe"));
+            }
+        }
+
+        try
+        {
+            foreach (var user in Directory.GetDirectories(usersRoot))
+            {
+                candidates.Add(Path.Combine(user, "scoop", "apps", "nodejs", "current", "node.exe"));
+                // Pi 自己装的那份 node：服务账户的 LOCALAPPDATA 指向系统目录，只有按用户目录找才找得到。
+                candidates.Add(Path.Combine(user, "AppData", "Local", "pi-node", "current", "node.exe"));
+
+                var nvm = Path.Combine(user, "AppData", "Roaming", "nvm");
+                if (Directory.Exists(nvm))
+                {
+                    foreach (var version in Directory.GetDirectories(nvm, "v*"))
+                    {
+                        candidates.Add(Path.Combine(version, "node.exe"));
+                    }
+                }
+
+                foreach (var programFiles in new[] { "Program Files", "Program Files (x86)" })
+                {
+                    candidates.Add(Path.Combine(user, "AppData", "Local", programFiles, "nodejs", "node.exe"));
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // 用户目录读不全不影响已经在列表里的候选。
+        }
+
+        string? best = null;
+        var bestVersion = new Version(0, 0);
+        foreach (var candidate in candidates)
+        {
+            if (!File.Exists(candidate))
+            {
+                continue;
+            }
+
+            var version = NodeVersion(candidate);
+            if (version is null || version <= bestVersion)
+            {
+                continue;
+            }
+
+            best = candidate;
+            bestVersion = version;
+        }
+
+        return best;
+    }
+
+    private static Version? NodeVersion(string nodePath)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(nodePath, "--version")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (process is null)
+            {
+                return null;
+            }
+
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            if (!process.WaitForExit(3000))
+            {
+                try { process.Kill(true); } catch (Exception) { }
+                return null;
+            }
+
+            // 形如 v22.11.0，去掉前缀再解析。
+            return Version.TryParse(output.TrimStart('v', 'V'), out var version) ? version : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     /// <summary>系统账户下按用户目录找一遍 Pi，最近写过的排前面。</summary>
