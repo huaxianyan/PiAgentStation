@@ -61,7 +61,9 @@
   body::after {
     content: '';
     position: fixed;
-    inset: 0;
+    /* 125% 缩放下 WebView2 的视口比可见区域高约 1.5px，底部那 1px 会被裁掉，
+       所以底边往上收 2px，四边才都看得见。 */
+    inset: 0 0 2px 0;
     pointer-events: none;
     border: 1px solid rgba(0, 0, 0, 0.14);
     z-index: 9999;
@@ -84,8 +86,10 @@
     width: 18px; height: 18px;
     display: flex; align-items: center; justify-content: center;
     border-radius: 5px;
-    background: var(--accent);
-    color: var(--card);
+    /* 和 exe / 托盘那枚图标同一套配色：浅底、深 π、一圈细描边。 */
+    background: var(--page);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--text);
     /* 和 exe / 托盘图标同一套字形：Segoe UI Semibold 的 π。 */
     font-family: "Segoe UI Semibold", "Segoe UI", sans-serif;
     font-size: 13px;
