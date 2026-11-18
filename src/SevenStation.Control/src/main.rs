@@ -66,6 +66,7 @@ fn open_target(target: String) -> Result<(), String> {
 #[tauri::command]
 fn window_ctl(window: tauri::WebviewWindow, what: String) -> Result<(), String> {
     match what.as_str() {
+        "drag" => window.start_dragging(),
         "minimize" => window.minimize(),
         "hide" => window.hide(),
         "toggle-max" => {
@@ -155,9 +156,9 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
             }
         });
 
-    if let Some(icon) = app.default_window_icon().cloned() {
-        builder = builder.icon(icon);
-    }
+    // 托盘用浅底那张：客户端托盘是深底，两个放一起才能一眼分开。
+    let tray_png = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
+    builder = builder.icon(tray_png);
 
     builder.build(app)?;
     Ok(())
