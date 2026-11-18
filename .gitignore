@@ -3,6 +3,8 @@ obj/
 dist/
 !src/SevenStation.Desktop/dist/
 !src/SevenStation.Desktop/dist/**
+!src/SevenStation.Control/dist/
+!src/SevenStation.Control/dist/**
 target/
 work/
 .vs/

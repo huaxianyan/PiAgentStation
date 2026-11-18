@@ -1,0 +1,16 @@
+{
+  "identifier": "control-page",
+  "description": "控制台页面可以调用壳的命令",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "allow-read-state",
+    "allow-control",
+    "allow-set-autostart",
+    "allow-set-scope",
+    "allow-regenerate-token",
+    "allow-copy-text",
+    "allow-open-target",
+    "allow-window-ctl"
+  ]
+}

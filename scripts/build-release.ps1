@@ -43,6 +43,7 @@ Write-Host "版本 $version"
 
 $centerOut = Join-Path $root "src/SevenStation.Core/bin/Release/net10.0/win-x64/publish"
 $clientOut = Join-Path $root "src/SevenStation.Desktop/target/release"
+$controlOut = Join-Path $root "src/SevenStation.Control/target/release"
 
 if (-not $SkipPublish) {
     dotnet publish (Join-Path $root "src/SevenStation.Core/SevenStation.Core.csproj") `
@@ -56,9 +57,17 @@ if (-not $SkipPublish) {
     } finally {
         Pop-Location
     }
+
+    Push-Location (Join-Path $root "src/SevenStation.Control")
+    try {
+        cargo build --release
+        if ($LASTEXITCODE -ne 0) { throw "控制台发布失败" }
+    } finally {
+        Pop-Location
+    }
 }
 
-foreach ($output in @($centerOut, $clientOut)) {
+foreach ($output in @($centerOut, $clientOut, $controlOut)) {
     if (-not (Test-Path $output)) { throw "没有发布输出：$output" }
 }
 
@@ -66,9 +75,10 @@ New-Item -ItemType Directory -Force -Path $dist | Out-Null
 
 $centerName = "SevenStation-center-$version-win-x64"
 $clientName = "SevenStation-client-$version-win-x64"
+$controlName = "SevenStation-control-$version-win-x64"
 
 # 打包前清掉上一次的同名 zip，否则 Compress-Archive 会把新内容塞进旧包。
-foreach ($name in @($centerName, $clientName)) {
+foreach ($name in @($centerName, $clientName, $controlName)) {
     Remove-Item (Join-Path $dist "$name.zip") -Force -ErrorAction SilentlyContinue
     Remove-Item (Join-Path $dist "$name.zip.sha256") -Force -ErrorAction SilentlyContinue
 }
@@ -94,6 +104,16 @@ Copy-Item $clientExe -Destination $clientStage
 Compress-Archive -Path (Join-Path $clientStage "*") -DestinationPath (Join-Path $dist "$clientName.zip")
 Remove-Item $clientStage -Recurse -Force
 
+# 控制台单独一个包，装到中心那台机器上；exe 名字和中心的 SevenStation.Core.exe 对齐。
+$controlStage = Join-Path $dist ".control-stage"
+Remove-Item $controlStage -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $controlStage | Out-Null
+$controlExe = Join-Path $controlOut "sevenstation-control.exe"
+if (-not (Test-Path $controlExe)) { throw "没有控制台产物：$controlExe" }
+Copy-Item $controlExe -Destination (Join-Path $controlStage "SevenStation.Control.exe")
+Compress-Archive -Path (Join-Path $controlStage "*") -DestinationPath (Join-Path $dist "$controlName.zip")
+Remove-Item $controlStage -Recurse -Force
+
 # 这台机器的 Windows PowerShell 5.1 里没有 Get-FileHash，用 .NET 自己算。
 function Get-Sha256([string]$path) {
     $sha = [System.Security.Cryptography.SHA256]::Create()
@@ -106,7 +126,7 @@ function Get-Sha256([string]$path) {
     }
 }
 
-foreach ($name in @($centerName, $clientName)) {
+foreach ($name in @($centerName, $clientName, $controlName)) {
     $zip = Join-Path $dist "$name.zip"
     $hash = Get-Sha256 $zip
     # 与 sha256sum 的输出同格式：哈希、两个空格、文件名。

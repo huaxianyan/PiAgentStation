@@ -302,10 +302,10 @@
 </head>
 <body>
 
-<div class="titlebar">
-  <span class="mark">π</span>
-  <span class="name">Seven Station 中心</span>
-  <span class="spacer"></span>
+<div class="titlebar" data-tauri-drag-region>
+  <span class="mark" data-tauri-drag-region>π</span>
+  <span class="name" data-tauri-drag-region>Seven Station 中心</span>
+  <span class="spacer" data-tauri-drag-region></span>
   <button class="win-btn" id="minBtn" title="最小化">—</button>
   <button class="win-btn close" id="closeBtn" title="收进托盘">✕</button>
 </div>
@@ -393,8 +393,30 @@
 </div>
 
 <script>
-  // 直接发对象：WebView2 会把它当 JSON 送进 WebMessageReceived。
-  const send = (type, extra = {}) => window.chrome.webview.postMessage({ type, ...extra });
+  // 界面只负责表达意图，具体怎么做在 Rust 那边。
+  const invoke = window.__TAURI__.core.invoke;
+  const listen = window.__TAURI__.event.listen;
+
+  async function send(type, extra = {}) {
+    try {
+      switch (type) {
+        case 'ready': render(await invoke('read_state')); break;
+        case 'start':
+        case 'stop':
+        case 'restart': await invoke('control', { action: type }); break;
+        case 'autostart': await invoke('set_autostart', { on: Boolean(extra.on) }); break;
+        case 'scope': await invoke('set_scope', { scope: extra.scope }); break;
+        case 'regenerate': await invoke('regenerate_token'); break;
+        case 'copy': await invoke('copy_text', { text: extra.text }); toast('已复制'); break;
+        case 'open': await invoke('open_target', { target: extra.target }); break;
+        case 'minimize': await invoke('window_ctl', { what: 'minimize' }); break;
+        case 'close': await invoke('window_ctl', { what: 'hide' }); break;
+        case 'toggle-max': await invoke('window_ctl', { what: 'toggle-max' }); break;
+      }
+    } catch (error) {
+      toast(typeof error === 'string' ? error : '这一步没做成。');
+    }
+  }
   const el = (id) => document.getElementById(id);
 
   let state = null;
@@ -455,9 +477,7 @@
       }).join('\n')
       : '<span class="empty">还没有日志</span>';
 
-    el('footNote').textContent = next.serviceInstalled
-      ? '数据在 ' + next.dataDirectory
-      : '数据在 ' + next.dataDirectory;
+    el('footNote').textContent = '数据在 ' + next.dataDirectory;
   }
 
   function escapeHtml(text) {
@@ -498,14 +518,8 @@
   el('minBtn').addEventListener('click', () => send('minimize'));
   el('closeBtn').addEventListener('click', () => send('close'));
 
-  // 拖标题栏由原生去调 OS 的移动循环，双击切最大化。
+  // 拖动是 Tauri 的 data-tauri-drag-region，这里只管双击最大化。
   const bar = document.querySelector('.titlebar');
-  bar.addEventListener('mousedown', (event) => {
-    if (event.button !== 0 || event.target.closest('.win-btn')) {
-      return;
-    }
-    send('drag');
-  });
   bar.addEventListener('dblclick', (event) => {
     if (event.target.closest('.win-btn')) {
       return;
@@ -517,12 +531,8 @@
     if (event.key === 'Escape' && !el('scrim').hidden) el('scrim').hidden = true;
   });
 
-  window.chrome.webview.addEventListener('message', (event) => {
-    // 原生那边用 PostWebMessageAsJson 发，event.data 已经是对象了；字符串的情况也兜一下。
-    const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-    if (message.type === 'state') render(message.state);
-    if (message.type === 'toast') toast(message.text);
-  });
+  listen('state', (event) => render(event.payload));
+  listen('toast', (event) => toast(event.payload));
 
   send('ready');
 </script>
