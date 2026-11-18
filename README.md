@@ -29,7 +29,7 @@ pwsh -File scripts/stop-center.ps1    # 停
 pwsh -File scripts/install-autostart.ps1   # 让中心跟着登录自动起来
 ```
 
-中心会在 `%LOCALAPPDATA%\SevenStation.Core\token.txt` 生成访问令牌，客户端自动读取。
+中心会在 `%LOCALAPPDATA%\SevenStation\token.txt` 生成访问令牌，客户端自动读取。
 想隔离会话记录，不污染真实会话：
 
 ```powershell
@@ -78,9 +78,19 @@ src/SevenStation.Desktop/   桌面客户端：Tauri 壳（Rust + WebView2），�
 src/Shared/Log.cs             两边共用的文件日志
 ```
 
+## 发布
+
+两个 Windows x64 包，版本号一致：
+
+| 包 | 是什么 | 大小 |
+| --- | --- | --- |
+| `SevenStation-center-<版本>-win-x64.zip` | 中心，自包含，没装 .NET 也能跑；双击 `启动中心.cmd` | 约 48 MB |
+| `SevenStation-client-<版本>-win-x64.zip` | 桌面客户端，单个 exe，要有 WebView2 运行时 | 约 3 MB |
+
+中心以后会搬到 Linux 上用，那时再加 Linux 包。打包流程见 [RELEASE.md](RELEASE.md)。
+
 ## 限制
 
 - 局域网与 TLS 还没做，现在适合「中心在本机」或可信网段。
 - 手机端只是同一页面能打开，窄屏布局还没调。
-- `@文件` 补全、终端面板、会话重命名与删除还没做。
-- 图片只作为附件随消息发送。
+- 图片只作为附件随消息发送（还没让模型直接读图）。

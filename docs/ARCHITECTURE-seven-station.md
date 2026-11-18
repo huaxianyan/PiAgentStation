@@ -22,7 +22,7 @@ Seven Station 是一个本机单用户的 agent 工作口。Host 是唯一的管
 | 仓库 `SevenStation` | 仓库 `SevenStation` |
 | `src/SevenStation.Core`（中心） | `src/SevenStation.Host` |
 | `src/SevenStation.Desktop`（WPF 壳） | `src/SevenStation.Desktop`（Tauri 壳，重写） |
-| `%LOCALAPPDATA%\SevenStation.Core\` | `%LOCALAPPDATA%\SevenStation\` |
+| `%LOCALAPPDATA%\SevenStation\`（已改，中心和客户端同一个目录） | `%LOCALAPPDATA%\SevenStation\` |
 | `SEVENSTATION_LISTEN` / `SEVENSTATION_TOKEN` | `SEVENSTATION_LISTEN` / `SEVENSTATION_TOKEN` |
 
 中心这个词在文档里换成 Host，界面文案里仍只说「中心」或「服务」，不出现工程词。

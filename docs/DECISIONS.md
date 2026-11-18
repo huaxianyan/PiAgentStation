@@ -55,5 +55,5 @@
 
 2026-11-17 用户定。MA 既是 Main 也是 Main Agent 的缩写，中心就叫 SevenStation.Core；面向用户打开的那个
 窗口叫 SevenStation。两个名字分工固定：说 SevenStation.Core 指部署在中心那套服务，说 SevenStation
-指客户端。程序集、日志目录、令牌位置都按这个分：中心写 `%LOCALAPPDATA%\SevenStation.Core`，
-客户端写 `%LOCALAPPDATA%\SevenStation`。
+指客户端。程序集按这个分。目录不再分两份：改名后中心与客户端都写 `%LOCALAPPDATA%\SevenStation`，
+令牌 `token.txt`、日志 `logs/`、对话库 `data/`、客户端配置 `center.json` 并列在一起。

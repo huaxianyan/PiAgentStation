@@ -82,15 +82,44 @@ $launcher = @(
 Set-Content -Path (Join-Path $centerOut "启动中心.cmd") -Value $launcher -Encoding ascii
 
 Compress-Archive -Path (Join-Path $centerOut "*") -DestinationPath (Join-Path $dist "$centerName.zip")
-Compress-Archive -Path (Join-Path $clientOut "*") -DestinationPath (Join-Path $dist "$clientName.zip")
+
+# 客户端只发那一个 exe：target/release 里还有 deps、build、pdb 这些构建中间产物，
+# 整个压进去是 380 MB，而真正要发的只有 10 MB。
+$clientStage = Join-Path $dist ".client-stage"
+Remove-Item $clientStage -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $clientStage | Out-Null
+$clientExe = Join-Path $clientOut "SevenStation.exe"
+if (-not (Test-Path $clientExe)) { throw "没有客户端产物：$clientExe" }
+Copy-Item $clientExe -Destination $clientStage
+Compress-Archive -Path (Join-Path $clientStage "*") -DestinationPath (Join-Path $dist "$clientName.zip")
+Remove-Item $clientStage -Recurse -Force
+
+# 这台机器的 Windows PowerShell 5.1 里没有 Get-FileHash，用 .NET 自己算。
+function Get-Sha256([string]$path) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($path)
+    try {
+        return ([System.BitConverter]::ToString($sha.ComputeHash($stream)) -replace '-', '').ToLowerInvariant()
+    } finally {
+        $stream.Dispose()
+        $sha.Dispose()
+    }
+}
 
 foreach ($name in @($centerName, $clientName)) {
     $zip = Join-Path $dist "$name.zip"
-    $hash = (Get-FileHash -Algorithm SHA256 -Path $zip).Hash.ToLowerInvariant()
+    $hash = Get-Sha256 $zip
     # 与 sha256sum 的输出同格式：哈希、两个空格、文件名。
-    Set-Content -Path "$zip.sha256" -Value "$hash  $name.zip" -Encoding ascii -NoNewline:$false
+    # 行尾必须是 LF：Set-Content 写出来是 CRLF，sha256sum -c 会把回车当成文件名的一部分读失败。
+    [System.IO.File]::WriteAllText("$zip.sha256", "$hash  $name.zip`n")
     $sizeMb = [math]::Round((Get-Item $zip).Length / 1MB, 1)
     Write-Host "$name.zip  $sizeMb MB  $($hash.Substring(0, 16))…"
+}
+
+# 包内容对不上就直接失败，别把半成品发出去。
+$clientZipBytes = (Get-Item (Join-Path $dist "$clientName.zip")).Length
+if ($clientZipBytes -gt 40MB) {
+    throw "客户端包 $([math]::Round($clientZipBytes / 1MB, 1)) MB，看着像把构建中间产物打进去了"
 }
 
 Write-Host "产物在 $dist"
