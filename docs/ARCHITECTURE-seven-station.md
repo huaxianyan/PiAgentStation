@@ -27,6 +27,20 @@ Seven Station 是一个本机单用户的 agent 工作口。Host 是唯一的管
 
 中心这个词在文档里换成 Host，界面文案里仍只说「中心」或「服务」，不出现工程词。
 
+## 部署形态
+
+两个产品、两个安装程序，可以装在不同机器上（见 `DECISIONS.md` D7）。
+
+| | 中心 SevenStation.Core | 客户端 SevenStation |
+| --- | --- | --- |
+| 形态 | Windows 服务（首版 Windows；以后 Linux 上换个宿主） | 桌面窗口（WebView2） |
+| 装到哪 | `%ProgramFiles%\SevenStation Core\` | `%ProgramFiles%\SevenStation\` |
+| 数据 | `%ProgramData%\SevenStation.Core\`：token、`data\sevenstation.db`、`logs\` | 用户目录：WebView2 缓存、界面偏好；`%ProgramData%\SevenStation\` 放配对信息（将来的节点服务也要读） |
+| 谁连谁 | 监听，等客户端来连 | 主动连中心（出站），同一台机器也是走这条路 |
+
+客户端将来还要承担「节点」角色：中心的活派下来，在客户端自己的设备上执行。节点也走同一条出站连接，
+不额外装 agent、不开入站端口。
+
 ## 分层
 
 ### Host（现在的 SevenStation.Core）
