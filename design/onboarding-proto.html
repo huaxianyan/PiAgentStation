@@ -46,7 +46,7 @@
 
   /* ---- 日志卡片 ---- */
   .logs-row { display: flex; gap: 20px; align-items: flex-start; }
-  .log-card { width: 470px; display: flex; flex-direction: column; gap: 8px; }
+  .log-card { width: 382px; display: flex; flex-direction: column; gap: 8px; }
   .log-area { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm);
     padding: 10px 12px; font-family: var(--mono); font-size: 12px; line-height: 1.75; color: var(--text-dim); white-space: pre-wrap; }
   .gap-note { font-size: 12px; color: var(--text-mute); margin: 0; }
@@ -68,6 +68,10 @@
     border: 1px solid var(--border-strong); background: var(--card); font-size: 12px; color: var(--text-dim);
     font-family: inherit; }
   .variant-label { font-size: 12px; color: var(--text-mute); margin: 0 0 6px; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .card-head h3 { margin: 0; }
+  .card-head .ghost-btn { padding: 3px 9px; font-size: 12px; }
+
 
 </style>
 </head>
@@ -206,24 +210,38 @@
     </div>
   </div>
 
-  <!-- ============ C 日志卡片间距对比 ============ -->
+  <!-- ============ C 日志卡片：按钮位置三版 ============ -->
   <div>
-    <p class="proto-label">C · 日志卡片的间距（同一个卡片，两版并排）</p>
+    <p class="proto-label">C · 日志卡片（按钮位置三版并排）</p>
+    <p class="proto-title">同一张卡，只挪「读最近日志」的位置。</p>
     <div class="logs-row">
       <section class="page-card log-card">
         <h3>现在这样</h3>
         <p class="page-note">按钮下面直接贴住日志区，两个圆角撞在一起。</p>
         <div class="center-actions"><button class="ghost-btn">读最近日志</button></div>
-        <div class="log-area tight" style="margin-top:0;">还没有读，点上面的按钮。</div>
-        <p class="gap-note">按钮底边 → 日志区顶边：0px</p>
+        <div class="log-area" style="margin-top:0;">还没有读，点上面的按钮。</div>
+        <p class="gap-note">按钮在说明下面，日志区紧跟：0px</p>
       </section>
 
       <section class="page-card log-card">
-        <h3>改法一：留 10px</h3>
-        <p class="page-note">按钮和日志区之间留一个呼吸位。</p>
+        <p class="variant-label">C1 · 按钮进标题行右侧（推荐）</p>
+        <div class="card-head">
+          <h3>日志</h3>
+          <button class="ghost-btn">读最近日志</button>
+        </div>
+        <p class="page-note">中心那边的运行日志，排查问题时看这里。</p>
+        <div class="log-area" style="margin-top:6px;">2026-11-18 18:34:11.765 配置里缺的 Agent 已补上：C:\ProgramData\SevenStation.Core\settings.json
+2026-11-18 18:34:22.995 客户端连上 c-b626c5e3</div>
+        <p class="gap-note">说明文字与日志区之间：6px</p>
+      </section>
+
+      <section class="page-card log-card">
+        <p class="variant-label">C2 · 按钮留在下面，日志区留 10px</p>
+        <h3>日志</h3>
+        <p class="page-note">中心那边的运行日志，排查问题时看这里。</p>
         <div class="center-actions"><button class="ghost-btn">读最近日志</button></div>
         <div class="log-area" style="margin-top:10px;">还没有读，点上面的按钮。</div>
-        <p class="gap-note">按钮底边 → 日志区顶边：10px</p>
+        <p class="gap-note">按钮底边与日志区之间：10px</p>
       </section>
     </div>
   </div>
