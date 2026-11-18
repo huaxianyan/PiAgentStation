@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>中心控制台原型</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #e6e6e9;
+    --panel: #f7f7f9;
+    --card: #ffffff;
+    --border: #e9e9ee;
+    --border-strong: #dcdce2;
+    --active: #ececef;
+    --text: #1a1a1d;
+    --text-soft: #55555c;
+    --text-dim: #2c2c31;
+    --text-mute: #8a8a92;
+    --text-faint: #a9a9b1;
+    --accent: #1a1a1d;
+    --green: #189a4a;
+    --danger: #cf3b3b;
+    --radius-sm: 8px;
+    --radius-card: 14px;
+    --radius-pill: 999px;
+    --font: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+    --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  }
+
+  [data-theme="dark"] {
+    color-scheme: dark;
+    --page: #141417;
+    --panel: #1c1c20;
+    --card: #202024;
+    --border: #2a2a30;
+    --border-strong: #35353c;
+    --active: #2a2a30;
+    --text: #f2f2f4;
+    --text-soft: #c8c8cf;
+    --text-dim: #e2e2e6;
+    --text-mute: #8f8f98;
+    --text-faint: #6e6e77;
+    --accent: #f2f2f4;
+    --green: #3ddc84;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 34px 40px 60px;
+    background: #ececee;
+    font-family: var(--font);
+    color: var(--text);
+  }
+
+  .page-head { max-width: 1080px; margin: 0 auto 26px; }
+  .page-head h1 { margin: 0 0 6px; font-size: 19px; font-weight: 600; }
+  .page-head p { margin: 0 0 4px; font-size: 13px; color: var(--text-soft); line-height: 1.6; }
+  .page-head .picked { color: var(--text-dim); font-weight: 500; }
+
+  .grid { display: flex; flex-wrap: wrap; gap: 26px; max-width: 1560px; }
+  .variant { display: flex; flex-direction: column; gap: 8px; }
+  .variant-label { font-size: 12.5px; color: var(--text-soft); }
+  .variant-label b { color: var(--text); font-weight: 600; }
+
+  /* ---------------- 窗口 ---------------- */
+  .win {
+    width: 720px;
+    height: 626px;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    /* 窗口自己起一层文字色，深色变体才不会继承外层的深字。 */
+    color: var(--text);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 18px 44px rgba(16, 16, 20, .16), 0 0 0 1px rgba(16, 16, 20, .08);
+  }
+  [data-theme="dark"] .win { box-shadow: 0 18px 44px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .06); }
+
+  .titlebar {
+    flex: none;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 8px 0 14px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .mark {
+    width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 5px;
+    background: var(--accent);
+    color: var(--card);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .titlebar .name { font-size: 12.5px; color: var(--text-dim); }
+  .titlebar .spacer { flex: 1; }
+  .win-btn {
+    width: 30px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 6px;
+    background: transparent;
+    color: var(--text-mute);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .win-btn:hover { background: var(--active); color: var(--text); }
+  .win-btn.close:hover { background: #e81123; color: #fff; }
+
+  .body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    overflow: hidden;
+  }
+
+  /* ---------------- 状态卡 ---------------- */
+  .status-card {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 16px 16px 18px;
+    border-radius: var(--radius-card);
+    background: var(--card);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .status-text { flex: 1; min-width: 0; }
+  .status-line { display: flex; align-items: center; gap: 9px; }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 4px rgba(24, 154, 74, .12);
+  }
+  .dot.off { background: var(--text-faint); box-shadow: 0 0 0 4px rgba(140, 140, 150, .12); }
+  .status-title { font-size: 15px; font-weight: 600; }
+  .status-sub { margin-top: 3px; font-size: 12px; color: var(--text-mute); }
+  .status-actions { display: flex; gap: 8px; }
+
+  /* ---------------- 按钮 ---------------- */
+  .btn {
+    padding: 7px 13px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--card);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .btn:hover { box-shadow: inset 0 0 0 1px var(--text-faint); }
+  .btn.primary {
+    background: var(--accent);
+    color: var(--card);
+    box-shadow: none;
+  }
+  .btn.primary:hover { opacity: .88; }
+  .btn.danger { color: var(--danger); }
+  .btn:disabled { color: var(--text-faint); box-shadow: inset 0 0 0 1px var(--border); cursor: default; }
+  .btn.primary:disabled { background: var(--border-strong); color: var(--text-mute); }
+
+  .link {
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--text-mute);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .link:hover { color: var(--text); }
+  .link + .link { margin-left: 12px; }
+
+  /* ---------------- 卡片与行 ---------------- */
+  .card {
+    flex: none;
+    padding: 14px 16px;
+    border-radius: var(--radius-card);
+    background: var(--card);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .card-head h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-dim); }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 30px;
+    font-size: 13px;
+  }
+  .row + .row { border-top: 1px solid var(--border); }
+  .row .label { flex: none; width: 76px; color: var(--text-mute); font-size: 12.5px; }
+  .row .value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+  .row .value.mono { font-family: var(--mono); font-size: 12px; }
+  .row .actions { flex: none; display: flex; align-items: center; }
+
+  /* ---------------- 开关 ---------------- */
+  .switch {
+    flex: none;
+    width: 34px; height: 20px;
+    padding: 2px;
+    display: flex; align-items: center; justify-content: flex-start;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--border-strong);
+    cursor: pointer;
+  }
+  .switch.on { background: var(--accent); justify-content: flex-end; }
+  .switch i { display: block; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .2); }
+
+  /* ---------------- 分段 ---------------- */
+  .seg {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--radius-pill);
+    background: var(--active);
+  }
+  .seg button {
+    padding: 4px 11px;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--text-mute);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .seg button.on {
+    background: var(--card);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+  }
+
+  /* ---------------- 日志 ---------------- */
+  .logs {
+    margin: 6px 0 0;
+    padding: 9px 11px;
+    border-radius: 10px;
+    background: var(--panel);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.62;
+    color: var(--text-soft);
+    white-space: pre;
+    overflow: hidden;
+  }
+  .logs .t { color: var(--text-faint); }
+
+  .foot {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px;
+    font-size: 11.5px;
+    color: var(--text-faint);
+  }
+  .foot .spacer { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>中心控制台 · 界面原型</h1>
+  <p>给装中心的那台机器用的一个 Windows 小窗口：看状态、开着关着、管开机自启、把地址和令牌递给人。</p>
+  <p class="picked">沿用客户端的底子：14 px 卡片圆角、内阴影描边、黑色主按钮、34×20 开关。窗口 720×626。</p>
+</div>
+
+<div class="grid">
+
+  <!-- ============ A 运行中 ============ -->
+  <div class="variant">
+    <div class="variant-label"><b>A</b> · 运行中（服务模式）</div>
+    <div class="win">
+      <div class="titlebar">
+        <span class="mark">π</span>
+        <span class="name">Seven Station 中心</span>
+        <span class="spacer"></span>
+        <button class="win-btn">—</button>
+        <button class="win-btn">▢</button>
+        <button class="win-btn close">✕</button>
+      </div>
+      <div class="body">
+        <section class="status-card">
+          <div class="status-text">
+            <div class="status-line"><span class="dot"></span><span class="status-title">正在运行</span></div>
+            <div class="status-sub">已运行 3 小时 12 分 · 后台服务，关掉这个窗口也照常跑</div>
+          </div>
+          <div class="status-actions">
+            <button class="btn">重启</button>
+            <button class="btn primary">停止</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h3>连接</h3></div>
+          <div class="row">
+            <span class="label">访问地址</span>
+            <span class="value mono">http://127.0.0.1:8787</span>
+            <span class="actions"><button class="link">复制</button><button class="link">打开</button></span>
+          </div>
+          <div class="row">
+            <span class="label">访问令牌</span>
+            <span class="value mono">aed32852 7a839e77 43c871ba … 310d83</span>
+            <span class="actions"><button class="link">复制</button><button class="link">重新生成</button></span>
+          </div>
+          <div class="row">
+            <span class="label">数据目录</span>
+            <span class="value mono">C:\ProgramData\SevenStation.Core</span>
+            <span class="actions"><button class="link">打开</button></span>
+          </div>
+          <div class="row">
+            <span class="label">版本</span>
+            <span class="value">0.3.1</span>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="row">
+            <span class="label">开机自启</span>
+            <span class="value">系统启动时自动运行<span style="color: var(--text-faint)"> · 登录前就能连上</span></span>
+            <button class="switch on"><i></i></button>
+          </div>
+          <div class="row">
+            <span class="label">允许连接</span>
+            <span class="value">同一台机器上的客户端</span>
+            <div class="seg"><button class="on">仅本机</button><button>局域网</button></div>
+          </div>
+        </section>
+
+        <section class="card" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+          <div class="card-head"><h3>最近日志</h3><button class="link">打开目录</button></div>
+          <pre class="logs"><span class="t">21:44:02</span> 中心开始监听 http://127.0.0.1:8787
+<span class="t">21:44:02</span> Pi 目录 C:\Users\7inaBranford\.pi\agent
+<span class="t">21:47:19</span> 客户端接入 127.0.0.1
+<span class="t">22:03:41</span> 对话 01a1ed4e 恢复完成，35965 条</pre>
+        </section>
+
+        <div class="foot"><span>数据在 C:\ProgramData\SevenStation.Core</span><span class="spacer"></span><span>卸载不会删掉对话库</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ B 已停止 ============ -->
+  <div class="variant">
+    <div class="variant-label"><b>B</b> · 已停止</div>
+    <div class="win">
+      <div class="titlebar">
+        <span class="mark">π</span>
+        <span class="name">Seven Station 中心</span>
+        <span class="spacer"></span>
+        <button class="win-btn">—</button>
+        <button class="win-btn">▢</button>
+        <button class="win-btn close">✕</button>
+      </div>
+      <div class="body">
+        <section class="status-card">
+          <div class="status-text">
+            <div class="status-line"><span class="dot off"></span><span class="status-title">已停止</span></div>
+            <div class="status-sub">刚才 22:06 停的 · 客户端现在连不上</div>
+          </div>
+          <div class="status-actions">
+            <button class="btn primary">启动</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h3>连接</h3></div>
+          <div class="row">
+            <span class="label">访问地址</span>
+            <span class="value mono" style="color: var(--text-faint)">http://127.0.0.1:8787</span>
+            <span class="actions"><button class="link" disabled style="color: var(--text-faint)">复制</button><button class="link" disabled style="color: var(--text-faint)">打开</button></span>
+          </div>
+          <div class="row">
+            <span class="label">访问令牌</span>
+            <span class="value mono">aed32852 7a839e77 43c871ba … 310d83</span>
+            <span class="actions"><button class="link">复制</button><button class="link">重新生成</button></span>
+          </div>
+          <div class="row">
+            <span class="label">数据目录</span>
+            <span class="value mono">C:\ProgramData\SevenStation.Core</span>
+            <span class="actions"><button class="link">打开</button></span>
+          </div>
+          <div class="row">
+            <span class="label">版本</span>
+            <span class="value">0.3.1</span>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="row">
+            <span class="label">开机自启</span>
+            <span class="value">系统启动时自动运行<span style="color: var(--text-faint)"> · 登录前就能连上</span></span>
+            <button class="switch on"><i></i></button>
+          </div>
+          <div class="row">
+            <span class="label">允许连接</span>
+            <span class="value">同一台机器上的客户端</span>
+            <div class="seg"><button class="on">仅本机</button><button>局域网</button></div>
+          </div>
+        </section>
+
+        <section class="card" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+          <div class="card-head"><h3>最近日志</h3><button class="link">打开目录</button></div>
+          <pre class="logs"><span class="t">22:03:41</span> 对话 01a1ed4e 恢复完成，35965 条
+<span class="t">22:06:10</span> 收到停止请求
+<span class="t">22:06:11</span> 中心已停止</pre>
+        </section>
+
+        <div class="foot"><span>数据在 C:\ProgramData\SevenStation.Core</span><span class="spacer"></span><span>卸载不会删掉对话库</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ C 便携模式 ============ -->
+  <div class="variant">
+    <div class="variant-label"><b>C</b> · 便携测试版（没装服务）</div>
+    <div class="win">
+      <div class="titlebar">
+        <span class="mark">π</span>
+        <span class="name">Seven Station 中心</span>
+        <span class="spacer"></span>
+        <button class="win-btn">—</button>
+        <button class="win-btn">▢</button>
+        <button class="win-btn close">✕</button>
+      </div>
+      <div class="body">
+        <section class="status-card">
+          <div class="status-text">
+            <div class="status-line"><span class="dot"></span><span class="status-title">正在运行</span></div>
+            <div class="status-sub">便携模式 · 关掉这个窗口中心就停了</div>
+          </div>
+          <div class="status-actions">
+            <button class="btn primary">停止</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h3>连接</h3></div>
+          <div class="row">
+            <span class="label">访问地址</span>
+            <span class="value mono">http://127.0.0.1:8787</span>
+            <span class="actions"><button class="link">复制</button><button class="link">打开</button></span>
+          </div>
+          <div class="row">
+            <span class="label">访问令牌</span>
+            <span class="value mono">aed32852 7a839e77 43c871ba … 310d83</span>
+            <span class="actions"><button class="link">复制</button><button class="link">重新生成</button></span>
+          </div>
+          <div class="row">
+            <span class="label">数据目录</span>
+            <span class="value mono">E:\SevenStation-Core\data</span>
+            <span class="actions"><button class="link">打开</button></span>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="row">
+            <span class="label">开机自启</span>
+            <span class="value" style="color: var(--text-mute)">便携模式不会自启</span>
+            <button class="switch" disabled style="opacity: .45"><i></i></button>
+          </div>
+          <div class="row" style="align-items: flex-start; padding-top: 2px">
+            <span class="label"></span>
+            <span class="value" style="color: var(--text-mute); font-size: 12.5px; white-space: normal; line-height: 1.55">
+              装成服务后开机就自动运行，登录前也能连上；要管理员权限。
+            </span>
+            <button class="btn">装成服务</button>
+          </div>
+        </section>
+
+        <section class="card" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+          <div class="card-head"><h3>最近日志</h3><button class="link">打开目录</button></div>
+          <pre class="logs"><span class="t">09:12:44</span> 便携模式启动，数据目录 E:\SevenStation-Core
+<span class="t">09:12:44</span> 中心开始监听 http://127.0.0.1:8787</pre>
+        </section>
+
+        <div class="foot"><span>没有管理员权限时的用法</span><span class="spacer"></span><span>关窗口即停</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ D 深色 ============ -->
+  <div class="variant">
+    <div class="variant-label"><b>D</b> · 运行中的深色版</div>
+    <div class="win" data-theme="dark">
+      <div class="titlebar">
+        <span class="mark">π</span>
+        <span class="name">Seven Station 中心</span>
+        <span class="spacer"></span>
+        <button class="win-btn">—</button>
+        <button class="win-btn">▢</button>
+        <button class="win-btn close">✕</button>
+      </div>
+      <div class="body">
+        <section class="status-card">
+          <div class="status-text">
+            <div class="status-line"><span class="dot"></span><span class="status-title">正在运行</span></div>
+            <div class="status-sub">已运行 3 小时 12 分 · 后台服务，关掉这个窗口也照常跑</div>
+          </div>
+          <div class="status-actions">
+            <button class="btn">重启</button>
+            <button class="btn primary">停止</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h3>连接</h3></div>
+          <div class="row">
+            <span class="label">访问地址</span>
+            <span class="value mono">http://127.0.0.1:8787</span>
+            <span class="actions"><button class="link">复制</button><button class="link">打开</button></span>
+          </div>
+          <div class="row">
+            <span class="label">访问令牌</span>
+            <span class="value mono">aed32852 7a839e77 43c871ba … 310d83</span>
+            <span class="actions"><button class="link">复制</button><button class="link">重新生成</button></span>
+          </div>
+          <div class="row">
+            <span class="label">数据目录</span>
+            <span class="value mono">C:\ProgramData\SevenStation.Core</span>
+            <span class="actions"><button class="link">打开</button></span>
+          </div>
+          <div class="row">
+            <span class="label">版本</span>
+            <span class="value">0.3.1</span>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="row">
+            <span class="label">开机自启</span>
+            <span class="value">系统启动时自动运行<span style="color: var(--text-faint)"> · 登录前就能连上</span></span>
+            <button class="switch on"><i></i></button>
+          </div>
+          <div class="row">
+            <span class="label">允许连接</span>
+            <span class="value">同一台机器上的客户端</span>
+            <div class="seg"><button class="on">仅本机</button><button>局域网</button></div>
+          </div>
+        </section>
+
+        <section class="card" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+          <div class="card-head"><h3>最近日志</h3><button class="link">打开目录</button></div>
+          <pre class="logs"><span class="t">21:44:02</span> 中心开始监听 http://127.0.0.1:8787
+<span class="t">21:44:02</span> Pi 目录 C:\Users\7inaBranford\.pi\agent
+<span class="t">21:47:19</span> 客户端接入 127.0.0.1
+<span class="t">22:03:41</span> 对话 01a1ed4e 恢复完成，35965 条</pre>
+        </section>
+
+        <div class="foot"><span>数据在 C:\ProgramData\SevenStation.Core</span><span class="spacer"></span><span>卸载不会删掉对话库</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
