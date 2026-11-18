@@ -205,8 +205,8 @@
 .palette-btn.is-on { border-color: var(--text); color: var(--text); }
 
 .palette-dot {
-  width: 11px;
-  height: 11px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   border: 1px solid rgba(20, 20, 24, .14);
 }
@@ -293,7 +293,7 @@ button { cursor: pointer; }
 }
 
 .sidebar-head .icon-btn { width: 30px; height: 30px; background: var(--card); }
-.sidebar-head .icon-btn:hover { background: #fff; box-shadow: 0 1px 2px rgba(16, 16, 20, .06); }
+.sidebar-head .icon-btn:hover { background: var(--card); box-shadow: 0 1px 2px rgba(16, 16, 20, .06); }
 
 .new-thread {
   display: flex;
@@ -414,6 +414,11 @@ button { cursor: pointer; }
   box-shadow: 0 1px 2px rgba(16, 16, 20, .05);
 }
 
+.session-open:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
 .session-open {
   display: flex;
   gap: 8px;
@@ -434,15 +439,15 @@ button { cursor: pointer; }
 }
 
 .session-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--border-strong);
 }
 
 .session-spin {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   border: 2px solid rgba(24, 154, 74, .22);
   border-top-color: var(--green);
@@ -473,9 +478,14 @@ button { cursor: pointer; }
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  transition: opacity .12s;
 }
 
+/* 悬浮时「几分钟前」淡出，同一位置换成删除键。 */
+.session-item:hover .time { opacity: 0; }
+
 .session-item .row2 {
+  position: relative;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -493,22 +503,37 @@ button { cursor: pointer; }
 
 .session-delete {
   position: absolute;
-  top: 8px;
-  right: 6px;
-  width: 20px;
-  height: 20px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--card);
+  top: 50%;
+  right: -2px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: var(--text-mute);
-  font-size: 12px;
-  line-height: 1;
+  cursor: pointer;
   opacity: 0;
-  transition: opacity .12s;
+  transition: opacity .12s, background .12s, color .12s;
 }
 
-.session-item:hover .session-delete { opacity: 1; }
-.session-delete:hover { color: var(--danger); border-color: #e7c6c3; }
+.session-delete svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.session-item:hover .session-delete,
+.session-delete:focus-visible { opacity: 1; }
+
+.session-delete:hover { background: rgba(207, 59, 59, .1); color: var(--danger); }
 
 .sidebar-foot {
   display: flex;
@@ -610,8 +635,8 @@ button { cursor: pointer; }
 }
 
 .icon-btn svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.4;
@@ -620,8 +645,10 @@ button { cursor: pointer; }
 }
 
 .icon-btn:hover { background: var(--accent-soft); color: var(--text); }
-.icon-btn.small { width: 22px; height: 22px; }
+.icon-btn.small { width: 22px; height: 22px; border-radius: 6px; }
+.icon-btn.small svg { width: 13px; height: 13px; }
 .icon-btn.round { width: 28px; height: 28px; border-radius: 50%; font-size: 15px; }
+.icon-btn.round svg { width: 15px; height: 15px; }
 
 .ghost-btn {
   padding: 5px 10px;
@@ -806,9 +833,9 @@ button { cursor: pointer; }
 .tool-time { color: var(--text-mute); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 
 .state {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -878,8 +905,10 @@ button { cursor: pointer; }
 .ws-select {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 14px;
+  gap: 6px;
+  max-width: 320px;
+  height: 30px;
+  padding: 0 10px 0 12px;
   background: var(--card);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
@@ -887,8 +916,25 @@ button { cursor: pointer; }
   color: var(--text-dim);
 }
 
-.ws-select:hover { border-color: #c2c2cc; color: var(--text); }
-.ws-select .chev { color: var(--text-mute); font-size: 12px; }
+.ws-select:hover { border-color: var(--text-mute); color: var(--text); }
+
+.ws-select-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ws-select-chev {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  fill: none;
+  stroke: var(--text-mute);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .empty-note {
   margin: 0;
@@ -1301,8 +1347,8 @@ button { cursor: pointer; }
 .step-head:hover { background: var(--active); }
 
 .step-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   flex: none;
   border-radius: 50%;
   background: var(--green);
@@ -1814,7 +1860,7 @@ body.dragging .composer-box {
   width: 9px;
   height: 9px;
   border-radius: 2px;
-  background: #fff;
+  background: var(--on-accent);
 }
 
 .hint:empty { display: none; }
@@ -1887,8 +1933,8 @@ body.dragging .composer-box {
 }
 
 .spinner {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border: 2px solid #e0e0e6;
   border-top-color: #6b6b78;
   border-radius: 50%;
@@ -2044,7 +2090,7 @@ body.dragging .composer-box {
 .pill-model-wrap { position: relative; display: inline-flex; }
 
 .pill-model { cursor: pointer; }
-.pill-chev { width: 11px; height: 11px; fill: none; stroke: var(--text-soft); stroke-width: 1.8; stroke-linecap: round; }
+.pill-chev { width: 12px; height: 12px; flex: none; fill: none; stroke: var(--text-soft); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .pill-model[aria-expanded="true"] { background: var(--active); }
 .pill-model[aria-expanded="true"] .pill-chev { transform: rotate(180deg); }
 
@@ -2056,6 +2102,9 @@ body.dragging .composer-box {
   bottom: 0;
   z-index: 60;
   width: 392px;
+  /* 高度写死：切分组、搜模型、只剩几个模型都不让浮窗跳高跳矮。 */
+  height: 420px;
+  max-height: calc(100vh - 96px);
   display: flex;
   flex-direction: column;
   background: var(--card);
@@ -2088,7 +2137,7 @@ body.dragging .composer-box {
 
 .model-search input::placeholder { color: var(--text-faint); }
 
-.model-body { display: flex; flex-direction: row; max-height: 320px; }
+.model-body { display: flex; flex-direction: row; flex: 1 1 auto; min-height: 0; }
 
 .model-providers {
   flex: 0 0 132px;
@@ -2188,3 +2237,4 @@ body.dragging .composer-box {
 
 .switch.is-on { background: var(--accent); justify-content: flex-end; }
 .switch-knob { width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+.switch.is-on .switch-knob { background: var(--on-accent); }

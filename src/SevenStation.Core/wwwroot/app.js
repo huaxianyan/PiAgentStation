@@ -664,8 +664,10 @@ function renderSessionList() {
       item.className = 'session-item' + (conversation.id === app.currentKey ? ' active' : '');
       item.title = conversation.cwd;
 
-      const open = document.createElement('button');
+      const open = document.createElement('div');
       open.className = 'session-open';
+      open.setAttribute('role', 'button');
+      open.setAttribute('tabindex', '0');
       const marker = conversation.working
         ? '<span class="session-spin" aria-hidden="true"></span>'
         : '<span class="session-dot"></span>';
@@ -680,17 +682,26 @@ function renderSessionList() {
           : '') +
         '</span>';
       open.addEventListener('click', () => openSession(conversation));
-      item.appendChild(open);
+      open.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        openSession(conversation);
+      });
 
+      // 删除键跟「几分钟前」占同一个位置：悬浮时时间淡出，换成这个圆角图标键。
       const remove = document.createElement('button');
+      remove.type = 'button';
       remove.className = 'session-delete';
       remove.title = '删除对话';
-      remove.textContent = '×';
+      remove.setAttribute('aria-label', '删除对话');
+      remove.innerHTML =
+        '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.6 4.6l6.8 6.8M11.4 4.6l-6.8 6.8"/></svg>';
       remove.addEventListener('click', (event) => {
         event.stopPropagation();
         confirmDelete(conversation);
       });
-      item.appendChild(remove);
+      open.querySelector('.row2').appendChild(remove);
+      item.appendChild(open);
 
       el.sessionList.appendChild(item);
     }
@@ -3384,6 +3395,9 @@ function dispatch(message) {
         app.agents = message.agents;
         app.agent = message.agents[0] || null;
       }
+      // 侧栏的数量一开始就要有，别等点进页面才去读。
+      if (!app.skills) requestSkills();
+      if (!app.extensions) requestExtensions();
       if (message.listen) {
         app.listen = message.listen;
       }
