@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>控制台整体界面 · 原型（用系统窗口边框）</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f7f7f9;
+    --surface: #ffffff;
+    --hair: #ebebef;
+    --hair-strong: #dcdce2;
+    --text: #1a1a1d;
+    --text-soft: #4c4c54;
+    --text-mute: #8a8a92;
+    --accent: #1a1a1d;
+    --green: #2ecc71;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 26px 30px 44px;
+    background: #e9e9ec; color: var(--text);
+    font-family: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+    font-size: 13px; line-height: 1.6;
+  }
+
+  h1 { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+  h2 { font-size: 13.5px; font-weight: 600; margin: 30px 0 10px; }
+  .lead { color: #6b6b73; margin: 0 0 4px; }
+  .hint { color: #8a8a92; font-size: 12px; margin: 8px 0 0; }
+
+  /* ---------------- 模拟窗口 ---------------- */
+  .win {
+    width: 903px;
+    background: var(--surface);
+    border: 1px solid var(--hair-strong);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+    display: flex; flex-direction: column;
+  }
+  .caption {
+    height: 30px; flex: none;
+    display: flex; align-items: center;
+    background: #f7f7f9;
+    border-bottom: 1px solid var(--hair);
+    padding-left: 9px;
+    font-size: 12px; color: var(--text-soft);
+  }
+  .caption img { width: 16px; height: 16px; margin-right: 8px; }
+  .caption .grow { flex: 1; }
+  .caption .btns { display: flex; height: 100%; }
+  .caption .btns span {
+    width: 45px; display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: #44444a;
+  }
+
+  /* ---------------- 方案 A：扁平分栏 ---------------- */
+  .a-body { padding: 0 24px 0; }
+
+  .a-status {
+    display: flex; align-items: center; gap: 12px;
+    padding: 18px 0 16px;
+    border-bottom: 1px solid var(--hair);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+  .a-status .line { font-size: 14px; font-weight: 600; }
+  .a-status .sub { font-size: 12px; color: var(--text-mute); margin-top: 2px; }
+  .a-status .grow { flex: 1; }
+
+  .btn {
+    font: inherit; font-size: 12.5px;
+    padding: 6px 14px; border-radius: 4px;
+    border: 1px solid var(--hair-strong);
+    background: #fff; color: var(--text); cursor: default;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .a-section { padding: 14px 0 6px; border-bottom: 1px solid var(--hair); }
+  .a-section:last-of-type { border-bottom: 0; }
+  .a-section h3 {
+    margin: 0 0 2px; font-size: 12px; font-weight: 600; color: var(--text-mute);
+    letter-spacing: .02em;
+  }
+
+  .row {
+    display: flex; align-items: center; gap: 16px;
+    min-height: 34px;
+  }
+  .row .k { width: 92px; flex: none; color: var(--text-soft); }
+  .row .v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .v.mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12px; }
+  .row .acts { flex: none; display: flex; gap: 14px; }
+  .row .acts span { color: var(--text-mute); font-size: 12.5px; }
+  .row .acts span:hover { color: var(--text); }
+
+  .switch {
+    width: 40px; height: 22px; border-radius: 11px; background: var(--accent);
+    position: relative; flex: none;
+  }
+  .switch i { position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+  .switch.off { background: #d6d6dd; }
+  .switch.off i { right: auto; left: 3px; }
+
+  .logbox {
+    margin: 2px 0 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--hair);
+    border-radius: 5px;
+    background: #fafafb;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 11.5px; line-height: 1.75; color: var(--text-soft);
+    white-space: pre;
+    overflow: hidden;
+  }
+  .logbox .t { color: #b0b0b8; }
+
+  .foot {
+    flex: none;
+    display: flex; align-items: center;
+    padding: 9px 24px;
+    border-top: 1px solid var(--hair);
+    background: #fafafb;
+    color: var(--text-mute); font-size: 11.5px;
+  }
+  .foot .grow { flex: 1; }
+
+  /* ---------------- 方案 B：留卡片，但收边 ---------------- */
+  .b-body { padding: 16px; background: var(--page); display: flex; flex-direction: column; gap: 10px; }
+  .b-card {
+    background: var(--surface);
+    border: 1px solid var(--hair);
+    border-radius: 6px;
+    padding: 12px 16px;
+  }
+  .b-card h3 { margin: 0 0 4px; font-size: 12px; color: var(--text-mute); font-weight: 600; }
+  .b-status { display: flex; align-items: center; gap: 12px; }
+  .b-status .line { font-size: 14px; font-weight: 600; }
+  .b-status .sub { font-size: 12px; color: var(--text-mute); margin-top: 2px; }
+  .b-status .grow { flex: 1; }
+  .b-foot {
+    display: flex; align-items: center; padding: 9px 16px;
+    border-top: 1px solid var(--hair); background: var(--surface);
+    color: var(--text-mute); font-size: 11.5px;
+  }
+  .b-foot .grow { flex: 1; }
+</style>
+</head>
+<body>
+
+<h1>控制台整体界面 · 用系统窗口边框之后重新排一版</h1>
+<p class="lead">上一版是给「无边框圆角窗口」设计的：卡片浮在灰底上、四角圆着。换成系统边框后那套就散了 —— 现在是整窗白底、分区靠细线，像系统设置页。</p>
+
+<!-- ================= 方案 A ================= -->
+<h2>方案 A · 扁平分栏（整窗一块白，分区靠 1px 细线，不用圆角卡片）</h2>
+<div class="win">
+  <div class="caption">
+    <img src="../src/SevenStation.Control/icons/tray.png" alt="" />
+    Seven Station 中心
+    <span class="grow"></span>
+    <span class="btns"><span>—</span><span>□</span><span>✕</span></span>
+  </div>
+
+  <div class="a-body">
+    <div class="a-status">
+      <span class="dot"></span>
+      <div>
+        <div class="line">正在运行</div>
+        <div class="sub">已运行 6 小时 32 分 · 后台服务，关掉窗口也照常跑</div>
+      </div>
+      <span class="grow"></span>
+      <button class="btn">重启</button>
+      <button class="btn primary">停止</button>
+    </div>
+
+    <div class="a-section">
+      <h3>连接</h3>
+      <div class="row"><span class="k">访问地址</span><span class="v mono">http://127.0.0.1:8787</span><span class="acts"><span>复制</span><span>打开</span></span></div>
+      <div class="row"><span class="k">访问令牌</span><span class="v mono">aed32852 7a839e77 … 310d83</span><span class="acts"><span>复制</span><span>重新生成</span></span></div>
+      <div class="row"><span class="k">数据目录</span><span class="v mono">C:\ProgramData\SevenStation.Core\data</span><span class="acts"><span>打开</span></span></div>
+      <div class="row"><span class="k">版本</span><span class="v">0.3.0</span></div>
+    </div>
+
+    <div class="a-section">
+      <h3>启动与连接</h3>
+      <div class="row"><span class="k">开机自启</span><span class="v">系统启动时自动运行</span><span class="switch"><i></i></span></div>
+      <div class="row"><span class="k">局域网连接</span><span class="v">局域网里的其他设备也能连</span><span class="switch off"><i></i></span></div>
+    </div>
+
+    <div class="a-section">
+      <h3>最近日志<span style="float:right;font-weight:400;color:#8a8a92">打开目录</span></h3>
+      <div class="logbox"><span class="t">01:25:12</span> 客户端连上  c-33628b04
+<span class="t">01:25:16</span> 客户端断开  c-33628b04
+<span class="t">01:29:26</span> 客户端连上  c-e31418e0
+<span class="t">01:30:17</span> 客户端断开  c-e31418e0
+<span class="t">01:43:08</span> 客户端连上  c-008f3bf4
+<span class="t">01:43:23</span> 客户端断开  c-008f3bf4</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>数据在 C:\ProgramData\SevenStation.Core\data</span>
+    <span class="grow"></span>
+    <span>关掉窗口不会停掉中心 · 右键托盘图标可退出</span>
+  </div>
+</div>
+
+<!-- ================= 方案 B ================= -->
+<h2>方案 B · 保留卡片：页面灰底 + 白卡片，但圆角收到 6px、去掉多余描边</h2>
+<div class="win">
+  <div class="caption">
+    <img src="../src/SevenStation.Control/icons/tray.png" alt="" />
+    Seven Station 中心
+    <span class="grow"></span>
+    <span class="btns"><span>—</span><span>□</span><span>✕</span></span>
+  </div>
+
+  <div class="b-body">
+    <div class="b-card">
+      <div class="b-status">
+        <span class="dot"></span>
+        <div>
+          <div class="line">正在运行</div>
+          <div class="sub">已运行 6 小时 32 分 · 后台服务，关掉窗口也照常跑</div>
+        </div>
+        <span class="grow"></span>
+        <button class="btn">重启</button>
+        <button class="btn primary">停止</button>
+      </div>
+    </div>
+
+    <div class="b-card">
+      <h3>连接</h3>
+      <div class="row"><span class="k">访问地址</span><span class="v mono">http://127.0.0.1:8787</span><span class="acts"><span>复制</span><span>打开</span></span></div>
+      <div class="row"><span class="k">访问令牌</span><span class="v mono">aed32852 7a839e77 … 310d83</span><span class="acts"><span>复制</span><span>重新生成</span></span></div>
+      <div class="row"><span class="k">数据目录</span><span class="v mono">C:\ProgramData\SevenStation.Core\data</span><span class="acts"><span>打开</span></span></div>
+      <div class="row"><span class="k">版本</span><span class="v">0.3.0</span></div>
+    </div>
+
+    <div class="b-card">
+      <h3>启动与连接</h3>
+      <div class="row"><span class="k">开机自启</span><span class="v">系统启动时自动运行</span><span class="switch"><i></i></span></div>
+      <div class="row"><span class="k">局域网连接</span><span class="v">局域网里的其他设备也能连</span><span class="switch off"><i></i></span></div>
+    </div>
+
+    <div class="b-card" style="flex:1;display:flex;flex-direction:column;min-height:0">
+      <h3>最近日志<span style="float:right;font-weight:400;color:#8a8a92">打开目录</span></h3>
+      <div class="logbox" style="flex:1;margin-bottom:0"><span class="t">01:25:12</span> 客户端连上  c-33628b04
+<span class="t">01:25:16</span> 客户端断开  c-33628b04
+<span class="t">01:29:26</span> 客户端连上  c-e31418e0
+<span class="t">01:30:17</span> 客户端断开  c-e31418e0
+<span class="t">01:43:08</span> 客户端连上  c-008f3bf4</div>
+    </div>
+  </div>
+
+  <div class="b-foot">
+    <span>数据在 C:\ProgramData\SevenStation.Core\data</span>
+    <span class="grow"></span>
+    <span>关掉窗口不会停掉中心 · 右键托盘图标可退出</span>
+  </div>
+</div>
+
+<h2>另外两件要在这一版里定掉的事</h2>
+<div class="win" style="padding:18px 22px; box-shadow:none">
+  <div style="font-size:13px;color:var(--text-soft);line-height:2">
+    <div><b>1 · 关闭按钮怎么算「关闭」</b><br />
+      现在点系统 ✕ 会收进托盘（这是你最早定的：关窗口不停中心，右键托盘退出）。你说「无法关闭」，多半是收进去之后不知道从哪退。
+      建议：✕ 仍然收进托盘，但页脚那行字明说「右键托盘图标可退出」（上面两版都这么写了），托盘菜单里「退出」就是真退。
+      如果你更想「✕ 直接退出」，也可以，我把中心改成退出前先问一句。
+    </div>
+    <div style="margin-top:10px"><b>2 · 页面里不再画窗口边框</b><br />
+      窗口边框、阴影、拖动交给系统（和客户端一致），页面只管内容。所以上面两版都没有自己画描边。
+    </div>
+  </div>
+</div>
+
+<p class="hint">定了哪一版我再改代码，不再边改边返工。图标沿用已经确认的 Segoe UI Semibold 的 π（浅底那张）。</p>
+
+</body>
+</html>
