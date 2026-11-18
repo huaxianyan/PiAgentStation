@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Seven Station 中心</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f7f7f9;
+    --panel: #f7f7f9;
+    --card: #ffffff;
+    --border: #e9e9ee;
+    --border-strong: #dcdce2;
+    --active: #ececef;
+    --text: #1a1a1d;
+    --text-dim: #2c2c31;
+    --text-soft: #55555c;
+    --text-mute: #8a8a92;
+    --text-faint: #a9a9b1;
+    --accent: #1a1a1d;
+    --green: #189a4a;
+    --radius-card: 14px;
+    --radius-pill: 999px;
+    --font: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+    --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  }
+
+  [data-theme="dark"] {
+    color-scheme: dark;
+    --page: #141417;
+    --panel: #16161a;
+    --card: #202024;
+    --border: #2a2a30;
+    --border-strong: #35353c;
+    --active: #2a2a30;
+    --text: #f2f2f4;
+    --text-dim: #e2e2e6;
+    --text-soft: #c8c8cf;
+    --text-mute: #8f8f98;
+    --text-faint: #6e6e77;
+    --accent: #f2f2f4;
+    --green: #3ddc84;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--page);
+    color: var(--text);
+    font-family: var(--font);
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ---------------- 标题栏 ---------------- */
+  .titlebar {
+    flex: none;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 6px 0 14px;
+    border-bottom: 1px solid var(--border);
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+  .mark {
+    width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 5px;
+    background: var(--accent);
+    color: var(--card);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .titlebar .name { font-size: 12.5px; color: var(--text-dim); }
+  .titlebar .spacer { flex: 1; }
+  .win-btn {
+    width: 30px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 6px;
+    background: transparent;
+    color: var(--text-mute);
+    font-size: 12px;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+  .win-btn:hover { background: var(--active); color: var(--text); }
+  .win-btn.close:hover { background: #e81123; color: #fff; }
+
+  /* ---------------- 主体 ---------------- */
+  .body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    overflow: hidden;
+  }
+
+  .status-card {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 16px 16px 18px;
+    border-radius: var(--radius-card);
+    background: var(--card);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .status-text { flex: 1; min-width: 0; }
+  .status-line { display: flex; align-items: center; gap: 9px; }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 4px rgba(24, 154, 74, .12);
+  }
+  .dot.off { background: var(--text-faint); box-shadow: 0 0 0 4px rgba(140, 140, 150, .12); }
+  .status-title { font-size: 15px; font-weight: 600; }
+  .status-sub { margin-top: 3px; font-size: 12px; color: var(--text-mute); }
+  .status-actions { display: flex; gap: 8px; }
+
+  .btn {
+    padding: 7px 13px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--card);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .btn:hover { box-shadow: inset 0 0 0 1px var(--text-faint); }
+  .btn.primary { background: var(--accent); color: var(--card); box-shadow: none; }
+  .btn.primary:hover { opacity: .88; }
+  .btn:disabled { color: var(--text-faint); box-shadow: inset 0 0 0 1px var(--border); cursor: default; }
+  .btn[hidden] { display: none; }
+
+  .link {
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--text-mute);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .link:hover { color: var(--text); }
+  .link:disabled { color: var(--text-faint); cursor: default; }
+  .link + .link { margin-left: 12px; }
+
+  .card {
+    flex: none;
+    padding: 14px 16px;
+    border-radius: var(--radius-card);
+    background: var(--card);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .card-head h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-dim); }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 30px;
+    font-size: 13px;
+  }
+  .row + .row { border-top: 1px solid var(--border); }
+  .row .label { flex: none; width: 76px; color: var(--text-mute); font-size: 12.5px; }
+  .row .value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+  .row .value.mono { font-family: var(--mono); font-size: 12px; }
+  .row .actions { flex: none; display: flex; align-items: center; }
+  .row .note { color: var(--text-mute); font-size: 12.5px; }
+
+  .switch {
+    flex: none;
+    width: 34px; height: 20px;
+    padding: 2px;
+    display: flex; align-items: center; justify-content: flex-start;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--border-strong);
+    cursor: pointer;
+  }
+  .switch.on { background: var(--accent); justify-content: flex-end; }
+  .switch:disabled { opacity: .45; cursor: default; }
+  .switch i { display: block; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .2); }
+
+  .seg {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--radius-pill);
+    background: var(--active);
+  }
+  .seg button {
+    padding: 4px 11px;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--text-mute);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .seg button.on {
+    background: var(--card);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+  }
+  .seg button:disabled { cursor: default; }
+
+  .logs {
+    margin: 6px 0 0;
+    padding: 9px 11px;
+    border-radius: 10px;
+    background: var(--panel);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.62;
+    color: var(--text-soft);
+    white-space: pre;
+    overflow: hidden;
+    min-height: 74px;
+  }
+  .logs .t { color: var(--text-faint); }
+  .logs .empty { color: var(--text-faint); font-family: var(--font); }
+
+  .foot {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px;
+    font-size: 11.5px;
+    color: var(--text-faint);
+  }
+  .foot .spacer { flex: 1; }
+
+  /* ---------------- 提示与确认 ---------------- */
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translate(-50%, 12px);
+    padding: 8px 14px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--card);
+    font-size: 12.5px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+    max-width: 520px;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(16, 16, 20, .28);
+  }
+  .scrim[hidden] { display: none; }
+  .dialog {
+    width: 380px;
+    padding: 18px;
+    border-radius: var(--radius-card);
+    background: var(--card);
+    box-shadow: 0 18px 48px rgba(16, 16, 20, .24);
+  }
+  .dialog h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+  .dialog p { margin: 0 0 16px; font-size: 12.5px; line-height: 1.6; color: var(--text-soft); }
+  .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <span class="mark">π</span>
+  <span class="name">Seven Station 中心</span>
+  <span class="spacer"></span>
+  <button class="win-btn" id="minBtn" title="最小化">—</button>
+  <button class="win-btn close" id="closeBtn" title="最小化">✕</button>
+</div>
+
+<div class="body">
+  <section class="status-card">
+    <div class="status-text">
+      <div class="status-line"><span class="dot" id="statusDot"></span><span class="status-title" id="statusTitle">正在读取状态…</span></div>
+      <div class="status-sub" id="statusSub"></div>
+    </div>
+    <div class="status-actions">
+      <button class="btn" id="restartBtn" hidden>重启</button>
+      <button class="btn primary" id="toggleBtn">停止</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h3>连接</h3></div>
+    <div class="row">
+      <span class="label">访问地址</span>
+      <span class="value mono" id="address"></span>
+      <span class="actions">
+        <button class="link" id="copyAddress">复制</button>
+        <button class="link" id="openAddress">打开</button>
+      </span>
+    </div>
+    <div class="row">
+      <span class="label">访问令牌</span>
+      <span class="value mono" id="token"></span>
+      <span class="actions">
+        <button class="link" id="copyToken">复制</button>
+        <button class="link" id="regenToken">重新生成</button>
+      </span>
+    </div>
+    <div class="row">
+      <span class="label">数据目录</span>
+      <span class="value mono" id="dataDir"></span>
+      <span class="actions"><button class="link" id="openData">打开</button></span>
+    </div>
+    <div class="row">
+      <span class="label">版本</span>
+      <span class="value" id="version"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <span class="label">开机自启</span>
+      <span class="value" id="autostartText">系统启动时自动运行</span>
+      <button class="switch" id="autostartSwitch"><i></i></button>
+    </div>
+    <div class="row">
+      <span class="label">允许连接</span>
+      <span class="value note" id="scopeText">同一台机器上的客户端</span>
+      <div class="seg" id="scopeSeg">
+        <button data-scope="local">仅本机</button>
+        <button data-scope="lan">局域网</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+    <div class="card-head"><h3>最近日志</h3><button class="link" id="openLogs">打开目录</button></div>
+    <pre class="logs" id="logs"></pre>
+  </section>
+
+  <div class="foot">
+    <span id="footNote"></span>
+    <span class="spacer"></span>
+    <span>关掉窗口不会停掉中心</span>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="scrim" id="scrim" hidden>
+  <div class="dialog">
+    <h3>重新生成访问令牌</h3>
+    <p>现在连着的设备都会断开，得用新令牌重新连一次。已经跑起来的对话不受影响。</p>
+    <div class="actions">
+      <button class="btn" id="regenCancel">取消</button>
+      <button class="btn primary" id="regenConfirm">生成新令牌</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 直接发对象：WebView2 会把它当 JSON 送进 WebMessageReceived。
+  const send = (type, extra = {}) => window.chrome.webview.postMessage({ type, ...extra });
+  const el = (id) => document.getElementById(id);
+
+  let state = null;
+  let dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+
+  function shortToken(token) {
+    if (!token) return '还没生成';
+    if (token.length <= 16) return token;
+    return token.slice(0, 8) + ' ' + token.slice(8, 16) + ' … ' + token.slice(-6);
+  }
+
+  function render(next) {
+    state = next;
+
+    el('statusTitle').textContent = next.running ? '正在运行' : '已停止';
+    el('statusDot').className = next.running ? 'dot' : 'dot off';
+    el('statusSub').textContent = next.running
+      ? (next.mode === 'service'
+        ? [next.since, '后台服务，关掉这个窗口也照常跑'].filter(Boolean).join(' · ')
+        : '便携模式，关掉这个窗口中心就停了')
+      : '客户端现在连不上，点「启动」把它拉起来';
+
+    el('toggleBtn').textContent = next.running ? '停止' : '启动';
+    el('restartBtn').hidden = !(next.running && next.serviceInstalled);
+
+    el('address').textContent = next.listen;
+    el('address').style.color = next.running ? '' : 'var(--text-faint)';
+    el('openAddress').disabled = !next.running;
+    el('token').textContent = shortToken(next.token);
+    el('dataDir').textContent = next.dataDirectory;
+    el('version').textContent = next.version;
+
+    el('autostartSwitch').classList.toggle('on', next.autostart);
+    el('autostartSwitch').disabled = !next.serviceInstalled;
+    el('autostartText').textContent = next.serviceInstalled
+      ? '系统启动时自动运行'
+      : '便携模式不会自启';
+    el('autostartText').style.color = next.serviceInstalled ? '' : 'var(--text-mute)';
+
+    for (const button of el('scopeSeg').children) {
+      button.classList.toggle('on', button.dataset.scope === next.scope);
+    }
+
+    const lan = next.scope === 'lan';
+    el('scopeText').textContent = lan
+      ? (next.firewallRule ? '局域网设备可以连' : '还没在防火墙放行，切过去要确认管理员权限')
+      : '同一台机器上的客户端';
+
+    const logs = next.logs || [];
+    el('logs').innerHTML = logs.length
+      ? logs.map((line) => {
+        // 日志行首的时间戳压暗、去掉毫秒，正文才是要看的。
+        const hit = line.match(/^(\[?\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?\]?|\[?\d{2}:\d{2}:\d{2}\]?)\s*(.*)$/);
+        return hit
+          ? '<span class="t">' + escapeHtml(hit[1].replace(/^\d{4}-\d{2}-\d{2} /, '').replace(/\.\d+$/, '')) + '</span> ' + escapeHtml(hit[2])
+          : escapeHtml(line);
+      }).join('\n')
+      : '<span class="empty">还没有日志</span>';
+
+    el('footNote').textContent = next.serviceInstalled
+      ? '数据在 ' + next.dataDirectory
+      : '数据在 ' + next.dataDirectory;
+  }
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  }
+
+  let toastTimer = 0;
+  function toast(text) {
+    const box = el('toast');
+    box.textContent = text;
+    box.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => box.classList.remove('show'), 2600);
+  }
+
+  el('toggleBtn').addEventListener('click', () => send(state && state.running ? 'stop' : 'start'));
+  el('restartBtn').addEventListener('click', () => send('restart'));
+  el('autostartSwitch').addEventListener('click', () => send('autostart', { on: !(state && state.autostart) }));
+  el('scopeSeg').addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button || (state && button.dataset.scope === state.scope)) return;
+    send('scope', { scope: button.dataset.scope });
+  });
+
+  el('copyAddress').addEventListener('click', () => send('copy', { text: state ? state.listen : '' }));
+  el('openAddress').addEventListener('click', () => send('open', { target: 'url' }));
+  el('copyToken').addEventListener('click', () => send('copy', { text: state ? state.token : '' }));
+  el('openData').addEventListener('click', () => send('open', { target: 'data' }));
+  el('openLogs').addEventListener('click', () => send('open', { target: 'logs' }));
+
+  el('regenToken').addEventListener('click', () => { el('scrim').hidden = false; });
+  el('regenCancel').addEventListener('click', () => { el('scrim').hidden = true; });
+  el('regenConfirm').addEventListener('click', () => {
+    el('scrim').hidden = true;
+    send('regenerate');
+  });
+
+  el('minBtn').addEventListener('click', () => send('minimize'));
+  el('closeBtn').addEventListener('click', () => send('close'));
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !el('scrim').hidden) el('scrim').hidden = true;
+  });
+
+  window.chrome.webview.addEventListener('message', (event) => {
+    // 原生那边用 PostWebMessageAsJson 发，event.data 已经是对象了；字符串的情况也兜一下。
+    const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+    if (message.type === 'state') render(message.state);
+    if (message.type === 'toast') toast(message.text);
+  });
+
+  send('ready');
+</script>
+</body>
+</html>
