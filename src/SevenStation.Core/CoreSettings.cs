@@ -31,6 +31,25 @@ public sealed class CoreSettings
         Agents.TryGetValue(id, out var found) ? found : null;
 
     /// <summary>
+    /// Pi 所在的用户家目录。中心作为服务跑在系统账户下时，进程自己的家目录是
+    /// <c>C:\Windows\system32\config\systemprofile</c>，而技能、扩展、会话都在
+    /// 真实用户的家目录里，所以这些地方一律从这里取，不要直接用进程的 UserProfile。
+    /// </summary>
+    public string PiHome
+    {
+        get
+        {
+            var home = Agent("pi")?.Home;
+            if (!string.IsNullOrWhiteSpace(home) && Directory.Exists(home))
+            {
+                return home;
+            }
+
+            return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        }
+    }
+
+    /// <summary>
     /// 装载配置。文件不存在就先探测一遍本机已装的 Agent 再落盘——
     /// 这一步就是「安装后第一次启动自动把 Pi 纳进来」。探测不到也照常写文件，界面上可以再填。
     /// </summary>

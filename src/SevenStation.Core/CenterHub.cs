@@ -563,7 +563,7 @@ public sealed class CenterHub
 
     private static IEnumerable<(string Root, string Scope)> SkillRoots(string cwd)
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoreSettings.Current.PiHome;
         yield return (Path.Combine(home, ".pi", "agent", "skills"), "用户");
         yield return (Path.Combine(home, ".agents", "skills"), "用户");
 
@@ -690,7 +690,7 @@ public sealed class CenterHub
     /// </summary>
     private async Task SendExtensionsAsync(string cwd, CenterConnection sender)
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoreSettings.Current.PiHome;
         var settingsPath = Path.Combine(home, ".pi", "agent", "settings.json");
         var problems = new JsonArray();
         var packages = new JsonArray();

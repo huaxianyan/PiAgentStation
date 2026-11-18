@@ -10,13 +10,8 @@ public static class PiAgent
 {
     public static AgentDescriptor Describe()
     {
-        // 服务跑在系统账户下时，进程自己的家目录是系统账户的；Pi 的子进程是按配置里的
-        // 真实用户家目录起的，名片上显示的路径也得跟着那份走，否则两边对不上。
-        var home = CoreSettings.Current.Agent(AgentRegistry.PiId)?.Home;
-        if (string.IsNullOrWhiteSpace(home) || !Directory.Exists(home))
-        {
-            home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        }
+        // 服务跑在系统账户下，进程自己的家目录不是用户的家；会话目录照 PiHome 算。
+        var home = CoreSettings.Current.PiHome;
 
         var agentDirectory = PiLocator.AgentDirectory;
         var launcher = PiLocator.LauncherPath;
