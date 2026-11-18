@@ -36,16 +36,54 @@ fn timestamp() -> String {
     now.format(&format).unwrap_or_default()
 }
 
-/// 中心地址：center.json 里的 url 与 token，其次 token.txt，最后环境变量。
+/// 中心地址的来源，按优先级：
+/// 1. 安装时写进注册表的地址与令牌（整机一份，`HKLM\SOFTWARE\SevenStation`）
+/// 2. `%LOCALAPPDATA%\SevenStation\center.json`（本机开发或手工改过的那份）
+/// 3. `token.txt`（同一目录，中心在本机时直接用它的令牌）
+/// 4. 环境变量 `SEVENSTATION_TOKEN`
+///
+/// 装给整台机器的客户端靠第 1 条：所有用户共用一份配对信息，不用各自再填。
 struct Center {
     base_url: String,
     token: Option<String>,
+}
+
+fn registry_center() -> Option<Center> {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+
+    let key = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey(r"SOFTWARE\SevenStation")
+        .ok()?;
+    let url: String = key.get_value("CenterUrl").ok()?;
+    if url.trim().is_empty() {
+        return None;
+    }
+
+    let token: Option<String> = key
+        .get_value::<String, _>("CenterToken")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    Some(Center {
+        base_url: url.trim().to_string(),
+        token,
+    })
 }
 
 fn read_center() -> Center {
     let dir = data_dir();
     let config = dir.join("center.json");
     let fallback = "http://127.0.0.1:8787/".to_string();
+
+    if let Some(mut installed) = registry_center() {
+        if !installed.base_url.ends_with('/') {
+            installed.base_url.push('/');
+        }
+        log(&format!("中心地址来自安装配置：{}", installed.base_url));
+        return installed;
+    }
 
     let mut base_url = fallback.clone();
     let mut token: Option<String> = None;

@@ -17,9 +17,11 @@
 | 包 | 内容 | 命名 |
 | --- | --- | --- |
 | 中心 | MSI：装到 `%ProgramFiles%\SevenStation Core`，注册服务 `SevenStationCore`（自动启动、系统账户），开始菜单两个快捷方式 | `SevenStation-center-<版本>-win-x64.msi`（约 40 MB） |
-| 客户端 | MSI：装到 `%ProgramFiles%\SevenStation`，装时填中心地址与令牌 | `SevenStation-client-<版本>-win-x64.msi` |
+| 客户端 | MSI：装到 `%ProgramFiles%\SevenStation`，装时填中心地址与令牌（写进 `HKLM\SOFTWARE\SevenStation`，整机共用），开始菜单与桌面快捷方式 | `SevenStation-client-<版本>-win-x64.msi`（约 2.7 MB） |
 
-- 中心的安装程序：`powershell -File scripts/build-installer-center.ps1`（`-SkipPublish` 复用已有发布输出）。
+- 中心：`powershell -File scripts/build-installer-center.ps1`（`-SkipPublish` 复用已有发布输出）。
+- 客户端：`powershell -File scripts/build-installer-client.ps1`（`-SkipBuild` 复用已有 `target/release`）。
+- `scripts/build-release.ps1` 打的是 zip，只能跑便携版用；正式发布只发上面两个 MSI。
   WiX 5 是 dotnet 全局工具（`dotnet tool install -g wix --version 5.0.2`），脚本会自己找 `~/.dotnet/tools/wix.exe`。
 - 数据不进安装目录、也不随卸载删除：中心的配置、令牌、对话库、日志都在 `%ProgramData%\SevenStation.Core\`。
 - 中心安装时不问 Pi 装在哪：服务第一次启动自己探测（`PI_AGENT_DIR` 优先，其次各用户目录下的 `~/.pi/agent`），
@@ -33,8 +35,7 @@
 
 1. 改两个版本号、写发布说明、跑 `python scripts/verify_release_notes.py --tag v<版本>`、提交。
 2. 推 `main`。
-3. 出包：`powershell -File scripts/build-installer-center.ps1`（客户端安装程序脚本待做），
-   然后在一台干净环境里真装一遍、跑一遍，再卸载一遍。
+3. 出包：两个安装程序脚本各跑一遍，然后在一台干净环境里真装、真跑、再卸载。
 4. 打标签 `git tag -a v<版本> -m "SevenStation <版本>"` 并推标签。
 5. `gh release create v<版本> --title v<版本> --notes-file <拼好的正文> dist/*`（正文 = 发布说明 + `## 构建信息` 表）。
 5. 已发布的标签不改写，修复走递增版本。

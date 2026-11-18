@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SevenStation 客户端的安装程序（MSI）。
+
+  装给整台机器：客户端以后还要承担「节点」角色，节点是后台服务，机器级装法才立得住。
+  装的时候问两件事——中心地址和访问令牌，写进 HKLM\SOFTWARE\SevenStation，
+  所有用户共用一份，不用各自再填。客户端启动先读它，读不到才回落到用户目录的 center.json。
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package
+      Name="SevenStation 客户端"
+      Manufacturer="SevenStation"
+      Version="$(var.Version)"
+      UpgradeCode="dbac07cf-54b7-479c-a7ae-8029388412a7"
+      Scope="perMachine"
+      Compressed="yes"
+      Codepage="936"
+      Language="2052"
+      InstallerVersion="500">
+
+    <SummaryInformation Description="SevenStation 客户端：连上中心看任务、下指令。" />
+
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="已经装了更新的版本，请先卸载再装旧版。" Schedule="afterInstallValidate" />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- 安装时要填的两项。令牌留空也允许装，只是连不上，界面上会说。 -->
+    <Property Id="CENTERURL" Value="http://127.0.0.1:8787/" />
+    <Property Id="CENTERTOKEN" Secure="yes" />
+
+    <Launch Condition="CENTERURL" Message="中心地址不能为空。填成 http://主机:端口/ 的形式，比如 http://127.0.0.1:8787/。" />
+
+    <!-- 客户端是 WebView2 壳，没有运行时窗口起不来。 -->
+    <Property Id="WEBVIEW2MACHINE">
+      <!-- 整机安装的运行时写在 32 位视图里，所以要 always32 读，路径里不带 WOW6432Node。 -->
+      <RegistrySearch Id="WebView2MachineSearch" Root="HKLM"
+                      Key="SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+                      Name="pv" Type="raw" Bitness="always32" />
+    </Property>
+    <Property Id="WEBVIEW2USER">
+      <RegistrySearch Id="WebView2UserSearch" Root="HKCU"
+                      Key="SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+                      Name="pv" Type="raw" />
+    </Property>
+    <Launch Condition="WEBVIEW2MACHINE OR WEBVIEW2USER" Message="这台机器没有 WebView2 运行时，客户端打不开。先装上 WebView2（微软官网的 Evergreen Runtime），再运行本安装程序。" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="SevenStation" />
+    </StandardDirectory>
+
+    <Component Id="ClientExecutable" Directory="INSTALLFOLDER" Guid="*">
+      <File Id="ClientExe" Source="$(var.BuildDir)\SevenStation.exe" KeyPath="yes" />
+    </Component>
+
+    <!-- 安装时填的中心地址与令牌，整机一份。 -->
+    <Component Id="CenterSettings" Directory="INSTALLFOLDER" Guid="f2b1c9a4-6d3e-4a71-9c58-7e04a1d3b510">
+      <RegistryKey Root="HKLM" Key="SOFTWARE\SevenStation">
+        <RegistryValue Name="CenterUrl" Type="string" Value="[CENTERURL]" KeyPath="yes" />
+        <RegistryValue Name="CenterToken" Type="string" Value="[CENTERTOKEN]" />
+      </RegistryKey>
+      <!-- 卸载时把这份配对信息一起清掉；用户目录里的 center.json 不动。 -->
+      <RemoveRegistryKey Root="HKLM" Key="SOFTWARE\SevenStation" Action="removeOnUninstall" />
+    </Component>
+
+    <Component Id="Shortcuts" Directory="ProgramMenuFolder" Guid="a7d5e2b8-3f14-4c96-8bd2-51c7f0a9e263">
+      <Shortcut Id="MenuShortcut" Name="SevenStation" Target="[#ClientExe]" WorkingDirectory="INSTALLFOLDER" />
+      <Shortcut Id="DesktopShortcut" Name="SevenStation" Directory="DesktopFolder" Target="[#ClientExe]" WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveMenuShortcut" On="uninstall" />
+    </Component>
+
+    <Feature Id="Main" Title="SevenStation 客户端" Level="1" AllowAbsent="no">
+      <ComponentRef Id="ClientExecutable" />
+      <ComponentRef Id="CenterSettings" />
+      <ComponentRef Id="Shortcuts" />
+    </Feature>
+
+    <!-- 向导：欢迎 → 填中心地址与令牌 → 确认 → 进度 → 完成。 -->
+    <ui:WixUI Id="WixUI_Minimal" />
+
+    <UI>
+      <Dialog Id="CenterDlg" Width="370" Height="270" Title="[ProductName] 安装">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" Text="WixUI_Bmp_Banner" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15"
+                 Transparent="yes" NoPrefix="yes" Text="连到哪个中心" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15"
+                 Transparent="yes" NoPrefix="yes" Text="填中心那台机器的地址和访问令牌。装完就能直接连上。" />
+        <Control Id="UrlLabel" Type="Text" X="20" Y="80" Width="75" Height="17" Text="中心地址" />
+        <Control Id="UrlEdit" Type="Edit" X="100" Y="78" Width="240" Height="18" Property="CENTERURL" Text="[CENTERURL]" />
+        <Control Id="TokenLabel" Type="Text" X="20" Y="112" Width="75" Height="17" Text="访问令牌" />
+        <Control Id="TokenEdit" Type="Edit" X="100" Y="110" Width="240" Height="18" Property="CENTERTOKEN" Text="[CENTERTOKEN]" />
+        <Control Id="Hint" Type="Text" X="100" Y="134" Width="240" Height="32" Transparent="yes" NoPrefix="yes"
+                 Text="令牌在中心的 %ProgramData%\SevenStation.Core\token.txt 里，用开始菜单的「打开中心页面」也能看出当前地址。" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="CenterDlg" Order="2" />
+      <Publish Dialog="CenterDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="1" />
+      <Publish Dialog="CenterDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="1" Condition="CENTERURL" />
+    </UI>
+  </Package>
+</Wix>
