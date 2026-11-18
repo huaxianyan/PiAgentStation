@@ -100,14 +100,15 @@ for (let i = 0; i < 90; i++) {
 }
 if (!ready) fail('新建会话没有进入就绪状态');
 
-// 模型列表是中心从 Pi 那边取一次再缓存的，冷启动要等几秒。
-let modelVisible = false;
+// 模型是中心从 Pi 那边取一次再缓存的，冷启动要等几秒；胶囊上应该出现模型名。
+let modelText = '';
 for (let i = 0; i < 40; i++) {
-  modelVisible = await evaluate('return !document.getElementById("modelSelect").hidden');
-  if (modelVisible) break;
+  modelText = await evaluate('return document.getElementById("modelPillText").textContent');
+  if (modelText && modelText !== '默认模型') break;
   await sleep(500);
 }
-if (!modelVisible) fail('模型下拉没出现');
+if (!modelText) fail('模型胶囊没有文字');
+console.log('模型：' + modelText);
 
 await evaluate(`
   const input = document.getElementById('input');
