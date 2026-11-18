@@ -63,25 +63,6 @@ fn open_target(target: String) -> Result<(), String> {
     core::open_target(&target)
 }
 
-#[tauri::command]
-fn window_ctl(window: tauri::WebviewWindow, what: String) -> Result<(), String> {
-    match what.as_str() {
-        "drag" => window.start_dragging(),
-        "minimize" => window.minimize(),
-        "hide" => window.hide(),
-        "toggle-max" => {
-            let maximized = window.is_maximized().unwrap_or(false);
-            if maximized {
-                window.unmaximize()
-            } else {
-                window.maximize()
-            }
-        }
-        _ => return Err("不认识的动作。".into()),
-    }
-    .map_err(|error| format!("窗口操作失败：{error}"))
-}
-
 /// 状态变了就往页面推一次，同时把托盘上的文字换掉。
 fn publish(app: &tauri::AppHandle) {
     let snapshot = core::snapshot();
@@ -182,8 +163,7 @@ fn main() {
             set_lan,
             regenerate_token,
             copy_text,
-            open_target,
-            window_ctl
+            open_target
         ])
         .setup(|app| {
             let window = tauri::WebviewWindowBuilder::new(
@@ -194,7 +174,6 @@ fn main() {
             .title("Seven Station 中心")
             .inner_size(720.0, 626.0)
             .min_inner_size(620.0, 560.0)
-            .decorations(false)
             .center()
             .build()?;
 

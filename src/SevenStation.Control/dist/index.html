@@ -57,59 +57,6 @@
     user-select: none;
   }
 
-  /* 无边框窗口没有系统阴影，用一圈 1px 描边把边界交代清楚。 */
-  body::after {
-    content: '';
-    position: fixed;
-    /* 125% 缩放下 WebView2 的视口比可见区域高约 1.5px，底部那 1px 会被裁掉，
-       所以底边往上收 2px，四边才都看得见。 */
-    inset: 0 0 2px 0;
-    pointer-events: none;
-    /* 窗口没有系统阴影，这圈线是唯一的分界，颜色压深一点才在任何背景上都看得见。 */
-    border: 1px solid rgba(0, 0, 0, 0.22);
-    z-index: 9999;
-  }
-
-  /* ---------------- 标题栏 ---------------- */
-  .titlebar {
-    flex: none;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 0 6px 0 14px;
-    border-bottom: 1px solid var(--border);
-    /* WebView2 不认 app-region，拖动靠下面 mousedown 发消息给原生。 */
-    cursor: default;
-    user-select: none;
-  }
-  /* 标题栏这枚就是托盘 / exe 那张图，不在 CSS 里重画。 */
-  .mark { width: 18px; height: 18px; display: block; }
-  .titlebar .name { font-size: 12.5px; color: var(--text-dim); }
-  .titlebar .spacer { flex: 1; }
-  .win-btn {
-    width: 30px; height: 26px;
-    display: flex; align-items: center; justify-content: center;
-    border: 0; border-radius: 6px;
-    background: transparent;
-    color: var(--text-mute);
-    font-size: 12px;
-    cursor: pointer;
-  }
-  .win-btn:hover { background: var(--active); color: var(--text); }
-  .win-btn.close:hover { background: #e81123; color: #fff; }
-
-  /* ---------------- 主体 ---------------- */
-  .body {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px;
-    overflow: hidden;
-  }
-
   .status-card {
     flex: none;
     display: flex;
@@ -274,13 +221,6 @@
 </head>
 <body>
 
-<div class="titlebar">
-  <img class="mark" src="mark.png" alt="" draggable="false" />
-  <span class="name">Seven Station 中心</span>
-  <span class="spacer"></span>
-  <button class="win-btn" id="minBtn" title="最小化">—</button>
-  <button class="win-btn close" id="closeBtn" title="收进托盘">✕</button>
-</div>
 
 <div class="body">
   <section class="status-card">
@@ -378,10 +318,6 @@
         case 'regenerate': await invoke('regenerate_token'); break;
         case 'copy': await invoke('copy_text', { text: extra.text }); toast('已复制'); break;
         case 'open': await invoke('open_target', { target: extra.target }); break;
-        case 'drag': await invoke('window_ctl', { what: 'drag' }); break;
-        case 'minimize': await invoke('window_ctl', { what: 'minimize' }); break;
-        case 'close': await invoke('window_ctl', { what: 'hide' }); break;
-        case 'toggle-max': await invoke('window_ctl', { what: 'toggle-max' }); break;
       }
     } catch (error) {
       toast(typeof error === 'string' ? error : '这一步没做成。');
@@ -477,24 +413,6 @@
   el('regenConfirm').addEventListener('click', () => {
     el('scrim').hidden = true;
     send('regenerate');
-  });
-
-  el('minBtn').addEventListener('click', () => send('minimize'));
-  el('closeBtn').addEventListener('click', () => send('close'));
-
-  // 拖动交给原生的 startDragging：注入脚本那条路要先有窗口权限，不稳。
-  const bar = document.querySelector('.titlebar');
-  bar.addEventListener('mousedown', (event) => {
-    if (event.button !== 0 || event.target.closest('.win-btn')) {
-      return;
-    }
-    send('drag');
-  });
-  bar.addEventListener('dblclick', (event) => {
-    if (event.target.closest('.win-btn')) {
-      return;
-    }
-    send('toggle-max');
   });
 
   document.addEventListener('keydown', (event) => {

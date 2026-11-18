@@ -10,7 +10,6 @@
     "allow-set-lan",
     "allow-regenerate-token",
     "allow-copy-text",
-    "allow-open-target",
-    "allow-window-ctl"
+    "allow-open-target"
   ]
 }
