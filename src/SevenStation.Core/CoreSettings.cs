@@ -55,7 +55,7 @@ public sealed class CoreSettings
             settings = new CoreSettings();
         }
 
-        var discovered = settings.DiscoverMissingAgents();
+        var discovered = settings.DiscoverMissingAgents() | settings.FillMissingHomes();
         if (!exists || discovered)
         {
             settings.Save(path);
@@ -130,6 +130,44 @@ public sealed class CoreSettings
         {
             yield return (item.Directory, item.Home);
         }
+    }
+
+    /// <summary>
+    /// 老配置里只记了目录没记家目录。目录在某个用户的家目录下时把家目录补上——
+    /// 中心作为服务跑，缺这一项 Pi 就会去找系统账户的 ~/.pi。
+    /// </summary>
+    public bool FillMissingHomes()
+    {
+        var changed = false;
+        foreach (var agent in Agents.Values)
+        {
+            if (!string.IsNullOrWhiteSpace(agent.Home) || string.IsNullOrWhiteSpace(agent.Directory))
+            {
+                continue;
+            }
+
+            var home = HomeOf(agent.Directory);
+            if (home is not null)
+            {
+                agent.Home = home;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    /// <summary>从 &lt;用户目录&gt;\.pigent 反推用户目录；不是这个形状就返回 null。</summary>
+    private static string? HomeOf(string agentDirectory)
+    {
+        var pi = Path.GetDirectoryName(agentDirectory);
+        if (pi is null || !string.Equals(Path.GetFileName(pi), ".pi", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var home = Path.GetDirectoryName(pi);
+        return string.IsNullOrEmpty(home) || !Directory.Exists(home) ? null : home;
     }
 
     private static bool IsUsable(AgentSettings? agent) =>

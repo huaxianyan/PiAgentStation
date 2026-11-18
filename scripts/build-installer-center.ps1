@@ -44,6 +44,7 @@ Remove-Item "$msi.sha256" -Force -ErrorAction SilentlyContinue
 Push-Location (Split-Path -Parent $installer)
 try {
     & $wix build (Split-Path -Leaf $installer) -arch x64 -o $msi `
+        -ext WixToolset.UI.wixext `
         -d "Version=$version" -d "PublishDir=$publish"
     if ($LASTEXITCODE -ne 0) { throw "打包失败" }
 } finally {
