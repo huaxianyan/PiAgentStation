@@ -193,7 +193,9 @@
   align-items: center;
   gap: 7px;
   padding: 5px 12px;
-  /* 描边用内阴影画：1 px 真 border 在 125% 缩放下会在圆弧上留台阶。 */
+  /* 描边用内阴影画：1 px 真 border 在 125% 缩放下会在圆弧上留台阶。
+     但 border 必须显式归零，否则按钮会退回浏览器默认的 outset 边框。 */
+  border: 0;
   box-shadow: inset 0 0 0 1px var(--border-strong);
   border-radius: var(--radius-pill);
   background: var(--card);
@@ -306,6 +308,8 @@ button { cursor: pointer; }
 .new-restore {
   flex: none; width: 34px;
   display: flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0;
   background: var(--card); box-shadow: inset 0 0 0 1px var(--border-strong);
   border-radius: var(--radius-sm); color: var(--text-mute);
   transition: background .12s, color .12s;
@@ -924,6 +928,7 @@ button { cursor: pointer; }
   height: 30px;
   padding: 0 10px 0 12px;
   background: var(--card);
+  border: 0;
   box-shadow: inset 0 0 0 1px var(--border-strong);
   border-radius: var(--radius-pill);
   font-size: 12.5px;
@@ -1160,6 +1165,7 @@ button { cursor: pointer; }
 .chip-btn {
   max-width: 100%;
   padding: 5px 10px;
+  border: 0;
   box-shadow: inset 0 0 0 1px var(--border-strong);
   border-radius: var(--radius-pill);
   background: var(--card);
@@ -2023,6 +2029,8 @@ body.dragging .composer-box {
 
 .modal.is-restore {
   width: min(760px, 100%);
+  /* 高度定死：切 Pi / magpie、出进度卡都只压缩对话区，卡片本身不长高。 */
+  height: min(535px, 82vh);
   max-height: 82vh;
   padding: 0;
   overflow: hidden;
@@ -2104,8 +2112,8 @@ body.dragging .composer-box {
 
 .restore-body {
   display: flex;
+  flex: 1;
   border-top: 1px solid var(--border);
-  height: 330px;
   min-height: 0;
 }
 
