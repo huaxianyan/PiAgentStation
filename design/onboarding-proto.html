@@ -50,6 +50,25 @@
   .log-area { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm);
     padding: 10px 12px; font-family: var(--mono); font-size: 12px; line-height: 1.75; color: var(--text-dim); white-space: pre-wrap; }
   .gap-note { font-size: 12px; color: var(--text-mute); margin: 0; }
+  /* B 三版输入：都贴产品现有控件的度量 */
+  .row-edit { display: flex; align-items: center; gap: 12px; padding: 3px 0; }
+  .row-edit .row-label { width: 76px; flex: none; font-size: 13px; color: var(--text-mute); }
+  .row-edit input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border-strong);
+    border-radius: 9px; font-size: 13px; font-family: var(--mono); color: var(--text); background: var(--card); }
+  .row-edit input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px rgba(201, 197, 246, .35); }
+
+  .pill-input { flex: 1; min-width: 0; height: 32px; padding: 0 14px; border: 1px solid var(--border);
+    background: var(--panel); border-radius: var(--radius-pill); font-family: var(--mono);
+    font-size: 12.5px; color: var(--text-dim); }
+
+  .kv-edit { display: flex; flex-direction: column; }
+  .kv-edit .kv-row { align-items: center; }
+  .kv-edit .kv-value { font-family: var(--mono); }
+  .tiny-btn { margin-left: auto; height: 24px; padding: 0 10px; border-radius: var(--radius-pill);
+    border: 1px solid var(--border-strong); background: var(--card); font-size: 12px; color: var(--text-dim);
+    font-family: inherit; }
+  .variant-label { font-size: 12px; color: var(--text-mute); margin: 0 0 6px; }
+
 </style>
 </head>
 <body>
@@ -124,42 +143,64 @@
     </div>
   </div>
 
-  <!-- ============ B 设置页（已配置） ============ -->
+  <!-- ============ B 设置页（三版输入） ============ -->
   <div>
-    <p class="proto-label">B · 设置页（已经配置好）</p>
-    <p class="proto-title">连接信息可改，改完立刻重连；日志卡片按钮与内容之间有间距。</p>
-    <div class="win" style="height:900px;">
+    <p class="proto-label">B · 设置页（已配置）—— 输入框三种写法，挑一个</p>
+    <p class="proto-title">同一张卡片，只换输入那两行的做法。右边都留了 10px 的日志间距版本在最后一节。</p>
+    <div class="win" style="height:auto;">
       <div class="settings">
         <div class="settings-inner">
-          <p class="settings-title">设置</p>
 
           <section class="page-card">
+            <p class="variant-label">B1 · 行内标签 + 产品现有输入样式（和上面「连接」那几行的节奏一致）</p>
             <h3>这台设备连的中心</h3>
             <p class="page-note">只影响这台设备。中心换了地址或者令牌换了，改这里保存，客户端立刻重连。</p>
-            <div class="path-row"><input value="http://127.0.0.1:8787/" spellcheck="false"></div>
-            <div class="path-row"><input value="9f3c1a7bce4028d5a6f4b81c3e07d296e5a1c48f7b2d6039" spellcheck="false"></div>
+            <div class="row-edit">
+              <span class="row-label">中心地址</span>
+              <input value="http://127.0.0.1:8787/" spellcheck="false">
+            </div>
+            <div class="row-edit">
+              <span class="row-label">访问令牌</span>
+              <input value="9f3c1a7bce4028d5a6f4b81c3e07d296e5a1c48f7b2d6039" spellcheck="false">
+            </div>
             <p class="page-note">现在用的是这台设备保存的地址。令牌已保存（48 位）。</p>
             <div class="center-actions"><button class="ghost-btn">保存并重连</button></div>
           </section>
 
           <section class="page-card">
-            <h3>连接</h3>
-            <div class="kv">
-              <div class="kv-row"><span class="kv-key">中心</span><span class="kv-value">http://127.0.0.1:8787</span></div>
-              <div class="kv-row"><span class="kv-key">版本</span><span class="kv-value">0.3.0.0</span></div>
-              <div class="kv-row"><span class="kv-key">状态</span><span class="kv-value">已连接</span></div>
-              <div class="kv-row"><span class="kv-key">数据文件</span><span class="kv-value">C:\ProgramData\SevenStation.Core\data\sevenstation.db</span></div>
+            <p class="variant-label">B2 · 胶囊输入（和「最近工作区」那种 chip 同一套圆角与底色）</p>
+            <h3>这台设备连的中心</h3>
+            <p class="page-note">只影响这台设备。中心换了地址或者令牌换了，改这里保存，客户端立刻重连。</p>
+            <div class="row-edit">
+              <span class="row-label">中心地址</span>
+              <input class="pill-input" value="http://127.0.0.1:8787/" spellcheck="false">
             </div>
+            <div class="row-edit">
+              <span class="row-label">访问令牌</span>
+              <input class="pill-input" value="9f3c1a7bce4028d5a6f4b81c3e07d296e5a1c48f7b2d6039" spellcheck="false">
+            </div>
+            <p class="page-note">现在用的是这台设备保存的地址。令牌已保存（48 位）。</p>
+            <div class="center-actions"><button class="ghost-btn">保存并重连</button></div>
           </section>
 
           <section class="page-card">
-            <h3>日志</h3>
-            <p class="page-note">中心那边的运行日志，排查问题时看这里。</p>
-            <div class="center-actions"><button class="ghost-btn">读最近日志</button></div>
-            <div class="log-area" style="margin-top:10px;">2026-11-18 18:34:11.765 配置里缺的 Agent 已补上：C:\ProgramData\SevenStation.Core\settings.json
-2026-11-18 18:34:11.862 对话库：C:\ProgramData\SevenStation.Core\data\sevenstation.db
-2026-11-18 18:34:22.995 客户端连上 c-b626c5e3</div>
+            <p class="variant-label">B3 · 平时只读，点「修改」才变成输入（最贴近设置页原本的只读气质）</p>
+            <h3>这台设备连的中心</h3>
+            <p class="page-note">只影响这台设备。中心换了地址或者令牌换了，改这里保存，客户端立刻重连。</p>
+            <div class="kv kv-edit">
+              <div class="kv-row">
+                <span class="kv-key">中心地址</span>
+                <span class="kv-value">http://127.0.0.1:8787/</span>
+                <button class="tiny-btn">修改</button>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">访问令牌</span>
+                <span class="kv-value">已保存（48 位）</span>
+              </div>
+            </div>
+            <p class="page-note">中心换了地址或者令牌换了，点「修改」再保存，客户端立刻重连。</p>
           </section>
+
         </div>
       </div>
     </div>
