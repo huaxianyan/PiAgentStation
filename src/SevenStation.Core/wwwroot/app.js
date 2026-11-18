@@ -126,6 +126,7 @@ const app = {
   dirty: new Set(),
   frame: 0,
   nodeCache: new Map(),
+  restore: null,
 };
 
 function current() {
@@ -210,6 +211,7 @@ const el = {
   compactBtn: document.getElementById('compactBtn'),
   ctxUsage: document.getElementById('ctxUsage'),
   newSessionBtn: document.getElementById('newSessionBtn'),
+  restoreSessionBtn: document.getElementById('restoreSessionBtn'),
   emptyNewBtn: document.getElementById('emptyNewBtn'),
   overlay: document.getElementById('overlay'),
   overlayText: document.getElementById('overlayText'),
@@ -1910,6 +1912,414 @@ function renderDirListing(payload) {
   });
 }
 
+/* ------------------------------ 恢复会话 ------------------------------ */
+
+/**
+ * 从 Pi 那边把旧会话收回来：左边按工作区分组，右边先看这段讲的是什么再决定恢复。
+ * magpie 给的是整条 `pi --session <id>` 命令，切到那一栏粘进去，中心负责解析。
+ */
+function openRestoreDialog() {
+  app.restore = {
+    source: 'pi',
+    items: null,
+    loading: true,
+    filter: '',
+    selectedId: null,
+    command: '',
+    commandBusy: false,
+    commandResult: null,
+    commandError: '',
+  };
+
+  const card = document.createElement('div');
+  card.className = 'modal is-restore';
+  el.modal.innerHTML = '';
+  el.modal.appendChild(card);
+  el.modal.hidden = false;
+
+  send({ type: 'list_restore_candidates' });
+  renderRestoreDialog();
+}
+
+function renderRestoreDialog() {
+  const state = app.restore;
+  const card = el.modal.querySelector('.is-restore');
+  if (!state || !card) return;
+
+  card.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className = 'restore-head';
+  const title = document.createElement('h3');
+  title.textContent = '恢复会话';
+  head.appendChild(title);
+
+  const sources = document.createElement('div');
+  sources.className = 'restore-sources';
+
+  const piChip = document.createElement('button');
+  piChip.className = 'chip' + (state.source === 'pi' ? ' is-on' : '');
+  piChip.textContent = state.items ? 'Pi · ' + state.items.length + ' 段' : 'Pi';
+  piChip.addEventListener('click', () => {
+    if (state.source === 'pi') return;
+    state.source = 'pi';
+    renderRestoreDialog();
+  });
+  sources.appendChild(piChip);
+
+  const magpieChip = document.createElement('button');
+  magpieChip.className = 'chip' + (state.source === 'magpie' ? ' is-on' : '');
+  magpieChip.textContent = 'magpie 命令';
+  magpieChip.addEventListener('click', () => {
+    if (state.source === 'magpie') return;
+    state.source = 'magpie';
+    renderRestoreDialog();
+  });
+  sources.appendChild(magpieChip);
+  head.appendChild(sources);
+  card.appendChild(head);
+
+  if (state.source === 'pi') {
+    card.appendChild(makeRestoreSearch(state));
+  } else {
+    card.appendChild(makeRestoreCommandBar(state));
+  }
+
+  const body = document.createElement('div');
+  body.className = 'restore-body' + (state.source === 'magpie' ? ' is-single' : '');
+
+  // 命令那一栏只对应一段会话，不用分左右；列表那一栏才需要。
+  if (state.source === 'pi') {
+    body.appendChild(makeRestoreList(state));
+  }
+
+  const preview = document.createElement('div');
+  preview.className = 'restore-preview';
+  body.appendChild(preview);
+  card.appendChild(body);
+
+  renderRestorePreview(state, preview);
+  card.appendChild(makeRestoreFoot(state));
+}
+
+function makeRestoreSearch(state) {
+  const row = document.createElement('div');
+  row.className = 'restore-search';
+
+  const mag = document.createElement('span');
+  mag.className = 'mag';
+  mag.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7.2" cy="7.2" r="4.2"/><path d="m10.4 10.4 3 3"/></svg>';
+  row.appendChild(mag);
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = '搜标题或工作区';
+  input.value = state.filter;
+  row.appendChild(input);
+
+  // 输入时只重画列表，不重画输入框，否则光标每敲一下就跳回开头。
+  input.addEventListener('input', () => {
+    state.filter = input.value;
+    const list = el.modal.querySelector('.restore-list');
+    const preview = el.modal.querySelector('.restore-preview');
+    if (!list || !preview) return;
+    const fresh = makeRestoreList(state);
+    list.replaceWith(fresh);
+    renderRestorePreview(state, preview);
+    const foot = el.modal.querySelector('.restore-count');
+    if (foot) foot.textContent = restoreCountText(state);
+    const btn = el.modal.querySelector('.restore-buttons .primary-btn');
+    if (btn) btn.disabled = !currentRestoreTarget(state);
+  });
+
+  return row;
+}
+
+function makeRestoreCommandBar(state) {
+  const wrap = document.createElement('div');
+  wrap.className = 'restore-command';
+
+  const box = document.createElement('textarea');
+  box.className = 'restore-command-input';
+  box.rows = 2;
+  box.spellcheck = false;
+  box.placeholder = "Set-Location -LiteralPath 'E:\\Dev\\Android'; pi --session 01a1ed4e-…";
+  box.value = state.command;
+  box.addEventListener('input', () => {
+    state.command = box.value;
+    state.commandResult = null;
+    state.commandError = '';
+  });
+  wrap.appendChild(box);
+
+  const actions = document.createElement('div');
+  actions.className = 'restore-command-actions';
+
+  const hint = document.createElement('span');
+  hint.className = 'restore-hint' + (state.commandError ? ' is-bad' : '');
+  hint.textContent = state.commandError
+    || (state.commandResult?.item ? '找到了，下面这段对就恢复。' : '把 magpie 给的那条命令整段粘进来。');
+  actions.appendChild(hint);
+
+  const pick = document.createElement('button');
+  pick.className = 'ghost-btn small';
+  pick.textContent = state.commandBusy ? '正在找…' : '找这段会话';
+  pick.disabled = state.commandBusy;
+  pick.addEventListener('click', () => {
+    const command = state.command.trim();
+    if (!command) {
+      state.commandError = '先把命令粘进来。';
+      renderRestoreDialog();
+      return;
+    }
+
+    state.commandBusy = true;
+    state.commandError = '';
+    renderRestoreDialog();
+    send({ type: 'resolve_resume_command', command });
+  });
+  actions.appendChild(pick);
+
+  wrap.appendChild(actions);
+  return wrap;
+}
+
+function makeRestoreList(state) {
+  const list = document.createElement('div');
+  list.className = 'restore-list';
+
+  const notice = document.createElement('div');
+  notice.className = 'restore-empty';
+  if (state.loading) {
+    notice.textContent = '正在读 Pi 那边的会话…';
+    list.appendChild(notice);
+    return list;
+  }
+
+  const items = filterRestoreItems(state);
+  if (!items.length) {
+    notice.textContent = state.filter ? '没有匹配的会话，换个词试试。' : 'Pi 那边还没有会话记录。';
+    list.appendChild(notice);
+    return list;
+  }
+
+  if (!state.selectedId || !items.some((item) => item.id === state.selectedId)) {
+    const first = items.find((item) => !item.imported) || items[0];
+    state.selectedId = first.id;
+  }
+
+  let currentGroup = null;
+  for (const item of items) {
+    const group = workspaceName(item.cwd);
+    if (group !== currentGroup) {
+      currentGroup = group;
+      const head = document.createElement('div');
+      head.className = 'restore-group';
+      head.textContent = group;
+      const path = document.createElement('span');
+      path.textContent = ' · ' + (item.cwd || '（没记工作区）');
+      head.appendChild(path);
+      list.appendChild(head);
+    }
+
+    const row = document.createElement('button');
+    row.className = 'restore-row';
+    row.classList.toggle('is-selected', item.id === state.selectedId);
+    row.classList.toggle('is-imported', Boolean(item.imported));
+
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = item.title || '（没有内容的会话）';
+    row.appendChild(name);
+
+    const when = document.createElement('span');
+    when.className = 'when';
+    when.textContent = shortWhen(item.startedAt);
+    row.appendChild(when);
+
+    if (item.imported) {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = '已恢复';
+      row.appendChild(badge);
+    }
+
+    row.addEventListener('click', () => {
+      state.selectedId = item.id;
+      renderRestoreDialog();
+    });
+    list.appendChild(row);
+  }
+
+  return list;
+}
+
+function currentRestoreTarget(state) {
+  if (state.source === 'magpie') {
+    return state.commandResult && state.commandResult.item;
+  }
+
+  return filterRestoreItems(state).find((item) => item.id === state.selectedId) || null;
+}
+
+function filterRestoreItems(state) {
+  const items = state.items || [];
+  const needle = state.filter.trim().toLowerCase();
+  if (!needle) return items;
+
+  return items.filter((item) =>
+    String(item.title || '').toLowerCase().includes(needle) ||
+    String(item.cwd || '').toLowerCase().includes(needle) ||
+    workspaceName(item.cwd).toLowerCase().includes(needle));
+}
+
+function renderRestorePreview(state, preview) {
+  preview.innerHTML = '';
+  const item = currentRestoreTarget(state);
+
+  if (!item) {
+    const hint = document.createElement('div');
+    hint.className = 'restore-empty';
+    hint.textContent = state.source === 'magpie'
+      ? '命令对上之后，这里会显示这一段讲的是什么。'
+      : '左边挑一段，这里会先显示它讲的是什么。';
+    preview.appendChild(hint);
+    return;
+  }
+
+  const title = document.createElement('p');
+  title.className = 'preview-title';
+  title.textContent = item.title || '（没有内容的会话）';
+  preview.appendChild(title);
+
+  const facts = document.createElement('div');
+  facts.className = 'preview-facts';
+  for (const text of [
+    item.messageCount + ' 条消息',
+    formatBytes(item.sizeBytes),
+    shortDate(item.startedAt),
+    item.model || '',
+  ]) {
+    if (!text) continue;
+    const part = document.createElement('span');
+    part.textContent = text;
+    facts.appendChild(part);
+  }
+  preview.appendChild(facts);
+
+  const cwd = document.createElement('div');
+  cwd.className = 'preview-cwd';
+  cwd.textContent = item.cwd || '（这段会话没记工作区）';
+  preview.appendChild(cwd);
+
+  if (item.lastMessage) {
+    const quote = document.createElement('p');
+    quote.className = 'preview-quote';
+    const who = document.createElement('span');
+    who.className = 'who';
+    who.textContent = '最近一条回复';
+    quote.appendChild(who);
+    quote.appendChild(document.createTextNode(item.lastMessage));
+    preview.appendChild(quote);
+  }
+
+  if (item.imported) {
+    const done = document.createElement('div');
+    done.className = 'preview-done';
+    done.textContent = '这段已经在对话库里了，恢复会直接打开原来那一段。';
+    preview.appendChild(done);
+  }
+}
+
+function restoreCountText(state) {
+  if (state.source === 'pi' && state.items) {
+    const imported = state.items.filter((item) => item.imported).length;
+    return state.items.length + ' 段 · 已恢复 ' + imported + ' 段';
+  }
+
+  if (state.source === 'magpie' && state.commandResult?.item) {
+    return state.commandResult.item.imported ? '这段已经恢复过' : '这段还没恢复';
+  }
+
+  return '';
+}
+
+function makeRestoreFoot(state) {
+  const foot = document.createElement('div');
+  foot.className = 'restore-foot';
+
+  const count = document.createElement('span');
+  count.className = 'restore-count';
+  count.textContent = restoreCountText(state);
+  foot.appendChild(count);
+
+  const buttons = document.createElement('div');
+  buttons.className = 'restore-buttons';
+
+  const cancel = document.createElement('button');
+  cancel.className = 'ghost-btn';
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', () => {
+    closeModal();
+    app.restore = null;
+  });
+  buttons.appendChild(cancel);
+
+  const target = currentRestoreTarget(state);
+  const restore = document.createElement('button');
+  restore.className = 'primary-btn';
+  restore.textContent = '恢复这段';
+  restore.disabled = !target;
+  restore.addEventListener('click', () => {
+    const chosen = currentRestoreTarget(state);
+    if (!chosen) return;
+    restore.disabled = true;
+    restore.textContent = '正在恢复…';
+    send({ type: 'restore_session', sessionId: chosen.id });
+  });
+  buttons.appendChild(restore);
+
+  foot.appendChild(buttons);
+  return foot;
+}
+
+function workspaceName(cwd) {
+  if (!cwd) return '（没记工作区）';
+  const parts = String(cwd).split(/[\\/]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : cwd;
+}
+
+function formatBytes(bytes) {
+  const size = Number(bytes) || 0;
+  if (size >= 1024 * 1024) return (size / 1024 / 1024).toFixed(1) + ' MB';
+  if (size >= 1024) return Math.round(size / 1024) + ' KB';
+  return size + ' B';
+}
+
+function shortDate(ms) {
+  const value = Number(ms) || 0;
+  if (!value) return '';
+  const date = new Date(value);
+  const pad = (number) => String(number).padStart(2, '0');
+  const day = pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+  const time = pad(date.getHours()) + ':' + pad(date.getMinutes());
+  return date.getFullYear() === new Date().getFullYear() ? day + ' ' + time : date.getFullYear() + '-' + day;
+}
+
+function shortWhen(ms) {
+  const value = Number(ms) || 0;
+  if (!value) return '';
+  const date = new Date(value);
+  const now = new Date();
+  const pad = (number) => String(number).padStart(2, '0');
+  if (date.toDateString() === now.toDateString()) {
+    return pad(date.getHours()) + ':' + pad(date.getMinutes());
+  }
+  return date.getFullYear() === now.getFullYear()
+    ? pad(date.getMonth() + 1) + '-' + pad(date.getDate())
+    : String(date.getFullYear());
+}
+
 function askCwd() {
   // 桌面壳里直接开系统的选目录对话框，省掉中间那层自己画的。
   if (shell) {
@@ -2733,6 +3143,8 @@ function requestExtensions() {
   }
   send({ type: 'list_extensions', cwd: app.activeCwd || app.lastCwd || '' });
 }
+
+el.restoreSessionBtn.addEventListener('click', openRestoreDialog);
 
 el.newSessionBtn.addEventListener('click', () => {
   switchView('chat');
@@ -3668,6 +4080,46 @@ function dispatch(message) {
     case 'conversation_saved':
       send({ type: 'list_conversations' });
       break;
+
+    case 'resume_resolved':
+      if (app.restore) {
+        app.restore.commandBusy = false;
+        app.restore.commandResult = { item: message.item, cwd: message.cwd };
+        if (!message.item) {
+          app.restore.commandError = '没找到这段会话。';
+        }
+        renderRestoreDialog();
+      }
+      break;
+
+    case 'restore_candidates':
+      if (app.restore) {
+        app.restore.items = message.items || [];
+        app.restore.loading = false;
+        renderRestoreDialog();
+      }
+      break;
+
+    case 'session_restored': {
+      const state = app.restore;
+      closeModal();
+      app.restore = null;
+      if (state) {
+        const conversation = app.sessions.find((item) => item.id === message.id);
+        if (conversation) {
+          openSession(conversation);
+        } else {
+          send({ type: 'list_conversations' });
+        }
+      }
+
+      if (message.already) {
+        toast('这段会话早就在对话库里了，已经帮你打开。');
+      } else {
+        toast('已恢复 ' + message.messageCount + ' 条消息，可以接着聊。');
+      }
+      break;
+    }
 
     case 'conversation_settings': {
       const session = app.byKey.get(message.key);

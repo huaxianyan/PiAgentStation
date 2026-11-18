@@ -295,6 +295,19 @@ button { cursor: pointer; }
 .sidebar-head .icon-btn { width: 30px; height: 30px; background: var(--card); }
 .sidebar-head .icon-btn:hover { background: var(--card); box-shadow: 0 1px 2px rgba(16, 16, 20, .06); }
 
+/* 「新建对话」旁边常驻的恢复按钮：平时只要一个图标位，不占侧栏的第二行。 */
+.new-row { display: flex; gap: 6px; align-items: stretch; margin-bottom: 6px; }
+.new-row .new-thread { margin-bottom: 0; }
+.new-restore {
+  flex: none; width: 38px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--card); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); color: var(--text-mute);
+  transition: background .12s, color .12s;
+}
+.new-restore svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.new-restore:hover { background: var(--panel); color: var(--text-dim); }
+
 .new-thread {
   display: flex;
   align-items: center;
@@ -2007,6 +2020,183 @@ body.dragging .composer-box {
   background: rgba(24, 24, 27, .28);
   z-index: 30;
 }
+
+/* ------------------------------ 恢复会话 ------------------------------ */
+
+.modal.is-restore {
+  width: min(760px, 100%);
+  max-height: 82vh;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.restore-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px 12px;
+}
+.restore-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+
+.restore-sources { display: flex; gap: 6px; }
+.restore-sources .chip {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  color: var(--text-soft);
+  font-size: 12px;
+}
+.restore-sources .chip.is-on { border-color: var(--border-strong); background: var(--card); color: var(--text); }
+
+.restore-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 18px 12px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+}
+.restore-search .mag { display: flex; }
+.restore-search .mag svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+.restore-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.restore-command { margin: 0 18px 12px; display: flex; flex-direction: column; gap: 8px; }
+/* 选择器带上 .modal，否则被通用的 .modal textarea（min-height: 140px）压住。 */
+.modal .restore-command-input {
+  width: 100%;
+  height: 54px;
+  min-height: 54px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: var(--card);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+.modal .restore-command-input:focus { border-color: var(--focus); box-shadow: 0 0 0 3px rgba(201, 197, 246, .35); }
+.restore-command-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.restore-hint { font-size: 11.5px; color: var(--text-faint); }
+.restore-hint.is-bad { color: var(--danger); }
+
+.restore-body {
+  display: flex;
+  border-top: 1px solid var(--border);
+  height: 330px;
+  min-height: 0;
+}
+
+.restore-list {
+  width: 348px;
+  flex: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-right: 1px solid var(--border);
+  padding: 6px 6px 10px;
+}
+.restore-group { padding: 10px 10px 4px; font-size: 11.5px; color: var(--text-mute); }
+.restore-group span { color: var(--text-faint); }
+
+.restore-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+.restore-row:hover { background: var(--panel); }
+.restore-row.is-selected { background: var(--active); color: var(--text); }
+.restore-row.is-imported { color: var(--text-faint); }
+.restore-row .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.restore-row .when { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; }
+.restore-row .badge {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.restore-body.is-single .restore-preview { width: 100%; }
+
+.restore-preview {
+  flex: 1;
+  min-width: 0;
+  padding: 16px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.preview-title { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.6; }
+.preview-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.preview-cwd { font-family: var(--mono); font-size: 11.5px; color: var(--text-mute); word-break: break-all; }
+.preview-done { font-size: 12px; color: var(--text-mute); }
+.preview-quote {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--text-soft);
+}
+.preview-quote .who { display: block; margin-bottom: 3px; font-size: 11px; color: var(--text-faint); }
+
+.restore-empty {
+  padding: 18px 14px;
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: var(--text-faint);
+}
+
+.restore-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.restore-count { font-size: 11.5px; color: var(--text-faint); }
+.restore-buttons { display: flex; gap: 8px; }
 
 .modal {
   width: min(440px, 100%);

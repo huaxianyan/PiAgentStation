@@ -78,20 +78,31 @@ public sealed class ConversationStore : IDisposable
 
     public string DatabasePath => _connection.DataSource;
 
-    public Conversation Create(string cwd, string? title = null)
+    /// <summary>
+    /// 建一段对话。<paramref name="piSessionFile"/> 有值时这段绑定到 Pi 已有的会话文件上——
+    /// 恢复旧会话就走这条路，之后续聊还是那个 Pi 会话。
+    /// </summary>
+    public Conversation Create(
+        string cwd,
+        string? title = null,
+        string? piSessionFile = null,
+        long? startedAt = null)
     {
         var now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        var created = startedAt is > 0 ? startedAt.Value : now;
         var id = "c-" + Guid.NewGuid().ToString("N")[..12];
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
             command.CommandText = """
-                INSERT INTO conversations (id, title, cwd, created_at, updated_at)
-                VALUES ($id, $title, $cwd, $now, $now);
+                INSERT INTO conversations (id, title, cwd, pi_session_file, created_at, updated_at)
+                VALUES ($id, $title, $cwd, $file, $created, $now);
                 """;
             command.Parameters.AddWithValue("$id", id);
             command.Parameters.AddWithValue("$title", title ?? string.Empty);
             command.Parameters.AddWithValue("$cwd", cwd);
+            command.Parameters.AddWithValue("$file", (object?)piSessionFile ?? DBNull.Value);
+            command.Parameters.AddWithValue("$created", created);
             command.Parameters.AddWithValue("$now", now);
             command.ExecuteNonQuery();
         }

@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using SevenStation.Core.Rpc;
 using SevenStation.Core.Agents;
+using SevenStation.Core.Sessions;
 using SevenStation.Core.Storage;
 using SevenStation.Shared;
 
@@ -178,6 +179,18 @@ public sealed class CenterHub
                     _ = SendExtensionsAsync(message["cwd"]?.GetValue<string>() ?? string.Empty, sender);
                     break;
 
+                case "list_restore_candidates":
+                    SendRestoreCandidates(sender);
+                    break;
+
+                case "resolve_resume_command":
+                    ResolveResumeCommand(message["command"]?.GetValue<string>() ?? string.Empty, sender);
+                    break;
+
+                case "restore_session":
+                    RestoreSession(message, sender);
+                    break;
+
                 case "browse_dir":
                     BrowseDirectory(message["path"]?.GetValue<string>() ?? string.Empty, sender);
                     break;
@@ -244,6 +257,119 @@ public sealed class CenterHub
 
     private Conversation RequireConversation(string id) =>
         _store.Get(id) ?? throw new InvalidOperationException("这个对话已经不在了。");
+
+    /// <summary>
+    /// magpie 那边给的是一整条命令（`Set-Location -LiteralPath '...'; pi --session &lt;id&gt;`），
+    /// 这里把它翻译成一段具体的会话，界面先给用户看一眼再决定恢复。
+    /// </summary>
+    private void ResolveResumeCommand(string command, CenterConnection sender)
+    {
+        var (id, cwd) = PiSessionLibrary.ParseResumeCommand(command);
+        var candidate = id is null ? null : PiSessionLibrary.Resolve(id);
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "resume_resolved",
+            ["cwd"] = cwd ?? candidate?.Cwd ?? string.Empty,
+            ["item"] = candidate is null
+                ? null
+                : new JsonObject
+                {
+                    ["id"] = candidate.Id,
+                    ["cwd"] = candidate.Cwd,
+                    ["title"] = candidate.Title,
+                    ["startedAt"] = candidate.StartedAt,
+                    ["messageCount"] = candidate.MessageCount,
+                    ["sizeBytes"] = candidate.SizeBytes,
+                    ["model"] = candidate.Model,
+                    ["lastMessage"] = candidate.LastMessage,
+                    ["imported"] = _store.List().Any(conversation =>
+                        string.Equals(conversation.PiSessionFile, candidate.Path, StringComparison.OrdinalIgnoreCase)),
+                },
+        });
+    }
+
+    /// <summary>
+    /// 恢复会话页：Pi 那边还有哪些会话、哪些已经收进对话库了。
+    /// </summary>
+    private void SendRestoreCandidates(CenterConnection sender)
+    {
+        var imported = _store.List()
+            .Select(conversation => conversation.PiSessionFile)
+            .Where(file => !string.IsNullOrWhiteSpace(file))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var items = new JsonArray();
+        foreach (var candidate in PiSessionLibrary.Scan())
+        {
+            items.Add(new JsonObject
+            {
+                ["id"] = candidate.Id,
+                ["cwd"] = candidate.Cwd,
+                ["title"] = candidate.Title,
+                ["startedAt"] = candidate.StartedAt,
+                ["messageCount"] = candidate.MessageCount,
+                ["sizeBytes"] = candidate.SizeBytes,
+                ["model"] = candidate.Model,
+                ["lastMessage"] = candidate.LastMessage,
+                ["imported"] = imported.Contains(candidate.Path),
+            });
+        }
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "restore_candidates",
+            ["items"] = items,
+        });
+    }
+
+    /// <summary>
+    /// 把一段 Pi 会话收进对话库：对话绑定到那个会话文件，消息按原样搬进来。
+    /// 之后续聊还是原来那个 Pi 会话，这里不复制出第二个。
+    /// </summary>
+    private void RestoreSession(JsonObject message, CenterConnection sender)
+    {
+        var id = Require(message["sessionId"]?.GetValue<string>() ?? string.Empty, "会话标识");
+        var candidate = PiSessionLibrary.Resolve(id)
+            ?? throw new InvalidOperationException("中心这台机器上找不到这段会话，可能已经被删掉了。");
+
+        var existing = _store.List()
+            .FirstOrDefault(conversation =>
+                string.Equals(conversation.PiSessionFile, candidate.Path, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            sender.Send(new JsonObject
+            {
+                ["type"] = "session_restored",
+                ["id"] = existing.Id,
+                ["already"] = true,
+                ["messageCount"] = existing.MessageCount,
+            });
+            return;
+        }
+
+        var cwd = candidate.Cwd;
+        if (string.IsNullOrWhiteSpace(cwd))
+        {
+            throw new InvalidOperationException("这段会话没有记下工作目录，先手工建一个对话再接着聊。");
+        }
+
+        var conversation = _store.Create(cwd, candidate.Title, candidate.Path, candidate.StartedAt);
+        var added = _store.AppendMessages(conversation.Id, PiSessionLibrary.ReadMessages(candidate.Path).ToArray());
+
+        Log.Write($"恢复会话 {candidate.Id} → {conversation.Id}（{added} 条消息）");
+        Broadcast(new JsonObject { ["type"] = "conversation_saved" });
+        SendConversationList(sender);
+
+        sender.Send(new JsonObject
+        {
+            ["type"] = "session_restored",
+            ["id"] = conversation.Id,
+            ["already"] = false,
+            ["messageCount"] = added,
+        });
+    }
 
     private void SendConversationList(CenterConnection sender)
     {
