@@ -445,6 +445,9 @@ button { cursor: pointer; }
   background: var(--border-strong);
 }
 
+/* 跑完的对话是绿的；灰色只留给还没开始的空对话。 */
+.session-dot.is-ready { background: var(--green); }
+
 .session-spin {
   width: 12px;
   height: 12px;

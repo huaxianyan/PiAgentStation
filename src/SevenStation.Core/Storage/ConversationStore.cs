@@ -361,6 +361,73 @@ public sealed class ConversationStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// 追加消息，不动已有内容。用在一轮还没结束的时候：用户的话和每一步的
+    /// 结果一产生就落库，中途切走再切回来才看得见这段正在跑的内容。
+    /// 轮次结束时 <see cref="SaveTurn"/> 会拿 Pi 那边的完整消息整体替换，能自愈。
+    /// </summary>
+    public int AppendMessages(string id, IEnumerable<JsonNode?> messages)
+    {
+        var added = 0;
+        var now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        lock (_gate)
+        {
+            using var transaction = _connection.BeginTransaction();
+
+            long seq;
+            using (var next = _connection.CreateCommand())
+            {
+                next.Transaction = transaction;
+                next.CommandText =
+                    "SELECT COALESCE(MAX(seq), -1) + 1 FROM messages WHERE conversation_id = $id;";
+                next.Parameters.AddWithValue("$id", id);
+                seq = Convert.ToInt64(next.ExecuteScalar() ?? 0L);
+            }
+
+            foreach (var message in messages)
+            {
+                if (message is null)
+                {
+                    continue;
+                }
+
+                var json = message.ToJsonString();
+                using var insert = _connection.CreateCommand();
+                insert.Transaction = transaction;
+                insert.CommandText = """
+                    INSERT INTO messages (conversation_id, seq, payload, text)
+                    VALUES ($id, $seq, $payload, $text);
+                    """;
+                insert.Parameters.AddWithValue("$id", id);
+                insert.Parameters.AddWithValue("$seq", seq);
+                insert.Parameters.AddWithValue("$payload", json);
+                insert.Parameters.AddWithValue("$text", PayloadText(json));
+                insert.ExecuteNonQuery();
+                seq += 1;
+                added += 1;
+            }
+
+            if (added > 0)
+            {
+                using var update = _connection.CreateCommand();
+                update.Transaction = transaction;
+                update.CommandText = """
+                    UPDATE conversations
+                    SET updated_at = $now,
+                        message_count = (SELECT COUNT(*) FROM messages WHERE conversation_id = $id)
+                    WHERE id = $id;
+                    """;
+                update.Parameters.AddWithValue("$id", id);
+                update.Parameters.AddWithValue("$now", now);
+                update.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+        }
+
+        return added;
+    }
+
     public void Rename(string id, string title)
     {
         lock (_gate)

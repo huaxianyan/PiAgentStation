@@ -20,6 +20,9 @@ public sealed class CenterHub
         public required Conversation Conversation { get; init; }
         public required PiSession Session { get; init; }
         public bool Streaming { get; set; }
+
+        /// <summary>本轮已经写进库的消息指纹，同一条只落一次。</summary>
+        public HashSet<string> Persisted { get; } = new();
     }
 
     public static readonly JsonSerializerOptions SerializerOptions = new()
@@ -261,6 +264,8 @@ public sealed class CenterHub
                 ["updatedAt"] = conversation.UpdatedAt,
                 ["messageCount"] = conversation.MessageCount,
                 ["working"] = working,
+                // 跑完的对话是「完成」，空对话才是「没开始」，界面上用不同颜色区分。
+                ["status"] = working ? "working" : conversation.MessageCount > 0 ? "ready" : "empty",
             });
         }
 
@@ -1311,11 +1316,26 @@ public sealed class CenterHub
             if (name == "agent_start")
             {
                 live.Streaming = true;
+                // 新一轮从零开始记，判重集合不用一直长。
+                lock (live.Persisted)
+                {
+                    live.Persisted.Clear();
+                }
             }
             else if (name == "agent_settled")
             {
                 live.Streaming = false;
                 _ = PersistTurnAsync(live);
+            }
+            else if (name == "message_end")
+            {
+                // 用户的话和模型每段输出一产生就落库：这一轮还没结束，
+                // 中途切到别的对话再切回来，看到的不是空白。
+                AppendLiveMessage(live, record["message"] as JsonObject);
+            }
+            else if (name == "tool_execution_end")
+            {
+                AppendLiveMessage(live, ToolResultMessage(record));
             }
 
             Broadcast(new JsonObject
@@ -1356,6 +1376,70 @@ public sealed class CenterHub
         Broadcast(new JsonObject { ["type"] = "conversation_saved", ["key"] = conversation.Id });
 
         return live;
+    }
+
+    /// <summary>把一条消息追加进库，同一轮里重复的事件不重复写。</summary>
+    private void AppendLiveMessage(Live live, JsonObject? message)
+    {
+        if (message is null)
+        {
+            return;
+        }
+
+        var role = message["role"]?.GetValue<string>();
+        if (role is not ("user" or "assistant" or "toolResult"))
+        {
+            return;
+        }
+
+        // 工具结果按调用号判重，其它按时间点；拿不到标识就照写，宁可多一条也不漏。
+        var identity = role == "toolResult"
+            ? message["toolCallId"]?.GetValue<string>()
+            : message["timestamp"]?.ToJsonString();
+
+        lock (live.Persisted)
+        {
+            if (!string.IsNullOrEmpty(identity) && !live.Persisted.Add(role + ":" + identity))
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            _store.AppendMessages(live.Conversation.Id, new JsonNode?[] { message.DeepClone() });
+        }
+        catch (Exception ex)
+        {
+            // 落不下来只是这段历史少一截，不能让正在跑的这一轮跟着挂。
+            Log.Write($"对话 {live.Conversation.Id} 追加消息失败", ex);
+        }
+    }
+
+    /// <summary>
+    /// 工具结果事件转成 Pi 的消息形状，跟历史里存的那条一致，
+    /// 这样中途切回来、完成后再看，走的是同一套渲染。
+    /// </summary>
+    private static JsonObject? ToolResultMessage(JsonObject record)
+    {
+        var id = record["toolCallId"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(id))
+        {
+            return null;
+        }
+
+        return new JsonObject
+        {
+            ["role"] = "toolResult",
+            ["toolCallId"] = id,
+            ["toolName"] = record["toolName"]?.GetValue<string>(),
+            ["content"] = record["result"] is JsonObject result && result["content"] is JsonArray content
+                ? content.DeepClone()
+                : new JsonArray(),
+            ["isError"] = record["isError"]?.GetValue<bool>() ?? false,
+            ["durationMs"] = record["durationMs"]?.GetValue<long>() ?? 0,
+            ["timestamp"] = DateTimeOffset.Now.ToUnixTimeMilliseconds(),
+        };
     }
 
     /// <summary>一轮结束后把 Pi 那边的消息取回来，存成 SevenStation.Core 自己的副本。</summary>

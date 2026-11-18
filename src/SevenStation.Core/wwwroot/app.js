@@ -186,7 +186,6 @@ const el = {
   workspacePill: document.getElementById('workspacePill'),
   workspacePillText: document.getElementById('workspacePillText'),
   wsSelectText: document.getElementById('wsSelectText'),
-  content: document.getElementById('content'),
   windowEl: document.getElementById('app'),
   main: document.querySelector('.main'),
   crumbSep: document.getElementById('crumbSep'),
@@ -567,6 +566,11 @@ function blocksFromMessage(message) {
   }).filter(Boolean);
 }
 
+function messageTimestamp(message) {
+  const value = message && message.timestamp;
+  return typeof value === 'number' && value > 0 ? value : 0;
+}
+
 function buildItems(messages) {
   const items = [];
   const toolIndex = new Map();
@@ -580,9 +584,17 @@ function buildItems(messages) {
         kind: 'user',
         text: contentText(message.content),
         images: contentImages(message.content),
+        ts: messageTimestamp(message),
       });
     } else if (message.role === 'assistant') {
-      const item = { id: 'i' + seq++, kind: 'assistant', blocks: blocksFromMessage(message), streaming: false };
+      const item = {
+        id: 'i' + seq++,
+        kind: 'assistant',
+        blocks: blocksFromMessage(message),
+        streaming: false,
+        ts: messageTimestamp(message),
+        endTs: messageTimestamp(message) + (Number(message.durationMs) || 0),
+      };
       items.push(item);
       for (const block of item.blocks) {
         if (block.type === 'toolCall' && block.id) toolIndex.set(block.id, { item, block });
@@ -593,6 +605,11 @@ function buildItems(messages) {
         hit.block.output = contentText(message.content);
         hit.block.isError = Boolean(message.isError);
         hit.block.done = true;
+        // 每步耗时一直是 Pi 随结果一起给的，历史里没往界面传，所以完成之后只剩步数。
+        hit.block.durationMs =
+          typeof message.durationMs === 'number' ? Math.round(message.durationMs) : null;
+        const end = messageTimestamp(message);
+        if (end) hit.item.endTs = Math.max(hit.item.endTs || 0, end);
       }
     }
   }
@@ -670,7 +687,8 @@ function renderSessionList() {
       open.setAttribute('tabindex', '0');
       const marker = conversation.working
         ? '<span class="session-spin" aria-hidden="true"></span>'
-        : '<span class="session-dot"></span>';
+        : '<span class="session-dot' + (conversation.status === 'ready' ? ' is-ready' : '') +
+          '" aria-hidden="true"></span>';
       open.innerHTML =
         '<span class="session-gutter">' + marker + '</span>' +
         '<span class="session-text">' +
@@ -845,6 +863,18 @@ function turnNode(turn, session, isLast) {
     }
   }
 
+  // 一轮的用时按消息自己的时间点算——这个时间点是我们存下来的，不依赖 Pi 现给。
+  let turnMs = null;
+  const ask = turn.items.find((item) => item.kind === 'user');
+  if (ask && ask.ts) {
+    let end = 0;
+    for (const item of turn.items) {
+      if (item.endTs > end) end = item.endTs;
+      if (item.ts > end) end = item.ts;
+    }
+    if (end > ask.ts) turnMs = end - ask.ts;
+  }
+
   const streaming = Boolean(session.streaming) && isLast;
   const answered = texts.length > 0;
   const hasWork = work.length > 0;
@@ -853,7 +883,7 @@ function turnNode(turn, session, isLast) {
   assistant.className = 'msg assistant';
 
   if (hasWork) {
-    assistant.appendChild(workGroup(work, answered && !streaming));
+    assistant.appendChild(workGroup(work, answered && !streaming, turnMs, streaming && ask ? ask.ts : 0));
   }
 
   for (const text of texts) {
@@ -878,19 +908,33 @@ function turnNode(turn, session, isLast) {
   return node;
 }
 
-function workGroup(work, collapsed) {
+/** 「工作 12 秒 39 步」——时间是一轮的实际耗时，不是各步相加。 */
+function workLabel(totalMs, count) {
+  const spent = totalMs >= 1000 ? Math.round(totalMs / 1000) + ' 秒' : '';
+  return ['工作', spent, count + ' 步'].filter(Boolean).join(' ');
+}
+
+function workGroup(work, collapsed, turnMs, since) {
   const wrap = document.createElement('div');
   wrap.className = 'work';
 
-  const totalMs = work.reduce((sum, entry) => sum + (entry.block.durationMs || 0), 0);
-  const spent = totalMs >= 1000 ? Math.round(totalMs / 1000) + ' 秒' : '';
-  const label = ['工作', spent, work.length + ' 步'].filter(Boolean).join(' ');
+  // 还在跑的按开始到现在算，每秒跟着刷新；跑完的用这一轮的实际耗时。
+  const live = since > 0;
+  const totalMs = live
+    ? Date.now() - since
+    : turnMs > 0
+      ? turnMs
+      : work.reduce((sum, entry) => sum + (entry.block.durationMs || 0), 0);
 
   const head = document.createElement('button');
   head.className = 'work-head';
+  if (live) {
+    head.dataset.since = String(since);
+    head.dataset.steps = String(work.length);
+  }
   head.innerHTML =
     '<span class="work-caret">▸</span>' +
-    '<span class="work-title">' + escapeHtml(label) + '</span>';
+    '<span class="work-title">' + escapeHtml(workLabel(totalMs, work.length)) + '</span>';
 
   const body = document.createElement('div');
   body.className = 'work-body';
@@ -1572,10 +1616,30 @@ function stopWorkTicker() {
   workStartedAt = 0;
 }
 
+/** 这一轮是从哪句话开始的：时间点来自库里存的消息，切走再回来也接得上。 */
+function turnStartedAt(session) {
+  if (!session) return 0;
+  for (let index = session.items.length - 1; index >= 0; index -= 1) {
+    const item = session.items[index];
+    if (item.kind === 'user' && item.ts > 0) return item.ts;
+  }
+  return 0;
+}
+
 function paintWorkHint() {
-  if (!workStartedAt) return;
-  const seconds = Math.max(1, Math.round((Date.now() - workStartedAt) / 1000));
+  const started = turnStartedAt(current()) || workStartedAt;
+  if (!started) return;
+  const seconds = Math.max(1, Math.round((Date.now() - started) / 1000));
   el.hint.textContent = '工作 ' + seconds + ' 秒 · Enter 排队';
+
+  // 同一条时间线：下面刷新，上面「工作 N 秒」也跟着走。
+  const head = document.querySelector('.work-head[data-since]');
+  if (head) {
+    const title = head.querySelector('.work-title');
+    if (title) {
+      title.textContent = workLabel(Date.now() - Number(head.dataset.since), Number(head.dataset.steps));
+    }
+  }
 }
 
 function startWorkTicker() {
@@ -3657,7 +3721,14 @@ function onEvent(key, event) {
     case 'message_start': {
       const message = event.message || {};
       if (message.role === 'assistant') {
-        const item = { id: 'live-' + session.seq++, kind: 'assistant', blocks: [], streaming: true };
+        const item = {
+          id: 'live-' + session.seq++,
+          kind: 'assistant',
+          blocks: [],
+          streaming: true,
+          ts: messageTimestamp(message),
+          endTs: messageTimestamp(message) + (Number(message.durationMs) || 0),
+        };
         session.items.push(item);
         session.liveId = item.id;
         session.streaming = true;
@@ -3693,6 +3764,7 @@ function onEvent(key, event) {
           kind: 'user',
           text: contentText(message.content),
           images: contentImages(message.content),
+          ts: messageTimestamp(message),
         };
         session.items.push(item);
         if (key === app.currentKey) {
