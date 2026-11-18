@@ -57,6 +57,16 @@
     user-select: none;
   }
 
+  /* 无边框窗口没有系统阴影，用一圈 1px 描边把边界交代清楚。 */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    z-index: 9999;
+  }
+
   /* ---------------- 标题栏 ---------------- */
   .titlebar {
     flex: none;
@@ -66,8 +76,9 @@
     gap: 9px;
     padding: 0 6px 0 14px;
     border-bottom: 1px solid var(--border);
-    -webkit-app-region: drag;
-    app-region: drag;
+    /* WebView2 不认 app-region，拖动靠下面 mousedown 发消息给原生。 */
+    cursor: default;
+    user-select: none;
   }
   .mark {
     width: 18px; height: 18px;
@@ -88,8 +99,6 @@
     color: var(--text-mute);
     font-size: 12px;
     cursor: pointer;
-    -webkit-app-region: no-drag;
-    app-region: no-drag;
   }
   .win-btn:hover { background: var(--active); color: var(--text); }
   .win-btn.close:hover { background: #e81123; color: #fff; }
@@ -298,7 +307,7 @@
   <span class="name">Seven Station 中心</span>
   <span class="spacer"></span>
   <button class="win-btn" id="minBtn" title="最小化">—</button>
-  <button class="win-btn close" id="closeBtn" title="最小化">✕</button>
+  <button class="win-btn close" id="closeBtn" title="收进托盘">✕</button>
 </div>
 
 <div class="body">
@@ -488,6 +497,21 @@
 
   el('minBtn').addEventListener('click', () => send('minimize'));
   el('closeBtn').addEventListener('click', () => send('close'));
+
+  // 拖标题栏由原生去调 OS 的移动循环，双击切最大化。
+  const bar = document.querySelector('.titlebar');
+  bar.addEventListener('mousedown', (event) => {
+    if (event.button !== 0 || event.target.closest('.win-btn')) {
+      return;
+    }
+    send('drag');
+  });
+  bar.addEventListener('dblclick', (event) => {
+    if (event.target.closest('.win-btn')) {
+      return;
+    }
+    send('toggle-max');
+  });
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !el('scrim').hidden) el('scrim').hidden = true;

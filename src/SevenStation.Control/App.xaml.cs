@@ -11,7 +11,7 @@ public partial class App : Application
     private const string InstanceId = "SevenStation.Control.SingleInstance";
     private Mutex? _mutex;
 
-    private static void Trace(string message)
+    internal static void Trace(string message)
     {
         try
         {

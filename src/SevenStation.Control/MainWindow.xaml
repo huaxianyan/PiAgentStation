@@ -10,7 +10,8 @@
         WindowStartupLocation="CenterScreen"
         Background="#f7f7f9">
   <WindowChrome.WindowChrome>
-    <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="10" UseAeroCaptionButtons="False" />
+    <!-- GlassFrameThickness 留 1px，DWM 才会画窗口阴影和描边。 -->
+    <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False" />
   </WindowChrome.WindowChrome>
   <Grid>
     <wv2:WebView2 x:Name="View" DefaultBackgroundColor="#f7f7f9" />
