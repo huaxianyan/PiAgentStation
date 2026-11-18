@@ -37,41 +37,16 @@ fn timestamp() -> String {
 }
 
 /// 中心地址与令牌分头找，各自取第一个有值的：
-/// 地址：安装时写进注册表的（整机一份）→ `center.json` → 默认本机
-/// 令牌：`center.json` → 注册表 → `token.txt` → 环境变量 `SEVENSTATION_TOKEN`
+/// 地址：`center.json`（用户填过就以它为准）→ 默认本机
+/// 令牌：`center.json` → `token.txt` → 环境变量 `SEVENSTATION_TOKEN`
 ///
-/// 令牌优先看 `center.json`：安装时没填令牌的情况很常见，用户自己补一份就生效，
-/// 不用为了改一个字符串重装一遍。
+/// 令牌优先看 `center.json`：用户自己补一份就生效，不用为了改一个字符串重装一遍。
 struct Center {
     base_url: String,
     token: Option<String>,
 }
 
-fn registry_center() -> Option<Center> {
-    use winreg::enums::HKEY_LOCAL_MACHINE;
-    use winreg::RegKey;
-
-    let key = RegKey::predef(HKEY_LOCAL_MACHINE)
-        .open_subkey(r"SOFTWARE\SevenStation")
-        .ok()?;
-    let url: String = key.get_value("CenterUrl").ok()?;
-    if url.trim().is_empty() {
-        return None;
-    }
-
-    let token: Option<String> = key
-        .get_value::<String, _>("CenterToken")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
-
-    Some(Center {
-        base_url: url.trim().to_string(),
-        token,
-    })
-}
-
-/// 本机保存的那份配置：`userSet` 为真表示用户自己在界面上改过，优先级高于安装时写进注册表的值。
+/// 本机保存的那份配置：`userSet` 为真表示用户自己在界面上改过。
 fn stored_center() -> Option<Value> {
     let text = fs::read_to_string(data_dir().join("center.json")).ok()?;
     serde_json::from_str::<Value>(&text).ok()
@@ -105,8 +80,6 @@ fn read_center() -> Center {
         .and_then(|value| value.get("userSet"))
         .and_then(|value| value.as_bool())
         .unwrap_or(false);
-    let installed = registry_center();
-
     let mut base_url: Option<String> = None;
     let mut token: Option<String> = None;
 
@@ -117,20 +90,7 @@ fn read_center() -> Center {
     }
 
     if base_url.is_none() {
-        if let Some(center) = &installed {
-            base_url = Some(center.base_url.clone());
-            log(&format!("中心地址来自安装配置：{}", center.base_url));
-        }
-    }
-
-    if base_url.is_none() {
         base_url = stored_text(&stored, "url");
-    }
-
-    if token.is_none() {
-        if let Some(center) = &installed {
-            token = center.token.clone();
-        }
     }
 
     if token.is_none() {
@@ -172,16 +132,8 @@ fn client_config_get() -> Value {
         .and_then(|value| value.get("userSet"))
         .and_then(|value| value.as_bool())
         .unwrap_or(false);
-    let installed = registry_center();
     let center = read_center();
-
-    let source = if user_set {
-        "file"
-    } else if installed.is_some() {
-        "installed"
-    } else {
-        "default"
-    };
+    let source = if user_set { "file" } else { "default" };
 
     serde_json::json!({
         "url": center.base_url,

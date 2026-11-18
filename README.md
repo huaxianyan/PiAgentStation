@@ -13,31 +13,46 @@ Pi 的客户端。形态是一个中心加多个薄客户端：中心跑 Pi、�
 - 扩展推的状态、组件、通知、选择框都能显示。
 - 同一个会话被 PC 和手机同时打开时共用一个 Pi 子进程，事件广播给所有客户端。
 
-## 怎么跑
+## 装起来用
 
-Host 那台机器要装好 Pi（`~/.pi/agent`）与 .NET 10 SDK；桌面客户端要 Rust 工具链（cargo）与 WebView2 运行时。
+两个安装程序，都要管理员权限（中心要注册系统服务），版本号要一致：
+
+| 包 | 装在哪 | 装完是什么样 |
+| --- | --- | --- |
+| `SevenStationCore-win-x64-<版本>.msi` | 中心那台机器 | 注册服务 `SevenStationCore`，开机自启，只监听 `127.0.0.1:8787` |
+| `SevenStation-win-x64-<版本>.msi` | 要用的机器 | 开始菜单与桌面一个快捷方式，第一次打开是「先连上中心」引导页 |
+
+先装中心，再装客户端。客户端第一次打开会让你填中心地址和访问令牌，令牌在中心那台机器的
+`%ProgramData%\SevenStation.Core\token.txt`。填完随时可以在「设置 → 这台设备连的中心」里改，
+保存就重连。
+
+中心那台机器还要有 Pi（`~/.pi/agent`）；服务第一次启动会自己找到它，写进
+`%ProgramData%\SevenStation.Core\settings.json`，改配置用开始菜单里的「打开中心配置」。
+
+## 开发
+
+中心那台机器要 .NET 10 SDK，桌面客户端要 Rust 工具链（cargo）与 WebView2 运行时。
 
 ```powershell
-pwsh -File scripts/dev-run.ps1        # 开发：构建并起中心 + 桌面客户端
+pwsh -File scripts/dev-run.ps1        # 构建并起中心 + 桌面客户端，开 9222 调试端口
 ```
 
-日常用（不构建、不弹窗口）：
+只想起停中心、不做构建：
 
 ```powershell
 pwsh -File scripts/start-center.ps1   # 起中心
 pwsh -File scripts/stop-center.ps1    # 停
-pwsh -File scripts/install-autostart.ps1   # 让中心跟着登录自动起来
 ```
 
-中心会在 `%LOCALAPPDATA%\SevenStation\token.txt` 生成访问令牌，客户端自动读取。
-想隔离会话记录，不污染真实会话：
+开发时的令牌在 `%LOCALAPPDATA%\SevenStation\token.txt`，客户端自动读取。想隔离会话记录、
+不污染真实会话：
 
 ```powershell
 pwsh -File scripts/dev-run.ps1 -SessionDir E:\tmp\pigui-sessions
 ```
 
-手机上打开 `http://<中心地址>:8787/?token=<令牌>` 即可，和桌面看到的是同一份会话。
-默认只监听本机；要让别的设备连，得显式指定：
+手机上打开 `http://<中心地址>:8787/?token=<令牌>`，和桌面看到的是同一份会话。默认只监听本机，
+要让别的设备连需要显式放开：
 
 ```powershell
 pwsh -File scripts/dev-run.ps1 -Listen http://0.0.0.0:8787
@@ -80,17 +95,24 @@ src/Shared/Log.cs             两边共用的文件日志
 
 ## 发布
 
-两个 Windows x64 包，版本号一致：
+两个 Windows x64 安装程序，版本号一致：
 
 | 包 | 是什么 | 大小 |
 | --- | --- | --- |
-| `SevenStation-center-<版本>-win-x64.zip` | 中心，自包含，没装 .NET 也能跑；双击 `启动中心.cmd` | 约 48 MB |
-| `SevenStation-client-<版本>-win-x64.zip` | 桌面客户端，单个 exe，要有 WebView2 运行时 | 约 3 MB |
+| `SevenStationCore-win-x64-<版本>.msi` | 中心，自包含，没装 .NET 也能跑 | 约 40 MB |
+| `SevenStation-win-x64-<版本>.msi` | 桌面客户端，单个 exe，要有 WebView2 运行时 | 约 2.8 MB |
 
-中心以后会搬到 Linux 上用，那时再加 Linux 包。打包流程见 [RELEASE.md](RELEASE.md)。
+两个包分开建 Release：`SevenStationCore-win-x64-<版本>` 与 `SevenStation-win-x64-<版本>`，
+每个 Release 只装自己的包和同名 `.sha256`。中心以后会搬到 Linux 上用，那时再加 Linux 包。
+
+发布说明写在 `docs/release-notes/`，打包与发布流程见 [RELEASE.md](RELEASE.md)。
 
 ## 限制
 
 - 局域网与 TLS 还没做，现在适合「中心在本机」或可信网段。
 - 手机端只是同一页面能打开，窄屏布局还没调。
 - 图片只作为附件随消息发送（还没让模型直接读图）。
+
+## 许可证
+
+SevenStation 采用 GNU 通用公共许可证第 3 版（GPLv3）发布，许可证全文见 [LICENSE](LICENSE)。

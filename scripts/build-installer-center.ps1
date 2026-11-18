@@ -4,7 +4,7 @@
 #   powershell -File scripts/build-installer-center.ps1              # 发布 + 打包
 #   powershell -File scripts/build-installer-center.ps1 -SkipPublish # 用已有 publish 输出
 #
-# 产物：dist/SevenStation-center-<版本>-win-x64.msi 与同名 .sha256
+# 产物：dist/SevenStationCore-win-x64-<版本>.msi 与同名 .sha256
 param(
     [switch]$SkipPublish
 )
@@ -43,7 +43,8 @@ if (-not $SkipPublish) {
 if (-not (Test-Path $publish)) { throw "没有发布输出：$publish" }
 
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
-$name = "SevenStation-center-$version-win-x64"
+$license = Join-Path $root "installer/license.rtf"
+$name = "SevenStationCore-win-x64-$version"
 $msi = Join-Path $dist "$name.msi"
 Remove-Item $msi -Force -ErrorAction SilentlyContinue
 Remove-Item "$msi.sha256" -Force -ErrorAction SilentlyContinue
@@ -52,7 +53,7 @@ Push-Location (Split-Path -Parent $installer)
 try {
     & $wix build (Split-Path -Leaf $installer) -arch x64 -o $msi `
         -ext WixToolset.UI.wixext `
-        -d "Version=$version" -d "PublishDir=$publish"
+        -d "Version=$version" -d "PublishDir=$publish" -d "LicenseRtf=$license"
     if ($LASTEXITCODE -ne 0) { throw "打包失败" }
 } finally {
     Pop-Location

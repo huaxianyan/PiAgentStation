@@ -67,6 +67,9 @@
     </Component>
 
     <!-- 双击 MSI 要有个向导：说明、进度、完成。没有 UI 时 Windows Installer 一个窗都不留。 -->
+    <!-- 许可页：WixUI 自带的是一段假文字，换成仓库里的 GPL 说明。 -->
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+
     <ui:WixUI Id="WixUI_Minimal" />
 
     <Feature Id="Main" Title="SevenStation 中心" Level="1" AllowAbsent="no">

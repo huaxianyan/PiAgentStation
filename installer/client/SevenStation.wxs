@@ -3,8 +3,8 @@
   SevenStation 客户端的安装程序（MSI）。
 
   装给整台机器：客户端以后还要承担「节点」角色，节点是后台服务，机器级装法才立得住。
-  装的时候问两件事——中心地址和访问令牌，写进 HKLM\SOFTWARE\SevenStation，
-  所有用户共用一份，不用各自再填。客户端启动先读它，读不到才回落到用户目录的 center.json。
+  装的时候不问中心地址和令牌：装完第一次打开会走引导页填一次，之后在
+  「设置 → 这台设备连的中心」里随时改，填错不用重装。
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
@@ -23,12 +23,6 @@
 
     <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="已经装了更新的版本，请先卸载再装旧版。" Schedule="afterInstallValidate" />
     <MediaTemplate EmbedCab="yes" />
-
-    <!-- 安装时要填的两项。令牌留空也允许装，只是连不上，界面上会说。 -->
-    <Property Id="CENTERURL" Value="http://127.0.0.1:8787/" />
-    <Property Id="CENTERTOKEN" Secure="yes" />
-
-    <Launch Condition="CENTERURL" Message="中心地址不能为空。填成 http://主机:端口/ 的形式，比如 http://127.0.0.1:8787/。" />
 
     <!-- 客户端是 WebView2 壳，没有运行时窗口起不来。 -->
     <Property Id="WEBVIEW2MACHINE">
@@ -52,16 +46,6 @@
       <File Id="ClientExe" Source="$(var.BuildDir)\SevenStation.exe" KeyPath="yes" />
     </Component>
 
-    <!-- 安装时填的中心地址与令牌，整机一份。 -->
-    <Component Id="CenterSettings" Directory="INSTALLFOLDER" Guid="f2b1c9a4-6d3e-4a71-9c58-7e04a1d3b510">
-      <RegistryKey Root="HKLM" Key="SOFTWARE\SevenStation">
-        <RegistryValue Name="CenterUrl" Type="string" Value="[CENTERURL]" KeyPath="yes" />
-        <RegistryValue Name="CenterToken" Type="string" Value="[CENTERTOKEN]" />
-      </RegistryKey>
-      <!-- 卸载时把这份配对信息一起清掉；用户目录里的 center.json 不动。 -->
-      <RemoveRegistryKey Root="HKLM" Key="SOFTWARE\SevenStation" Action="removeOnUninstall" />
-    </Component>
-
     <Component Id="Shortcuts" Directory="ProgramMenuFolder" Guid="a7d5e2b8-3f14-4c96-8bd2-51c7f0a9e263">
       <Shortcut Id="MenuShortcut" Name="SevenStation" Target="[#ClientExe]" WorkingDirectory="INSTALLFOLDER" />
       <Shortcut Id="DesktopShortcut" Name="SevenStation" Directory="DesktopFolder" Target="[#ClientExe]" WorkingDirectory="INSTALLFOLDER" />
@@ -70,12 +54,11 @@
 
     <Feature Id="Main" Title="SevenStation 客户端" Level="1" AllowAbsent="no">
       <ComponentRef Id="ClientExecutable" />
-      <ComponentRef Id="CenterSettings" />
       <ComponentRef Id="Shortcuts" />
     </Feature>
 
     <!-- WixUI 的欢迎页自带一段 lorem ipsum 假许可，必须换成真的，否则装的时候满屏假文字。 -->
-    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
 
     <!-- 向导走 WixUI 默认的三页（欢迎/许可 → 进度 → 完成）。中心地址与令牌不在这里问：
          客户端设置页里有「这台设备连的中心」那一块，装完随时能填能改，装的时候填错还得重装。 -->

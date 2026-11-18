@@ -2375,11 +2375,9 @@ function renderClientCenterCard() {
       urlInput.value = config.url || '';
       tokenInput.value = config.token || '';
 
-      const source = config.source === 'installed'
-        ? '现在用的是安装时填的地址'
-        : config.source === 'file'
-          ? '现在用的是这台设备上保存的地址'
-          : '现在用的是默认地址';
+      const source = config.source === 'file'
+        ? '现在用的是这台设备上保存的地址'
+        : '现在用的是默认地址';
       const tokenState = config.token
         ? '令牌已保存（' + config.token.length + ' 位）。'
         : '还没有令牌，连不上中心。';

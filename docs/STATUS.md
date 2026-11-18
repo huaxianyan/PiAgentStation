@@ -9,7 +9,8 @@
 - 交付形态改成安装程序：中心 MSI（装服务、自动启动）已装上并验证服务里 Pi 能跑；
   客户端 MSI（整机安装、装时填中心地址与令牌、写 HKLM 供所有用户共用）已产出，待实装验证。
 - 客户端连接信息改为装完之后在「设置 → 这台设备连的中心」里填，写在 `%LOCALAPPDATA%\SevenStation\center.json`（带 userSet 标记，优先级高于安装时写进注册表的值）。
-- 下一步：客户端重新实装验证一次 → 两个 MSI 在干净环境各跑一遍 → 打标签 `v0.3.0` → `gh release create`。
+- 下一步：两个 MSI 在干净环境各跑一遍 → 建两个 Release（`SevenStationCore-win-x64-0.3.0`、
+  `SevenStation-win-x64-0.3.0`），各自的包与校验和。
 - 已知阻塞：无。
 - 已知限制（写进发布说明）：中心目前只放 Windows 包，之后会出 Linux 版；局域网与 TLS 未做；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
@@ -218,5 +219,24 @@
 - 每步耗时一直在 Pi 的消息里（`toolResult.durationMs`），历史渲染没往界面传，所以完成之后只剩步数；
   现在补上。整轮用时按消息自己的时间点算（用户那句话到最后一次动作），不再把各步相加当总计；
   还在跑的时候按开始到现在每秒刷新，和输入框下面的提示是同一个数。
+
+## STATUS-018：发布口径收口（命名、许可证、死配置）
+
+- 产物改名成 `<项目名>-<平台>-<架构>-<版本>.msi`：中心 `SevenStationCore-win-x64-<版本>.msi`，
+  客户端 `SevenStation-win-x64-<版本>.msi`。两个 Release 分开建，名字与包名一致。
+- 仓库加 `LICENSE`（GPLv3 全文），README 增「装起来用」「许可证」两节，「发布」一节按 MSI 重写；
+  `RELEASE.md` 按两个产品的命名、门禁、`gh release create` 两条命令重写。
+- 两个安装程序的许可页都换掉 WiX 自带的假文字，改用 `installer/license.rtf`（GPLv3 说明与安装会做的事），
+  构建脚本用 `-d LicenseRtf=` 传进去，不再各自放一份。
+- 删掉客户端 MSI 里只写不读的 `HKLM\SOFTWARE\SevenStation`（`CenterUrl`/`CenterToken`）：
+  安装向导早就不问这两项了，装一次写一对空字符串，属于死配置。客户端现在只认
+  `%LOCALAPPDATA%\SevenStation\center.json`、`token.txt` 与环境变量，`winreg` 依赖一并去掉。
+- 修「Pi 名片里的会话目录」：写在 `~/.pi/sessions`，那里根本不存在，Pi 1.5 的会话在
+  `<agent 目录>\sessions`。
+- 发布说明拆成 `docs/release-notes/v0.3.0-core.md` 与 `v0.3.0-client.md`，两份都过门禁
+  （`--link-pattern '/blob/[^/\s]+/'`，因为标签不带 `v` 前缀）。
+- 验证：`dotnet build SevenStation.slnx` 0 错误；两个 MSI 用 `wix msi decompile` 核过
+  （客户端无 Registry 表、中心有 `ServiceInstall`、两边许可页都是 GPL 文本）；
+  两个包的 `.sha256` 与文件对应。
 
 ## 归档索引
