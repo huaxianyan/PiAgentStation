@@ -2,7 +2,7 @@
 # 用法：pwsh -NoProfile -File scripts/close-smoke.ps1
 # 前置：客户端已构建（bin\Debug\net10.0-windows\SevenStation.exe）。
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot '../src/SevenStation.Desktop/target/debug/sevenstation-desktop.exe'),
+    [string]$Exe = (Join-Path $PSScriptRoot '../src/SevenStation.Desktop/target/debug/SevenStation.exe'),
     [int]$WaitSeconds = 12
 )
 
@@ -39,7 +39,7 @@ public class CloseSmoke {
 $Exe = (Resolve-Path $Exe).Path
 $logPath = Join-Path $env:LOCALAPPDATA 'SevenStation/logs/client.log'
 
-Get-Process sevenstation-desktop -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process SevenStation -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 4
 
 $mark = Get-Date
@@ -48,7 +48,7 @@ Start-Sleep -Seconds $WaitSeconds
 
 if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
     Write-Output ('✗ 窗口没开起来（pid=' + $process.Id + '，还在的客户端进程 ' +
-        @(Get-Process sevenstation-desktop -ErrorAction SilentlyContinue).Count + ' 个）')
+        @(Get-Process SevenStation -ErrorAction SilentlyContinue).Count + ' 个）')
     Write-Output '日志尾部：'
     Get-Content $logPath -Tail 3 -ErrorAction SilentlyContinue
     exit 1

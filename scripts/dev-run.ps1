@@ -15,14 +15,14 @@ $root = Split-Path -Parent $PSScriptRoot
 $serverProject = Join-Path $root "src/SevenStation.Core/SevenStation.Core.csproj"
 $desktopProject = Join-Path $root "src/SevenStation.Desktop"
 $serverExe = Join-Path $root "src/SevenStation.Core/bin/Debug/net10.0/SevenStation.Core.exe"
-$desktopExe = Join-Path $root "src/SevenStation.Desktop/target/debug/sevenstation-desktop.exe"
+$desktopExe = Join-Path $root "src/SevenStation.Desktop/target/debug/SevenStation.exe"
 $logDir = Join-Path $env:LOCALAPPDATA "SevenStation/logs"
 
 # rustup 装的工具不一定在当前会话的 PATH 里。
 $cargoBin = Join-Path $env:USERPROFILE ".cargo/bin"
 if (Test-Path $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
 
-Get-Process sevenstation-desktop, SevenStation.Core -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process SevenStation, SevenStation.Core -ErrorAction SilentlyContinue | Stop-Process -Force
 # 强杀主进程后 WebView2 的浏览器进程会留下来占着缓存目录，客户端就打不开了。
 Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
     Where-Object { $_.CommandLine -like '*SevenStation*' } |
