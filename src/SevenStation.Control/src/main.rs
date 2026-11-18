@@ -39,8 +39,8 @@ fn set_autostart(app: tauri::AppHandle, on: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn set_scope(app: tauri::AppHandle, scope: String) -> Result<(), String> {
-    core::set_scope(&scope)?;
+fn set_lan(app: tauri::AppHandle, on: bool) -> Result<(), String> {
+    core::set_lan(on)?;
     publish(&app);
     Ok(())
 }
@@ -179,7 +179,7 @@ fn main() {
             read_state,
             control,
             set_autostart,
-            set_scope,
+            set_lan,
             regenerate_token,
             copy_text,
             open_target,

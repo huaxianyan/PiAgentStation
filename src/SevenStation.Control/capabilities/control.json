@@ -7,7 +7,7 @@
     "allow-read-state",
     "allow-control",
     "allow-set-autostart",
-    "allow-set-scope",
+    "allow-set-lan",
     "allow-regenerate-token",
     "allow-copy-text",
     "allow-open-target",

@@ -30,6 +30,7 @@ pub struct Snapshot {
     pub version: String,
     pub autostart: bool,
     pub scope: String,
+    pub local_address: Option<String>,
     pub firewall_rule: bool,
     pub logs: Vec<String>,
     pub since: String,
@@ -89,6 +90,7 @@ pub fn snapshot() -> Snapshot {
         version: env!("CARGO_PKG_VERSION").to_string(),
         autostart: installed && autostart_on(),
         scope: if is_lan(&listen) { "lan" } else { "local" }.to_string(),
+        local_address: local_address(),
         firewall_rule: has_firewall_rule(port),
         logs: tail_log(6),
         since: since_text(),
@@ -242,16 +244,16 @@ pub fn set_autostart(on: bool) -> Result<(), String> {
 
 // ------------------------------ 监听范围与防火墙 ------------------------------
 
-pub fn set_scope(scope: &str) -> Result<(), String> {
+pub fn set_lan(on: bool) -> Result<(), String> {
     let port = port_of(&read_listen());
-    let listen = if scope == "lan" {
+    let listen = if on {
         format!("http://0.0.0.0:{port}")
     } else {
         format!("http://127.0.0.1:{port}")
     };
     write_listen(&listen)?;
 
-    if scope == "lan" && !has_firewall_rule(port) && add_firewall_rule(port).is_err() {
+    if on && !has_firewall_rule(port) && add_firewall_rule(port).is_err() {
         // 防火墙没放行也要把监听改回去，不然局域网连不上还留着个开着的端口。
         write_listen(&format!("http://127.0.0.1:{port}"))?;
         return Err("没在防火墙里放行，还是只允许本机连接。".into());
@@ -358,6 +360,18 @@ fn port_of(listen: &str) -> u16 {
 
 fn is_lan(listen: &str) -> bool {
     listen.contains("0.0.0.0") || listen.contains("[::]") || listen.contains('*')
+}
+
+/// 这台机器在局域网里的地址：连一个 UDP 目标只为了问路由表自己是谁，不发包。
+fn local_address() -> Option<String> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    let ip = socket.local_addr().ok()?.ip();
+    if ip.is_loopback() || ip.is_unspecified() {
+        None
+    } else {
+        Some(ip.to_string())
+    }
 }
 
 fn tail_log(lines: usize) -> Vec<String> {

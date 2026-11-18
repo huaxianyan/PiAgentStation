@@ -86,8 +86,12 @@
     border-radius: 5px;
     background: var(--accent);
     color: var(--card);
-    font-size: 11px;
+    /* 和 exe / 托盘图标同一套字形：Segoe UI Semibold 的 π。 */
+    font-family: "Segoe UI Semibold", "Segoe UI", sans-serif;
+    font-size: 13px;
     font-weight: 600;
+    line-height: 1;
+    padding-bottom: 1px;
   }
   .titlebar .name { font-size: 12.5px; color: var(--text-dim); }
   .titlebar .spacer { flex: 1; }
@@ -186,11 +190,11 @@
     display: flex;
     align-items: center;
     gap: 14px;
-    min-height: 30px;
+    min-height: 36px;
     font-size: 13px;
   }
   .row + .row { border-top: 1px solid var(--border); }
-  .row .label { flex: none; width: 76px; color: var(--text-mute); font-size: 12.5px; }
+  .row .label { flex: none; width: 80px; color: var(--text-mute); font-size: 12.5px; }
   .row .value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
   .row .value.mono { font-family: var(--mono); font-size: 12px; }
   .row .actions { flex: none; display: flex; align-items: center; }
@@ -209,30 +213,6 @@
   .switch.on { background: var(--accent); justify-content: flex-end; }
   .switch:disabled { opacity: .45; cursor: default; }
   .switch i { display: block; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .2); }
-
-  .seg {
-    display: flex;
-    gap: 2px;
-    padding: 2px;
-    border-radius: var(--radius-pill);
-    background: var(--active);
-  }
-  .seg button {
-    padding: 4px 11px;
-    border: 0;
-    border-radius: var(--radius-pill);
-    background: transparent;
-    color: var(--text-mute);
-    font-family: inherit;
-    font-size: 12px;
-    cursor: pointer;
-  }
-  .seg button.on {
-    background: var(--card);
-    color: var(--text);
-    box-shadow: inset 0 0 0 1px var(--border-strong);
-  }
-  .seg button:disabled { cursor: default; }
 
   .logs {
     margin: 6px 0 0;
@@ -358,12 +338,9 @@
       <button class="switch" id="autostartSwitch"><i></i></button>
     </div>
     <div class="row">
-      <span class="label">允许连接</span>
-      <span class="value note" id="scopeText">同一台机器上的客户端</span>
-      <div class="seg" id="scopeSeg">
-        <button data-scope="local">仅本机</button>
-        <button data-scope="lan">局域网</button>
-      </div>
+      <span class="label">局域网连接</span>
+      <span class="value note">局域网里的其他设备也能连</span>
+      <button class="switch" id="lanSwitch"><i></i></button>
     </div>
   </section>
 
@@ -405,7 +382,7 @@
         case 'stop':
         case 'restart': await invoke('control', { action: type }); break;
         case 'autostart': await invoke('set_autostart', { on: Boolean(extra.on) }); break;
-        case 'scope': await invoke('set_scope', { scope: extra.scope }); break;
+        case 'lan': await invoke('set_lan', { on: Boolean(extra.on) }); break;
         case 'regenerate': await invoke('regenerate_token'); break;
         case 'copy': await invoke('copy_text', { text: extra.text }); toast('已复制'); break;
         case 'open': await invoke('open_target', { target: extra.target }); break;
@@ -444,7 +421,10 @@
     el('toggleBtn').textContent = next.running ? '停止' : '启动';
     el('restartBtn').hidden = !(next.running && next.serviceInstalled);
 
-    el('address').textContent = next.listen;
+    // 局域网开着时别把 0.0.0.0 摊给用户看，换成这台机器在局域网里的地址。
+    el('address').textContent = next.scope === 'lan' && next.localAddress
+      ? next.listen.replace('0.0.0.0', next.localAddress)
+      : next.listen;
     el('address').style.color = next.running ? '' : 'var(--text-faint)';
     el('openAddress').disabled = !next.running;
     el('token').textContent = shortToken(next.token);
@@ -458,14 +438,7 @@
       : '便携模式不会自启';
     el('autostartText').style.color = next.serviceInstalled ? '' : 'var(--text-mute)';
 
-    for (const button of el('scopeSeg').children) {
-      button.classList.toggle('on', button.dataset.scope === next.scope);
-    }
-
-    const lan = next.scope === 'lan';
-    el('scopeText').textContent = lan
-      ? (next.firewallRule ? '局域网设备可以连' : '还没在防火墙放行，切过去要确认管理员权限')
-      : '同一台机器上的客户端';
+    el('lanSwitch').classList.toggle('on', next.scope === 'lan');
 
     const logs = next.logs || [];
     el('logs').innerHTML = logs.length
@@ -497,13 +470,11 @@
   el('toggleBtn').addEventListener('click', () => send(state && state.running ? 'stop' : 'start'));
   el('restartBtn').addEventListener('click', () => send('restart'));
   el('autostartSwitch').addEventListener('click', () => send('autostart', { on: !(state && state.autostart) }));
-  el('scopeSeg').addEventListener('click', (event) => {
-    const button = event.target.closest('button');
-    if (!button || (state && button.dataset.scope === state.scope)) return;
-    send('scope', { scope: button.dataset.scope });
+  el('lanSwitch').addEventListener('click', () => {
+    send('lan', { on: !(state && state.scope === 'lan') });
   });
 
-  el('copyAddress').addEventListener('click', () => send('copy', { text: state ? state.listen : '' }));
+  el('copyAddress').addEventListener('click', () => send('copy', { text: el('address').textContent }));
   el('openAddress').addEventListener('click', () => send('open', { target: 'url' }));
   el('copyToken').addEventListener('click', () => send('copy', { text: state ? state.token : '' }));
   el('openData').addEventListener('click', () => send('open', { target: 'data' }));

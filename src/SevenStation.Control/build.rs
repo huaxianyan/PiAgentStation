@@ -5,7 +5,7 @@ fn main() {
             "read_state",
             "control",
             "set_autostart",
-            "set_scope",
+            "set_lan",
             "regenerate_token",
             "copy_text",
             "open_target",

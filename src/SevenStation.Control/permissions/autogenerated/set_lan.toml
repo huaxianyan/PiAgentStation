@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-lan"
+description = "Enables the set_lan command without any pre-configured scope."
+commands.allow = ["set_lan"]
+
+[[permission]]
+identifier = "deny-set-lan"
+description = "Denies the set_lan command without any pre-configured scope."
+commands.deny = ["set_lan"]
