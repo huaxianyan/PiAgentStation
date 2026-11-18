@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>π 的写法 + 两个开关 · 原型 v2</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f2f2f5;
+    --card: #ffffff;
+    --border: #e9e9ee;
+    --border-strong: #dcdce2;
+    --text: #1a1a1d;
+    --text-soft: #55555c;
+    --text-mute: #8a8a92;
+    --ink: #1a1a1d;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 32px 40px;
+    background: var(--page); color: var(--text);
+    font-family: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+    font-size: 13px; line-height: 1.6;
+  }
+
+  h1 { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+  h2 { font-size: 14px; font-weight: 600; margin: 26px 0 10px; }
+  .lead { color: var(--text-mute); margin: 0; }
+  .note { color: var(--text-mute); font-size: 12px; margin: 8px 0 0; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .row { display: flex; align-items: flex-end; gap: 28px; flex-wrap: wrap; }
+
+  .sample { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .sample .cap { font-size: 11.5px; color: var(--text-mute); text-align: center; max-width: 150px; }
+  .sample.pick .cap { color: var(--text); font-weight: 600; }
+
+  .strip { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 10px; }
+  .strip.light { background: #f7f7f9; border: 1px solid var(--border); }
+  .strip.dark { background: #202024; }
+  .strip .caption { font-size: 11px; color: var(--text-mute); min-width: 92px; }
+  .strip.dark .caption { color: #b9b9c2; }
+
+  /* ---------------- 设置卡 ---------------- */
+  .field { display: flex; align-items: center; gap: 16px; padding: 9px 0; }
+  .field + .field { border-top: 1px solid #f1f1f4; }
+  .field .key { width: 80px; flex: none; color: var(--text-soft); }
+  .field .desc { flex: 1; color: var(--text); }
+  .field .desc .hint { color: var(--text-mute); font-size: 11.5px; margin-left: 6px; }
+
+  .switch { width: 40px; height: 22px; border-radius: 11px; background: var(--ink); position: relative; flex: none; }
+  .switch::after { content: ''; position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+  .switch.off { background: #d6d6dd; }
+  .switch.off::after { right: auto; left: 3px; }
+
+  .option { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
+  .option .head { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 11.5px; color: var(--text-soft); background: #fbfbfc; }
+  .option .body { padding: 4px 16px 8px; }
+</style>
+</head>
+<body>
+
+<h1>π 的写法 + 「开机自启 / 局域网连接」两个开关</h1>
+<p class="lead">上一版那个 π 你说像板凳——横杠太宽、两条腿一样直。这一版让右腿往外撇，横杠收窄，贴着真实 π 的样子。</p>
+
+<!-- ============ 一、π 的右腿 ============ -->
+<h2>一 · 右腿外撇多少（同一套横杠与左腿，只改右腿）</h2>
+<div class="card">
+  <div class="row">
+    <div class="sample">
+      <svg width="132" height="132" viewBox="0 0 128 128">
+        <rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d" />
+        <rect x="30" y="36" width="68" height="13" fill="#fff" />
+        <rect x="42" y="49" width="13" height="46" fill="#fff" />
+        <rect x="75" y="49" width="13" height="46" fill="#fff" />
+      </svg>
+      <span class="cap">v1 现在这版<br />两腿平行 → 像板凳</span>
+    </div>
+
+    <div class="sample pick">
+      <svg width="132" height="132" viewBox="0 0 128 128">
+        <rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d" />
+        <rect x="30" y="36" width="68" height="13" fill="#fff" />
+        <rect x="42" y="49" width="13" height="46" fill="#fff" />
+        <path d="M75 49 h13 l6 46 h-13 z" fill="#fff" />
+      </svg>
+      <span class="cap">v2 右腿外撇 7°<br />横杠不动，右腿下端口外张</span>
+    </div>
+
+    <div class="sample">
+      <svg width="132" height="132" viewBox="0 0 128 128">
+        <rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d" />
+        <rect x="30" y="36" width="68" height="13" fill="#fff" />
+        <rect x="42" y="49" width="13" height="46" fill="#fff" />
+        <path d="M75 49 h13 l9 46 h-13 z" fill="#fff" />
+      </svg>
+      <span class="cap">v3 右腿外撇 11°<br />更明显，小尺寸也看得出来</span>
+    </div>
+
+    <div class="sample">
+      <svg width="132" height="132" viewBox="0 0 128 128">
+        <rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d" />
+        <path d="M30 36 h68 v13 h-24 l7 46 h-14 l-6 -46 h-18 l-1 46 h-13 z" fill="#fff" />
+      </svg>
+      <span class="cap">v4 横杠右端下垂接右腿<br />最像手写 π，笔画连贯</span>
+    </div>
+  </div>
+
+  <p class="note">左腿、横杠四个版本完全一致，差别只在右腿朝向与是否与横杠连笔。选定后托盘、exe 图标、标题栏都用这一份。</p>
+</div>
+
+<!-- ============ 二、小尺寸还认不认得出 ============ -->
+<h2>二、小尺寸对照（v2 / v3 / v4，16 / 24 / 32）</h2>
+<div class="card">
+  <div class="strip light">
+    <span class="caption">浅底深 π</span>
+    <!-- v2 -->
+    <svg width="16" height="16" viewBox="0 0 128 128"><rect x="2.5" y="2.5" width="123" height="123" rx="30" fill="#f7f7f9" stroke="#1a1a1d" stroke-width="6"/><rect x="30" y="36" width="68" height="13" fill="#1a1a1d"/><rect x="42" y="49" width="13" height="46" fill="#1a1a1d"/><path d="M75 49 h13 l6 46 h-13 z" fill="#1a1a1d"/></svg>
+    <svg width="24" height="24" viewBox="0 0 128 128"><rect x="2.5" y="2.5" width="123" height="123" rx="30" fill="#f7f7f9" stroke="#1a1a1d" stroke-width="6"/><rect x="30" y="36" width="68" height="13" fill="#1a1a1d"/><rect x="42" y="49" width="13" height="46" fill="#1a1a1d"/><path d="M75 49 h13 l6 46 h-13 z" fill="#1a1a1d"/></svg>
+    <svg width="32" height="32" viewBox="0 0 128 128"><rect x="2.5" y="2.5" width="123" height="123" rx="30" fill="#f7f7f9" stroke="#1a1a1d" stroke-width="5"/><rect x="30" y="36" width="68" height="13" fill="#1a1a1d"/><rect x="42" y="49" width="13" height="46" fill="#1a1a1d"/><path d="M75 49 h13 l6 46 h-13 z" fill="#1a1a1d"/></svg>
+    <span style="width:1px;height:26px;background:var(--border-strong)"></span>
+    <!-- v3 -->
+    <svg width="16" height="16" viewBox="0 0 128 128"><rect x="2.5" y="2.5" width="123" height="123" rx="30" fill="#f7f7f9" stroke="#1a1a1d" stroke-width="6"/><rect x="30" y="36" width="68" height="13" fill="#1a1a1d"/><rect x="42" y="49" width="13" height="46" fill="#1a1a1d"/><path d="M75 49 h13 l9 46 h-13 z" fill="#1a1a1d"/></svg>
+    <svg width="24" height="24" viewBox="0 0 128 128"><rect x="2.5" y="2.5" width="123" height="123" rx="30" fill="#f7f7f9" stroke="#1a1a1d" stroke-width="6"/><rect x="30" y="36" width="68" height="13" fill="#1a1a1d"/><rect x="42" y="49" width="13" height="46" fill="#1a1a1d"/><path d="M75 49 h13 l9 46 h-13 z" fill="#1a1a1d"/></svg>
+    <svg width="32" height="32" viewBox="0 0 128 128"><rect x="2.5" y="2.5" width="123" height="123" rx="30" fill="#f7f7f9" stroke="#1a1a1d" stroke-width="5"/><rect x="30" y="36" width="68" height="13" fill="#1a1a1d"/><rect x="42" y="49" width="13" height="46" fill="#1a1a1d"/><path d="M75 49 h13 l9 46 h-13 z" fill="#1a1a1d"/></svg>
+    <span style="width:1px;height:26px;background:var(--border-strong)"></span>
+    <!-- v4 -->
+    <svg width="16" height="16" viewBox="0 0 128 128"><rect x="2.5" y="2.5" width="123" height="123" rx="30" fill="#f7f7f9" stroke="#1a1a1d" stroke-width="6"/><path d="M30 36 h68 v13 h-24 l7 46 h-14 l-6 -46 h-18 l-1 46 h-13 z" fill="#1a1a1d"/></svg>
+    <svg width="24" height="24" viewBox="0 0 128 128"><rect x="2.5" y="2.5" width="123" height="123" rx="30" fill="#f7f7f9" stroke="#1a1a1d" stroke-width="6"/><path d="M30 36 h68 v13 h-24 l7 46 h-14 l-6 -46 h-18 l-1 46 h-13 z" fill="#1a1a1d"/></svg>
+    <svg width="32" height="32" viewBox="0 0 128 128"><rect x="2.5" y="2.5" width="123" height="123" rx="30" fill="#f7f7f9" stroke="#1a1a1d" stroke-width="5"/><path d="M30 36 h68 v13 h-24 l7 46 h-14 l-6 -46 h-18 l-1 46 h-13 z" fill="#1a1a1d"/></svg>
+  </div>
+
+  <div class="strip dark" style="margin-top:10px">
+    <span class="caption">深底白 π</span>
+    <svg width="16" height="16" viewBox="0 0 128 128"><rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d"/><rect x="30" y="36" width="68" height="13" fill="#fff"/><rect x="42" y="49" width="13" height="46" fill="#fff"/><path d="M75 49 h13 l6 46 h-13 z" fill="#fff"/></svg>
+    <svg width="24" height="24" viewBox="0 0 128 128"><rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d"/><rect x="30" y="36" width="68" height="13" fill="#fff"/><rect x="42" y="49" width="13" height="46" fill="#fff"/><path d="M75 49 h13 l6 46 h-13 z" fill="#fff"/></svg>
+    <svg width="32" height="32" viewBox="0 0 128 128"><rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d"/><rect x="30" y="36" width="68" height="13" fill="#fff"/><rect x="42" y="49" width="13" height="46" fill="#fff"/><path d="M75 49 h13 l6 46 h-13 z" fill="#fff"/></svg>
+    <span style="width:1px;height:26px;background:#3a3a42"></span>
+    <svg width="16" height="16" viewBox="0 0 128 128"><rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d"/><rect x="30" y="36" width="68" height="13" fill="#fff"/><rect x="42" y="49" width="13" height="46" fill="#fff"/><path d="M75 49 h13 l9 46 h-13 z" fill="#fff"/></svg>
+    <svg width="24" height="24" viewBox="0 0 128 128"><rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d"/><rect x="30" y="36" width="68" height="13" fill="#fff"/><rect x="42" y="49" width="13" height="46" fill="#fff"/><path d="M75 49 h13 l9 46 h-13 z" fill="#fff"/></svg>
+    <svg width="32" height="32" viewBox="0 0 128 128"><rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d"/><rect x="30" y="36" width="68" height="13" fill="#fff"/><rect x="42" y="49" width="13" height="46" fill="#fff"/><path d="M75 49 h13 l9 46 h-13 z" fill="#fff"/></svg>
+    <span style="width:1px;height:26px;background:#3a3a42"></span>
+    <svg width="16" height="16" viewBox="0 0 128 128"><rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d"/><path d="M30 36 h68 v13 h-24 l7 46 h-14 l-6 -46 h-18 l-1 46 h-13 z" fill="#fff"/></svg>
+    <svg width="24" height="24" viewBox="0 0 128 128"><rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d"/><path d="M30 36 h68 v13 h-24 l7 46 h-14 l-6 -46 h-18 l-1 46 h-13 z" fill="#fff"/></svg>
+    <svg width="32" height="32" viewBox="0 0 128 128"><rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d"/><path d="M30 36 h68 v13 h-24 l7 46 h-14 l-6 -46 h-18 l-1 46 h-13 z" fill="#fff"/></svg>
+  </div>
+
+  <p class="note">三组顺序都是 v2 / v3 / v4。16 px 时 v2 的斜度开始糊成直腿，v3、v4 还看得出来。</p>
+</div>
+
+<!-- ============ 三、标题栏 ============ -->
+<h2>三、标题栏里的小号 π</h2>
+<div class="card">
+  <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:10px">
+      <svg width="16" height="16" viewBox="0 0 128 128"><rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d"/><rect x="30" y="36" width="68" height="13" fill="#fff"/><rect x="42" y="49" width="13" height="46" fill="#fff"/><path d="M75 49 h13 l6 46 h-13 z" fill="#fff"/></svg>
+      <span style="font-size:12.5px;color:var(--text-soft)">Seven Station 中心</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:10px">
+      <svg width="16" height="16" viewBox="0 0 128 128"><rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d"/><rect x="30" y="36" width="68" height="13" fill="#fff"/><rect x="42" y="49" width="13" height="46" fill="#fff"/><path d="M75 49 h13 l9 46 h-13 z" fill="#fff"/></svg>
+      <span style="font-size:12.5px;color:var(--text-soft)">Seven Station 中心</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:10px">
+      <svg width="16" height="16" viewBox="0 0 128 128"><rect x="2" y="2" width="124" height="124" rx="30" fill="#1a1a1d"/><path d="M30 36 h68 v13 h-24 l7 46 h-14 l-6 -46 h-18 l-1 46 h-13 z" fill="#fff"/></svg>
+      <span style="font-size:12.5px;color:var(--text-soft)">Seven Station 中心</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 四、设置卡 ============ -->
+<h2>四、以 A 为基础：「允许连接」改成「局域网连接」开关</h2>
+
+<div class="option">
+  <div class="head">A′ · 两行都用开关，行距稍放宽（9px → 11px），键名列宽 80px</div>
+  <div class="body">
+    <div class="field" style="padding:11px 0">
+      <span class="key">开机自启</span>
+      <span class="desc">系统启动时自动运行</span>
+      <span class="switch"></span>
+    </div>
+    <div class="field" style="padding:11px 0">
+      <span class="key">局域网连接</span>
+      <span class="desc">局域网里的其他设备也能连<span class="hint">关掉后只允许本机</span></span>
+      <span class="switch"></span>
+    </div>
+  </div>
+</div>
+
+<div class="option">
+  <div class="head">A″ · 保持现在的行距（9px），只换控件</div>
+  <div class="body">
+    <div class="field">
+      <span class="key">开机自启</span>
+      <span class="desc">系统启动时自动运行</span>
+      <span class="switch"></span>
+    </div>
+    <div class="field">
+      <span class="key">局域网连接</span>
+      <span class="desc">局域网里的其他设备也能连<span class="hint">关掉后只允许本机</span></span>
+      <span class="switch"></span>
+    </div>
+  </div>
+</div>
+
+<div class="option">
+  <div class="head">A‴ · 两行都用开关 + 关掉时灰掉的说明（状态一眼可读）</div>
+  <div class="body">
+    <div class="field" style="padding:11px 0">
+      <span class="key">开机自启</span>
+      <span class="desc">系统启动时自动运行</span>
+      <span class="switch"></span>
+    </div>
+    <div class="field" style="padding:11px 0">
+      <span class="key">局域网连接</span>
+      <span class="desc">局域网里的其他设备也能连</span>
+      <span class="switch off"></span>
+    </div>
+    <div class="field" style="padding:11px 0">
+      <span class="key" style="color:var(--text-mute)">当前</span>
+      <span class="desc" style="color:var(--text-mute)">只允许本机连接 · http://127.0.0.1:8787</span>
+    </div>
+  </div>
+</div>
+
+<p class="note">提示文案（「关掉后只允许本机」）如果嫌啰嗦可以去掉，开关本身就是二态，看到开/关就知道。</p>
+
+</body>
+</html>
