@@ -102,6 +102,10 @@ public sealed class CenterHub
                     SendConversationList(sender);
                     break;
 
+                case "load_older":
+                    SendOlderMessages(Require(message["key"]?.GetValue<string>(), "对话标识"), message, sender);
+                    break;
+
                 case "open_conversation":
                     SendState(Require(message["id"]?.GetValue<string>(), "对话标识"), sender);
                     break;
@@ -433,6 +437,9 @@ public sealed class CenterHub
         });
     }
 
+    /// <summary>打开会话时先给这么多条，剩下的往上翻再要。</summary>
+    private const int MessagePageSize = 120;
+
     private void SendState(string id, CenterConnection sender)
     {
         var conversation = RequireConversation(id);
@@ -442,6 +449,7 @@ public sealed class CenterHub
             _live.TryGetValue(id, out live);
         }
 
+        var (messages, total) = _store.MessageWindow(id, MessagePageSize);
         sender.Send(new JsonObject
         {
             ["type"] = "session_state",
@@ -449,8 +457,24 @@ public sealed class CenterHub
             ["cwd"] = conversation.Cwd,
             ["title"] = conversation.Title,
             ["state"] = BuildState(conversation, live?.Streaming == true),
-            ["messages"] = _store.Messages(id),
+            ["messages"] = messages,
+            ["messageTotal"] = total,
+            ["hasMore"] = total > messages.Count,
             ["stats"] = Parse(conversation.Stats),
+        });
+    }
+
+    /// <summary>往前翻一页：<c>loaded</c> 是界面上已有的条数，返回它前面那一段。</summary>
+    private void SendOlderMessages(string id, JsonNode message, CenterConnection sender)
+    {
+        var loaded = Math.Max(0, message["loaded"]?.GetValue<int>() ?? 0);
+        var (messages, total) = _store.MessageWindow(id, MessagePageSize, loaded);
+        sender.Send(new JsonObject
+        {
+            ["type"] = "older_messages",
+            ["key"] = id,
+            ["messages"] = messages,
+            ["hasMore"] = total > loaded + messages.Count,
         });
     }
 

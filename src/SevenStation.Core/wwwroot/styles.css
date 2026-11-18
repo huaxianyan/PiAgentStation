@@ -687,6 +687,17 @@ button { cursor: pointer; }
 
 .ghost-btn:hover { background: var(--accent-soft); color: var(--text); }
 
+.ghost-btn.small { padding: 3px 9px; font-size: 12px; }
+
+/* 对话顶部：上面还有更早的消息时出现，一页一页往上取 */
+.older-row {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 14px;
+}
+.older-row .ghost-btn { color: var(--text-mute); }
+
+
 .topbar .ghost-btn {
   border-color: transparent;
   background: transparent;

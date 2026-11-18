@@ -1,4 +1,5 @@
 using System.IO;
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 
@@ -257,14 +258,30 @@ public sealed class ConversationStore : IDisposable
         }
     }
 
-    public JsonArray Messages(string id)
+    /// <summary>
+    /// 从末尾往前取一段消息：先跳过末尾 <paramref name="skipFromEnd"/> 条，再取 <paramref name="limit"/> 条。
+    /// 对话可以到几万条、上百 MB，一次全取出来会把主线程和网络都堵死，所以界面只按窗口拿。
+    /// </summary>
+    public (JsonArray Messages, int Total) MessageWindow(string id, int limit, int skipFromEnd = 0)
     {
         var messages = new JsonArray();
+        int total;
         lock (_gate)
         {
+            using (var count = _connection.CreateCommand())
+            {
+                count.CommandText = "SELECT COUNT(*) FROM messages WHERE conversation_id = $id;";
+                count.Parameters.AddWithValue("$id", id);
+                total = Convert.ToInt32(count.ExecuteScalar(), CultureInfo.InvariantCulture);
+            }
+
+            var skip = Math.Max(0, total - Math.Max(0, skipFromEnd) - Math.Max(0, limit));
             using var command = _connection.CreateCommand();
-            command.CommandText = "SELECT payload FROM messages WHERE conversation_id = $id ORDER BY seq;";
+            command.CommandText =
+                "SELECT payload FROM messages WHERE conversation_id = $id ORDER BY seq LIMIT $limit OFFSET $skip;";
             command.Parameters.AddWithValue("$id", id);
+            command.Parameters.AddWithValue("$limit", Math.Max(0, limit));
+            command.Parameters.AddWithValue("$skip", skip);
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
@@ -275,7 +292,7 @@ public sealed class ConversationStore : IDisposable
             }
         }
 
-        return messages;
+        return (messages, total);
     }
 
     /// <summary>一轮结束时整体替换消息，顺带更新统计、模型与会话绑定。</summary>

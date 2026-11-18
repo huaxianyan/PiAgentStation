@@ -134,13 +134,17 @@ function current() {
 }
 
 function makeSession(key, state, messages, cwd) {
-  const built = buildItems(messages || []);
+  const raw = messages || [];
+  const built = buildItems(raw);
   return {
     key,
     state: state || {},
     cwd: cwd || '',
+    raw,
     items: built.items,
     toolIndex: built.toolIndex,
+    hasMore: false,
+    loadingOlder: false,
     streaming: false,
     stats: null,
     models: null,
@@ -1148,11 +1152,18 @@ function toolSummary(block) {
   return '';
 }
 
-function renderThread() {
+/**
+ * 画整段对话。<paramref name="keepAnchor"/> 为真时保住「离底部还有多远」，
+ * 往前翻页时用，免得内容从顶部插进来把视线弹走。
+ */
+function renderThread(keepAnchor) {
   const session = current();
+  const anchor = keepAnchor && session ? el.thread.scrollHeight - el.thread.scrollTop : 0;
   app.turnNodes = [];
   el.threadInner.innerHTML = '';
   if (!session) return;
+
+  if (session.hasMore) el.threadInner.appendChild(olderRow(session));
 
   const turns = turnsOf(session);
   turns.forEach((turn, index) => {
@@ -1161,7 +1172,36 @@ function renderThread() {
     el.threadInner.appendChild(node);
   });
 
-  scrollToBottom(true);
+  if (keepAnchor) {
+    el.thread.scrollTop = el.thread.scrollHeight - anchor;
+  } else {
+    scrollToBottom(true);
+  }
+}
+
+/** 顶部那行「加载更早的消息」：只在中心说上面还有的时候出现。 */
+function olderRow(session) {
+  const row = document.createElement('div');
+  row.className = 'older-row';
+  const button = document.createElement('button');
+  button.className = 'ghost-btn small';
+  button.textContent = session.loadingOlder ? '正在读…' : '加载更早的消息';
+  button.disabled = Boolean(session.loadingOlder);
+  button.addEventListener('click', () => loadOlder());
+  row.appendChild(button);
+  return row;
+}
+
+function loadOlder() {
+  const session = current();
+  if (!session || !session.hasMore || session.loadingOlder) return;
+  session.loadingOlder = true;
+  const button = el.threadInner.querySelector('.older-row button');
+  if (button) {
+    button.textContent = '正在读…';
+    button.disabled = true;
+  }
+  send({ type: 'load_older', key: session.key, loaded: session.items.length });
 }
 
 function patchItem(item) {
@@ -4218,6 +4258,10 @@ function dispatch(message) {
       onSessionState(message);
       break;
 
+    case 'older_messages':
+      onOlderMessages(message);
+      break;
+
     case 'dir_listing': {
       if (current()?.key !== message.key) break;
       if (el.filePanel.hidden) break;
@@ -4313,6 +4357,8 @@ function onSessionState(message) {
   const cwd = message.cwd || (previous && previous.cwd) || pendingCwd || app.pendingCwd || '';
   const session = makeSession(key, message.state, message.messages, cwd);
   session.stats = message.stats || null;
+  session.hasMore = Boolean(message.hasMore);
+  session.loadingOlder = false;
   if (previous) {
     session.models = previous.models;
     session.levels = previous.levels;
@@ -4342,6 +4388,30 @@ function onSessionState(message) {
     el.input.value = text;
     submitPrompt();
   }
+}
+
+function onOlderMessages(message) {
+  const session = app.byKey.get(message.key);
+  if (!session) return;
+  session.loadingOlder = false;
+  session.hasMore = Boolean(message.hasMore);
+  const older = Array.isArray(message.messages) ? message.messages : [];
+  if (!older.length) {
+    if (current() === session) renderThread(true);
+    return;
+  }
+
+  session.raw = older.concat(session.raw);
+  const built = buildItems(session.raw);
+  // 正在生成的那条还没进 raw（要等 message_end），重建时单独留住。
+  if (session.liveId) {
+    const live = session.items.find((item) => item.id === session.liveId);
+    if (live) built.items.push(live);
+  }
+  session.items = built.items;
+  session.toolIndex = built.toolIndex;
+  session.seq = session.items.length;
+  if (current() === session) renderThread(true);
 }
 
 function onModels(message) {
@@ -4413,6 +4483,7 @@ function onEvent(key, event) {
         if (item) {
           item.blocks = blocksFromMessage(message);
           item.streaming = false;
+          session.raw.push(message);
           for (const block of item.blocks) {
             if (block.type === 'toolCall' && block.id) session.toolIndex.set(block.id, { item, block });
           }
@@ -4428,6 +4499,7 @@ function onEvent(key, event) {
           ts: messageTimestamp(message),
         };
         session.items.push(item);
+        session.raw.push(message);
         if (key === app.currentKey) {
           patchItem(item);
           scrollToBottom(true);
