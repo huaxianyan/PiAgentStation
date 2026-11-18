@@ -3,11 +3,13 @@
   "description": "中心页面可以调用壳的命令",
   "windows": ["main"],
   "remote": {
-    "urls": ["http://127.0.0.1:8787/*", "http://localhost:8787/*"]
+    "urls": ["http://127.0.0.1:*/*", "http://localhost:*/*", "http://*:*/*", "https://*:*/*"]
   },
   "permissions": [
     "core:default",
     "allow-pick-folder",
-    "allow-center-local"
+    "allow-center-local",
+    "allow-client-config-get",
+    "allow-client-config-save"
   ]
 }

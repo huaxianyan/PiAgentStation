@@ -17,13 +17,15 @@
 | 包 | 内容 | 命名 |
 | --- | --- | --- |
 | 中心 | MSI：装到 `%ProgramFiles%\SevenStation Core`，注册服务 `SevenStationCore`（自动启动、系统账户），开始菜单两个快捷方式 | `SevenStation-center-<版本>-win-x64.msi`（约 40 MB） |
-| 客户端 | MSI：装到 `%ProgramFiles%\SevenStation`，装时填中心地址与令牌（写进 `HKLM\SOFTWARE\SevenStation`，整机共用），开始菜单与桌面快捷方式 | `SevenStation-client-<版本>-win-x64.msi`（约 2.7 MB） |
+| 客户端 | MSI：装到 `%ProgramFiles%\SevenStation`，开始菜单与桌面快捷方式；中心地址与令牌装完后在客户端「设置 → 这台设备连的中心」里填 | `SevenStation-client-<版本>-win-x64.msi`（约 2.7 MB） |
 
 - 中心：`powershell -File scripts/build-installer-center.ps1`（`-SkipPublish` 复用已有发布输出）。
 - 客户端：`powershell -File scripts/build-installer-client.ps1`（`-SkipBuild` 复用已有 `target/release`）。
 - `scripts/build-release.ps1` 打的是 zip，只能跑便携版用；正式发布只发上面两个 MSI。
   WiX 5 是 dotnet 全局工具（`dotnet tool install -g wix --version 5.0.2`），脚本会自己找 `~/.dotnet/tools/wix.exe`。
 - 数据不进安装目录、也不随卸载删除：中心的配置、令牌、对话库、日志都在 `%ProgramData%\SevenStation.Core\`。
+- 客户端的连接信息不放在安装向导里：装的时候填错还得重装，改地址也不方便。
+  客户端设置页有一块「这台设备连的中心」，填完保存立刻重连，写在本机 `%LOCALAPPDATA%\SevenStation\center.json`。
 - 中心安装时不问 Pi 装在哪：服务第一次启动自己探测（`PI_AGENT_DIR` 优先，其次各用户目录下的 `~/.pi/agent`），
   写进 `settings.json`，之后按配置走；改配置用开始菜单的「打开中心配置」。
 - 服务跑在系统账户下，但 Pi 的子进程会带上面板配置里记的用户家目录（`HOME`/`USERPROFILE`），

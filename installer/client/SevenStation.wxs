@@ -74,32 +74,12 @@
       <ComponentRef Id="Shortcuts" />
     </Feature>
 
-    <!-- 向导：欢迎 → 填中心地址与令牌 → 确认 → 进度 → 完成。 -->
+    <!-- WixUI 的欢迎页自带一段 lorem ipsum 假许可，必须换成真的，否则装的时候满屏假文字。 -->
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+
+    <!-- 向导走 WixUI 默认的三页（欢迎/许可 → 进度 → 完成）。中心地址与令牌不在这里问：
+         客户端设置页里有「这台设备连的中心」那一块，装完随时能填能改，装的时候填错还得重装。 -->
     <ui:WixUI Id="WixUI_Minimal" />
 
-    <UI>
-      <Dialog Id="CenterDlg" Width="370" Height="270" Title="[ProductName] 安装">
-        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" Text="WixUI_Bmp_Banner" />
-        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15"
-                 Transparent="yes" NoPrefix="yes" Text="连到哪个中心" />
-        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15"
-                 Transparent="yes" NoPrefix="yes" Text="填中心那台机器的地址和访问令牌。装完就能直接连上。" />
-        <Control Id="UrlLabel" Type="Text" X="20" Y="80" Width="75" Height="17" Text="中心地址" />
-        <Control Id="UrlEdit" Type="Edit" X="100" Y="78" Width="240" Height="18" Property="CENTERURL" Text="[CENTERURL]" />
-        <Control Id="TokenLabel" Type="Text" X="20" Y="112" Width="75" Height="17" Text="访问令牌" />
-        <Control Id="TokenEdit" Type="Edit" X="100" Y="110" Width="240" Height="18" Property="CENTERTOKEN" Text="[CENTERTOKEN]" />
-        <Control Id="Hint" Type="Text" X="100" Y="134" Width="240" Height="32" Transparent="yes" NoPrefix="yes"
-                 Text="令牌在中心的 %ProgramData%\SevenStation.Core\token.txt 里，用开始菜单的「打开中心页面」也能看出当前地址。" />
-        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
-        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)" />
-        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
-          <Publish Event="SpawnDialog" Value="CancelDlg" />
-        </Control>
-      </Dialog>
-
-      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="CenterDlg" Order="2" />
-      <Publish Dialog="CenterDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="1" />
-      <Publish Dialog="CenterDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="1" Condition="CENTERURL" />
-    </UI>
   </Package>
 </Wix>

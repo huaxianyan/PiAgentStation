@@ -36,13 +36,12 @@ fn timestamp() -> String {
     now.format(&format).unwrap_or_default()
 }
 
-/// 中心地址的来源，按优先级：
-/// 1. 安装时写进注册表的地址与令牌（整机一份，`HKLM\SOFTWARE\SevenStation`）
-/// 2. `%LOCALAPPDATA%\SevenStation\center.json`（本机开发或手工改过的那份）
-/// 3. `token.txt`（同一目录，中心在本机时直接用它的令牌）
-/// 4. 环境变量 `SEVENSTATION_TOKEN`
+/// 中心地址与令牌分头找，各自取第一个有值的：
+/// 地址：安装时写进注册表的（整机一份）→ `center.json` → 默认本机
+/// 令牌：`center.json` → 注册表 → `token.txt` → 环境变量 `SEVENSTATION_TOKEN`
 ///
-/// 装给整台机器的客户端靠第 1 条：所有用户共用一份配对信息，不用各自再填。
+/// 令牌优先看 `center.json`：安装时没填令牌的情况很常见，用户自己补一份就生效，
+/// 不用为了改一个字符串重装一遍。
 struct Center {
     base_url: String,
     token: Option<String>,
@@ -72,46 +71,70 @@ fn registry_center() -> Option<Center> {
     })
 }
 
+/// 本机保存的那份配置：`userSet` 为真表示用户自己在界面上改过，优先级高于安装时写进注册表的值。
+fn stored_center() -> Option<Value> {
+    let text = fs::read_to_string(data_dir().join("center.json")).ok()?;
+    serde_json::from_str::<Value>(&text).ok()
+}
+
+fn stored_text(config: &Option<Value>, key: &str) -> Option<String> {
+    let value = config.as_ref()?.get(key)?.as_str()?.trim().to_string();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value)
+    }
+}
+
 fn read_center() -> Center {
     let dir = data_dir();
-    let config = dir.join("center.json");
+    let config_path = dir.join("center.json");
     let fallback = "http://127.0.0.1:8787/".to_string();
 
-    if let Some(mut installed) = registry_center() {
-        if !installed.base_url.ends_with('/') {
-            installed.base_url.push('/');
-        }
-        log(&format!("中心地址来自安装配置：{}", installed.base_url));
-        return installed;
-    }
-
-    let mut base_url = fallback.clone();
-    let mut token: Option<String> = None;
-
-    if !config.exists() {
+    if !config_path.exists() {
         let _ = fs::create_dir_all(&dir);
         let _ = fs::write(
-            &config,
+            &config_path,
             "{\n  \"url\": \"http://127.0.0.1:8787/\",\n  \"token\": \"\"\n}\n",
         );
-    } else if let Ok(text) = fs::read_to_string(&config) {
-        if let Ok(parsed) = serde_json::from_str::<Value>(&text) {
-            if let Some(url) = parsed.get("url").and_then(|v| v.as_str()) {
-                if !url.trim().is_empty() {
-                    base_url = url.trim().to_string();
-                }
-            }
-            if let Some(value) = parsed.get("token").and_then(|v| v.as_str()) {
-                let trimmed = value.trim();
-                if !trimmed.is_empty() {
-                    token = Some(trimmed.to_string());
-                }
-            }
+    }
+
+    let stored = stored_center();
+    let user_set = stored
+        .as_ref()
+        .and_then(|value| value.get("userSet"))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+    let installed = registry_center();
+
+    let mut base_url: Option<String> = None;
+    let mut token: Option<String> = None;
+
+    if user_set {
+        base_url = stored_text(&stored, "url");
+        token = stored_text(&stored, "token");
+        log("连接设置来自本机保存的配置");
+    }
+
+    if base_url.is_none() {
+        if let Some(center) = &installed {
+            base_url = Some(center.base_url.clone());
+            log(&format!("中心地址来自安装配置：{}", center.base_url));
         }
     }
 
-    if !base_url.ends_with('/') {
-        base_url.push('/');
+    if base_url.is_none() {
+        base_url = stored_text(&stored, "url");
+    }
+
+    if token.is_none() {
+        if let Some(center) = &installed {
+            token = center.token.clone();
+        }
+    }
+
+    if token.is_none() {
+        token = stored_text(&stored, "token");
     }
 
     if token.is_none() {
@@ -132,7 +155,86 @@ fn read_center() -> Center {
         }
     }
 
+    let mut base_url = base_url.unwrap_or(fallback);
+    if !base_url.ends_with('/') {
+        base_url.push('/');
+    }
+
     Center { base_url, token }
+}
+
+/// 界面上读取这台设备的连接设置。
+#[tauri::command]
+fn client_config_get() -> Value {
+    let stored = stored_center();
+    let user_set = stored
+        .as_ref()
+        .and_then(|value| value.get("userSet"))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+    let installed = registry_center();
+    let center = read_center();
+
+    let source = if user_set {
+        "file"
+    } else if installed.is_some() {
+        "installed"
+    } else {
+        "default"
+    };
+
+    serde_json::json!({
+        "url": center.base_url,
+        "token": center.token.unwrap_or_default(),
+        "source": source,
+    })
+}
+
+/// 界面上保存连接设置：写到本机 `center.json`（带 userSet 标记），然后直接连新的地址。
+#[tauri::command]
+fn client_config_save(window: tauri::WebviewWindow, url: String, token: String) -> Result<(), String> {
+    let mut base_url = url.trim().to_string();
+    if base_url.is_empty() {
+        return Err("中心地址不能为空".into());
+    }
+    if !base_url.starts_with("http://") && !base_url.starts_with("https://") {
+        return Err("地址要以 http:// 或 https:// 开头".into());
+    }
+    if !base_url.ends_with('/') {
+        base_url.push('/');
+    }
+
+    let dir = data_dir();
+    fs::create_dir_all(&dir).map_err(|error| format!("建目录失败：{error}"))?;
+    let payload = serde_json::json!({
+        "url": base_url,
+        "token": token.trim(),
+        "userSet": true,
+    });
+    let text = serde_json::to_string_pretty(&payload).map_err(|error| format!("写配置失败：{error}"))?;
+    fs::write(dir.join("center.json"), text).map_err(|error| format!("写配置失败：{error}"))?;
+    log(&format!("本机连接设置已更新：{base_url}"));
+
+    let mut target = base_url;
+    if let Some(value) = payload.get("token").and_then(|value| value.as_str()) {
+        if !value.is_empty() {
+            let encoded: String = value
+                .chars()
+                .map(|ch| {
+                    if ch.is_ascii_alphanumeric() || "-_.~".contains(ch) {
+                        ch.to_string()
+                    } else {
+                        format!("%{:02X}", ch as u32)
+                    }
+                })
+                .collect();
+            target.push_str(&format!("?token={encoded}"));
+        }
+    }
+
+    let parsed = tauri::Url::parse(&target).map_err(|error| format!("地址解析失败：{error}"))?;
+    window.navigate(parsed).map_err(|error| format!("打开新地址失败：{error}"))?;
+    Ok(())
 }
 
 fn center_url(center: &Center) -> String {
@@ -242,7 +344,12 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![pick_folder, center_local])
+        .invoke_handler(tauri::generate_handler![
+            pick_folder,
+            center_local,
+            client_config_get,
+            client_config_save
+        ])
         .setup(|app| {
             let center = read_center();
             log(&format!("启动，中心 {}", center.base_url));

@@ -2270,6 +2270,97 @@ function renderAppearanceCard() {
   return card;
 }
 
+/**
+ * 桌面客户端才有的桥：Tauri 注入的全局对象。浏览器里打开页面时它不存在，
+ * 所以「这台设备连的中心」这一块在网页访问时不出现。
+ */
+function clientInvoke() {
+  const bridge = window.__TAURI__;
+  if (!bridge || !bridge.core || typeof bridge.core.invoke !== 'function') return null;
+  return bridge.core.invoke;
+}
+
+/**
+ * 这台设备自己的连接设置。装在别的机器上的客户端只认这一份，
+ * 中心那台机器上的设置与它无关。
+ */
+function renderClientCenterCard() {
+  const invoke = clientInvoke();
+  if (!invoke) return null;
+
+  const card = makePageCard(
+    '这台设备连的中心',
+    '只影响这台设备。中心换了地址或者令牌换了，改这里保存，客户端立刻重连。'
+  );
+
+  const urlRow = document.createElement('div');
+  urlRow.className = 'path-row';
+  const urlInput = document.createElement('input');
+  urlInput.type = 'text';
+  urlInput.placeholder = 'http://192.168.1.10:8787/';
+  urlInput.spellcheck = false;
+  urlRow.appendChild(urlInput);
+  card.appendChild(urlRow);
+
+  const tokenRow = document.createElement('div');
+  tokenRow.className = 'path-row';
+  const tokenInput = document.createElement('input');
+  tokenInput.type = 'text';
+  tokenInput.placeholder = '访问令牌';
+  tokenInput.spellcheck = false;
+  tokenRow.appendChild(tokenInput);
+  card.appendChild(tokenRow);
+
+  const status = document.createElement('p');
+  status.className = 'page-note';
+  status.textContent = '读取中…';
+  card.appendChild(status);
+
+  const save = document.createElement('button');
+  save.className = 'ghost-btn';
+  save.textContent = '保存并重连';
+  save.addEventListener('click', async () => {
+    const url = urlInput.value.trim();
+    const token = tokenInput.value.trim();
+    if (!url) {
+      status.textContent = '中心地址不能为空。';
+      return;
+    }
+
+    save.disabled = true;
+    status.textContent = '保存中…';
+    try {
+      await invoke('client_config_save', { url, token });
+      status.textContent = '已保存，正在连新的地址…';
+    } catch (error) {
+      save.disabled = false;
+      status.textContent = '保存失败：' + (error && error.message ? error.message : error);
+    }
+  });
+  card.appendChild(save);
+
+  invoke('client_config_get')
+    .then((config) => {
+      urlInput.value = config.url || '';
+      tokenInput.value = config.token || '';
+
+      const source = config.source === 'installed'
+        ? '现在用的是安装时填的地址'
+        : config.source === 'file'
+          ? '现在用的是这台设备上保存的地址'
+          : '现在用的是默认地址';
+      const tokenState = config.token
+        ? '令牌已保存（' + config.token.length + ' 位）。'
+        : '还没有令牌，连不上中心。';
+      status.textContent = source + '。' + tokenState;
+    })
+    .catch((error) => {
+      status.textContent = '读不到当前设置：' + (error && error.message ? error.message : error);
+    });
+
+  return card;
+}
+
 function renderSettingsPage() {
   el.pageInner.appendChild(makePageHead('设置'));
   el.pageInner.appendChild(renderAppearanceCard());
@@ -2283,6 +2374,10 @@ function renderSettingsPage() {
     ['访问', '只本机能连'],
   ]);
   el.pageInner.appendChild(connection);
+
+  // 只有装成桌面客户端时才有本机设置（浏览器里直接打开页面拿不到这个桥）。
+  const clientCenter = renderClientCenterCard();
+  if (clientCenter) el.pageInner.appendChild(clientCenter);
 
   const agent = app.agent;
   const card = makePageCard(agent ? agent.name : 'Agent');
