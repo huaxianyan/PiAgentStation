@@ -908,10 +908,32 @@ function turnNode(turn, session, isLast) {
   return node;
 }
 
-/** 「工作 12 秒 39 步」——时间是一轮的实际耗时，不是各步相加。 */
+/** 「工作 9 步 · 47 秒」——时间是一轮的实际耗时，不是各步相加。 */
 function workLabel(totalMs, count) {
-  const spent = totalMs >= 1000 ? Math.round(totalMs / 1000) + ' 秒' : '';
-  return ['工作', spent, count + ' 步'].filter(Boolean).join(' ');
+  const spent = formatSpent(totalMs);
+  const steps = count + ' 步';
+  return spent ? '工作 ' + steps + ' · ' + spent : '工作 ' + steps;
+}
+
+/**
+ * 不足一秒不写：那种一轮本来也没什么可说。
+ * 一分钟内写秒，再久写「M 分 S 秒」，一小时以上写「H 小时 M 分」。
+ */
+function formatSpent(totalMs) {
+  if (!(totalMs >= 1000)) return '';
+
+  const total = Math.round(totalMs / 1000);
+  if (total < 60) return total + ' 秒';
+
+  if (total < 3600) {
+    const minutes = Math.floor(total / 60);
+    const seconds = total % 60;
+    return seconds ? minutes + ' 分 ' + seconds + ' 秒' : minutes + ' 分';
+  }
+
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  return minutes ? hours + ' 小时 ' + minutes + ' 分' : hours + ' 小时';
 }
 
 function workGroup(work, collapsed, turnMs, since) {
