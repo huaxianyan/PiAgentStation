@@ -13,11 +13,10 @@ public static class Log
 
     public static string FilePath => _path;
 
-    /// <summary>例：<c>Log.Initialize("SevenStation", "center.log")</c>。</summary>
-    public static void Initialize(string folder, string fileName = "app.log")
+    /// <summary>例：<c>Log.Initialize(ProductPaths.CoreLogs, "center.log")</c>。传的是绝对目录。</summary>
+    public static void Initialize(string directory, string fileName = "app.log")
     {
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        _path = Path.Combine(local, folder, "logs", fileName);
+        _path = Path.Combine(directory, fileName);
     }
 
     public static void Write(string message)
@@ -54,9 +53,6 @@ public static class Log
         Write(exception is null ? message : $"{message} :: {exception.GetType().Name}: {exception.Message}{Environment.NewLine}{exception.StackTrace}");
     }
 
-    private static string DefaultPath()
-    {
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(local, "SevenStation", "logs", "app.log");
-    }
+    private static string DefaultPath() =>
+        Path.Combine(ProductPaths.ClientHome, "logs", "app.log");
 }

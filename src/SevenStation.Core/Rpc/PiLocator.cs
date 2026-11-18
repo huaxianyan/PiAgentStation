@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using SevenStation.Core.Agents;
 
 namespace SevenStation.Core.Rpc;
 
@@ -10,14 +11,22 @@ namespace SevenStation.Core.Rpc;
 /// </summary>
 public static class PiLocator
 {
-    public static string AgentDirectory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pi", "agent");
+    /// <summary>配置里记下的 Pi 目录；没配过就是空串，<see cref="EnsureInstalled"/> 会给出提示。</summary>
+    public static string AgentDirectory => CoreSettings.Current.Agent(AgentRegistry.PiId)?.Directory ?? string.Empty;
 
-    public static string LauncherPath { get; } = Path.Combine(AgentDirectory, "bin", "pi-launcher.js");
+    public static string LauncherPath => string.IsNullOrEmpty(AgentDirectory)
+        ? string.Empty
+        : Path.Combine(AgentDirectory, "bin", "pi-launcher.js");
 
     /// <summary>Node 解释器。优先环境变量覆盖，其次 PATH 上的 node，最后是 Pi 自带的 node 副本。</summary>
     public static string ResolveNode()
     {
+        var configured = CoreSettings.Current.Agent(AgentRegistry.PiId)?.Node;
+        if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+        {
+            return configured;
+        }
+
         var overridePath = Environment.GetEnvironmentVariable("PI_GUI_NODE");
         if (!string.IsNullOrWhiteSpace(overridePath) && File.Exists(overridePath))
         {
@@ -38,10 +47,16 @@ public static class PiLocator
 
     public static void EnsureInstalled()
     {
+        if (string.IsNullOrEmpty(AgentDirectory))
+        {
+            throw new InvalidOperationException(
+                "还没有配置 Pi。在中心的设置里填上 Pi 的安装目录，或设置环境变量 PI_AGENT_DIR 后重启中心。");
+        }
+
         if (!File.Exists(LauncherPath))
         {
             throw new FileNotFoundException(
-                $"没有找到 Pi 的启动器：{LauncherPath}。请先安装 Pi，或用 PI_GUI_NODE 指定 node 解释器。",
+                $"配置里的 Pi 目录下没有启动器：{LauncherPath}。检查目录是否被删掉或换过盘。",
                 LauncherPath);
         }
     }

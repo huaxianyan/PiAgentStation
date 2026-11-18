@@ -11,8 +11,8 @@ public static class PiAgent
     public static AgentDescriptor Describe()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var agentDirectory = Path.Combine(home, ".pi", "agent");
-        var launcher = Path.Combine(agentDirectory, "bin", "pi-launcher.js");
+        var agentDirectory = PiLocator.AgentDirectory;
+        var launcher = PiLocator.LauncherPath;
         var sessions = Environment.GetEnvironmentVariable("PI_CODING_AGENT_SESSION_DIR")
             ?? Path.Combine(home, ".pi", "sessions");
 

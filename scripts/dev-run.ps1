@@ -68,5 +68,8 @@ Start-Process -FilePath $desktopExe -WorkingDirectory $desktopProject `
     -RedirectStandardOutput (Join-Path $logDir "desktop.out.log") `
     -RedirectStandardError (Join-Path $logDir "desktop.err.log") | Out-Null
 Write-Host "中心：$probe"
-Write-Host "令牌：$(Join-Path $env:LOCALAPPDATA 'SevenStation/token.txt')"
-Write-Host "日志：$logDir"
+# 中心按 D7 搬到机器级目录，开发时也一样；下面这几行告诉你去哪看令牌和日志。
+$coreHome = Join-Path $env:ProgramData "SevenStation.Core"
+Write-Host "令牌：$(Join-Path $coreHome 'token.txt')"
+Write-Host "中心日志：$(Join-Path $coreHome 'logs/center.log')"
+Write-Host "客户端日志：$logDir"

@@ -1,13 +1,20 @@
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using SevenStation.Core;
 using SevenStation.Core.Storage;
 using SevenStation.Shared;
 
-SevenStation.Shared.Log.Initialize("SevenStation", "center.log");
+var runningAsService = WindowsServiceHelpers.IsWindowsService();
+Log.Initialize(ProductPaths.CoreLogs, "center.log");
+Log.Write($"启动（{(runningAsService ? "Windows 服务" : "控制台")}），目录 {ProductPaths.CoreHome}");
 
-var listen = Environment.GetEnvironmentVariable("SEVENSTATION_LISTEN") ?? "http://127.0.0.1:8787";
+MigrateLegacyData();
+
+// 配置里没有的 Agent 在装载时就探测补齐：安装程序不问 Pi 在哪，第一次启动自己找。
+var settings = CoreSettings.LoadOrInitialize(ProductPaths.CoreSettingsFile);
+var listen = Environment.GetEnvironmentVariable("SEVENSTATION_LISTEN") ?? settings.Listen;
 var token = TokenStore.Resolve();
 
 // 静态页永远跟着 exe 走：不管从哪个目录启动，都能找到 wwwroot。
@@ -16,6 +23,8 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     Args = args,
     ContentRootPath = AppContext.BaseDirectory,
 });
+// 被 SCM 拉起时换成服务宿主；控制台直接跑时什么也不做。
+builder.Host.UseWindowsService();
 builder.WebHost.UseUrls(listen);
 // 日志写自己的文件，控制台只留启动那几行，免得被 ASP.NET 默认日志淹掉。
 builder.Logging.ClearProviders();
@@ -23,9 +32,7 @@ builder.Logging.AddProvider(new FileLoggerProvider());
 
 var app = builder.Build();
 
-var dataDirectory = Environment.GetEnvironmentVariable("SEVENSTATION_DATA_DIR")
-    ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SevenStation", "data");
-var store = new ConversationStore(Path.Combine(dataDirectory, "sevenstation.db"));
+var store = new ConversationStore(Path.Combine(ProductPaths.CoreDataDirectory, "sevenstation.db"));
 Log.Write($"对话库：{store.DatabasePath}");
 var hub = new CenterHub(store, listen);
 
@@ -72,17 +79,57 @@ app.Lifetime.ApplicationStopping.Register(() =>
 });
 
 Log.Write($"中心启动 {listen}，对话库 {store.DatabasePath}");
-Console.WriteLine($"SevenStation.Core 已启动：{listen}");
-Console.WriteLine($"打开地址：{listen.TrimEnd('/')}/");
-Console.WriteLine($"访问令牌：见 {TokenStore.FilePath}（桌面客户端会自动读取；手机用 ?token= 拼在地址后）");
+if (!runningAsService)
+{
+    Console.WriteLine($"SevenStation.Core 已启动：{listen}");
+    Console.WriteLine($"打开地址：{listen.TrimEnd('/')}/");
+    Console.WriteLine($"访问令牌：见 {TokenStore.FilePath}（桌面客户端会自动读取；手机用 ?token= 拼在地址后）");
+}
 
 app.Run();
 
+/// <summary>
+/// 0.3.0 之前中心和客户端共用 <c>%LOCALAPPDATA%\SevenStation</c>。按 D7 拆开后中心搬到
+/// <c>%ProgramData%\SevenStation.Core</c>，老库与老令牌复制一次过去，别让用户丢历史。
+/// </summary>
+static void MigrateLegacyData()
+{
+    var legacy = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "SevenStation");
+
+    var target = Path.Combine(ProductPaths.CoreDataDirectory, "sevenstation.db");
+    var source = Path.Combine(legacy, "data", "sevenstation.db");
+    if (!File.Exists(target) && File.Exists(source))
+    {
+        Directory.CreateDirectory(ProductPaths.CoreDataDirectory);
+        foreach (var suffix in new[] { string.Empty, "-wal", "-shm" })
+        {
+            var from = source + suffix;
+            if (File.Exists(from))
+            {
+                File.Copy(from, target + suffix);
+            }
+        }
+
+        Log.Write($"把老的对话库搬到 {target}");
+    }
+
+    if (!File.Exists(ProductPaths.CoreTokenFile))
+    {
+        var oldToken = Path.Combine(legacy, "token.txt");
+        if (File.Exists(oldToken))
+        {
+            Directory.CreateDirectory(ProductPaths.CoreHome);
+            File.Copy(oldToken, ProductPaths.CoreTokenFile);
+            Log.Write($"把老的访问令牌搬到 {ProductPaths.CoreTokenFile}");
+        }
+    }
+}
+
 internal static class TokenStore
 {
-    public static string FilePath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SevenStation", "token.txt");
+    public static string FilePath => ProductPaths.CoreTokenFile;
 
     public static string Resolve()
     {
