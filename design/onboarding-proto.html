@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Seven Station · 原型：首次引导 / 设置 / 日志间距</title>
+<!-- 直接吃产品自己的样式表，看到的就是真界面 -->
+<link rel="stylesheet" href="../src/SevenStation.Core/wwwroot/styles.css">
+<style>
+  body { margin: 0; background: var(--page); font-family: var(--font); color: var(--text); }
+  .proto { padding: 26px; display: flex; flex-direction: column; gap: 32px; align-items: flex-start; }
+  .proto-label { font-size: 12.5px; color: var(--text-mute); margin: 0 0 4px; }
+  .proto-title { font-size: 14px; font-weight: 600; color: var(--text); margin: 0 0 10px; }
+
+  .win { width: 1240px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-card);
+    overflow: hidden; display: flex; }
+
+  /* ---- 首次启动 ---- */
+  .onboard { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 70px 0; }
+  .onboard-mark { width: 46px; height: 46px; border-radius: var(--radius-card); background: var(--accent);
+    color: var(--on-accent); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 600; }
+  .onboard-head { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .onboard-title { font-size: 22px; font-weight: 600; color: var(--text); margin: 0; }
+  .onboard-sub { font-size: 13.5px; color: var(--text-mute); margin: 0; }
+  .onboard-card { width: 470px; background: var(--card); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-card); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .fld { display: flex; flex-direction: column; gap: 6px; }
+  .fld-label { font-size: 12.5px; color: var(--text-soft); }
+  .fld input { height: 36px; padding: 0 11px; font-size: 13px; color: var(--text); font-family: var(--mono);
+    background: var(--card); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
+  .fld-hint { font-size: 12px; color: var(--text-faint); line-height: 1.6; }
+  .onboard-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
+  .onboard-note { font-size: 12.5px; color: var(--text-mute); }
+  .onboard-note.ok { color: var(--green); }
+  .onboard-note.bad { color: var(--danger); }
+  .btn-primary { height: 32px; padding: 0 16px; border-radius: var(--radius-sm); border: 1px solid var(--accent);
+    background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 500; font-family: inherit; }
+  .btn-primary.is-off { background: var(--active); border-color: var(--border-strong); color: var(--text-faint); }
+
+  /* ---- 设置页 ---- */
+  .settings { flex: 1; padding: 26px 0; display: flex; justify-content: center; overflow: hidden; }
+  .settings-inner { width: 760px; display: flex; flex-direction: column; gap: 14px; }
+  .settings-title { font-size: 20px; font-weight: 600; color: var(--text); margin: 0; }
+  .settings-inner .page-card { display: flex; flex-direction: column; gap: 8px; }
+  .settings-inner .page-note { margin: 0; }
+  .center-actions { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+
+  /* ---- 日志卡片 ---- */
+  .logs-row { display: flex; gap: 20px; align-items: flex-start; }
+  .log-card { width: 470px; display: flex; flex-direction: column; gap: 8px; }
+  .log-area { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 10px 12px; font-family: var(--mono); font-size: 12px; line-height: 1.75; color: var(--text-dim); white-space: pre-wrap; }
+  .gap-note { font-size: 12px; color: var(--text-mute); margin: 0; }
+</style>
+</head>
+<body>
+<div class="proto">
+
+  <!-- ============ A 首次启动引导 ============ -->
+  <div>
+    <p class="proto-label">A · 首次启动（什么都没配）</p>
+    <p class="proto-title">整窗只有一件事：连上中心。连不上就进不去主界面。</p>
+    <div class="win">
+      <div class="onboard">
+        <div class="onboard-mark">π</div>
+        <div class="onboard-head">
+          <p class="onboard-title">先连上中心</p>
+          <p class="onboard-sub">这台设备要连到哪台中心？填完就能开始用。</p>
+        </div>
+
+        <div class="onboard-card">
+          <div class="fld">
+            <span class="fld-label">中心地址</span>
+            <input value="http://127.0.0.1:8787/" spellcheck="false">
+            <span class="fld-hint">中心装在同一台机器上就是默认这个；装在别的机器上填那台的地址。</span>
+          </div>
+          <div class="fld">
+            <span class="fld-label">访问令牌</span>
+            <input value="9f3c1a7bce4028d5a6f4b81c3e07d296e5a1c48f7b2d6039" spellcheck="false">
+            <span class="fld-hint">在中心那台机器的 %ProgramData%\SevenStation.Core\token.txt 里。</span>
+          </div>
+          <div class="onboard-actions">
+            <span class="onboard-note ok">连上了，版本 0.3.0</span>
+            <div style="display:flex; gap:8px;">
+              <button class="ghost-btn">测试连接</button>
+              <button class="btn-primary">开始使用</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ A2 引导失败态 ============ -->
+  <div>
+    <p class="proto-label">A2 · 同一个页面，连接失败时</p>
+    <p class="proto-title">失败只占一行，不弹窗、不跳页；「开始使用」保持不可点。</p>
+    <div class="win" style="height:520px;">
+      <div class="onboard">
+        <div class="onboard-mark">π</div>
+        <div class="onboard-head">
+          <p class="onboard-title">先连上中心</p>
+          <p class="onboard-sub">这台设备要连到哪台中心？填完就能开始用。</p>
+        </div>
+        <div class="onboard-card">
+          <div class="fld">
+            <span class="fld-label">中心地址</span>
+            <input value="http://192.168.1.20:8787/" spellcheck="false">
+            <span class="fld-hint">中心装在同一台机器上就是默认这个；装在别的机器上填那台的地址。</span>
+          </div>
+          <div class="fld">
+            <span class="fld-label">访问令牌</span>
+            <input value="0000000000000000000000000000000000000000" spellcheck="false">
+            <span class="fld-hint">在中心那台机器的 %ProgramData%\SevenStation.Core\token.txt 里。</span>
+          </div>
+          <div class="onboard-actions">
+            <span class="onboard-note bad">令牌不对：中心拒绝了这个令牌</span>
+            <div style="display:flex; gap:8px;">
+              <button class="ghost-btn">测试连接</button>
+              <button class="btn-primary is-off">开始使用</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ B 设置页（已配置） ============ -->
+  <div>
+    <p class="proto-label">B · 设置页（已经配置好）</p>
+    <p class="proto-title">连接信息可改，改完立刻重连；日志卡片按钮与内容之间有间距。</p>
+    <div class="win" style="height:900px;">
+      <div class="settings">
+        <div class="settings-inner">
+          <p class="settings-title">设置</p>
+
+          <section class="page-card">
+            <h3>这台设备连的中心</h3>
+            <p class="page-note">只影响这台设备。中心换了地址或者令牌换了，改这里保存，客户端立刻重连。</p>
+            <div class="path-row"><input value="http://127.0.0.1:8787/" spellcheck="false"></div>
+            <div class="path-row"><input value="9f3c1a7bce4028d5a6f4b81c3e07d296e5a1c48f7b2d6039" spellcheck="false"></div>
+            <p class="page-note">现在用的是这台设备保存的地址。令牌已保存（48 位）。</p>
+            <div class="center-actions"><button class="ghost-btn">保存并重连</button></div>
+          </section>
+
+          <section class="page-card">
+            <h3>连接</h3>
+            <div class="kv">
+              <div class="kv-row"><span class="kv-key">中心</span><span class="kv-value">http://127.0.0.1:8787</span></div>
+              <div class="kv-row"><span class="kv-key">版本</span><span class="kv-value">0.3.0.0</span></div>
+              <div class="kv-row"><span class="kv-key">状态</span><span class="kv-value">已连接</span></div>
+              <div class="kv-row"><span class="kv-key">数据文件</span><span class="kv-value">C:\ProgramData\SevenStation.Core\data\sevenstation.db</span></div>
+            </div>
+          </section>
+
+          <section class="page-card">
+            <h3>日志</h3>
+            <p class="page-note">中心那边的运行日志，排查问题时看这里。</p>
+            <div class="center-actions"><button class="ghost-btn">读最近日志</button></div>
+            <div class="log-area" style="margin-top:10px;">2026-11-18 18:34:11.765 配置里缺的 Agent 已补上：C:\ProgramData\SevenStation.Core\settings.json
+2026-11-18 18:34:11.862 对话库：C:\ProgramData\SevenStation.Core\data\sevenstation.db
+2026-11-18 18:34:22.995 客户端连上 c-b626c5e3</div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ C 日志卡片间距对比 ============ -->
+  <div>
+    <p class="proto-label">C · 日志卡片的间距（同一个卡片，两版并排）</p>
+    <div class="logs-row">
+      <section class="page-card log-card">
+        <h3>现在这样</h3>
+        <p class="page-note">按钮下面直接贴住日志区，两个圆角撞在一起。</p>
+        <div class="center-actions"><button class="ghost-btn">读最近日志</button></div>
+        <div class="log-area tight" style="margin-top:0;">还没有读，点上面的按钮。</div>
+        <p class="gap-note">按钮底边 → 日志区顶边：0px</p>
+      </section>
+
+      <section class="page-card log-card">
+        <h3>改法一：留 10px</h3>
+        <p class="page-note">按钮和日志区之间留一个呼吸位。</p>
+        <div class="center-actions"><button class="ghost-btn">读最近日志</button></div>
+        <div class="log-area" style="margin-top:10px;">还没有读，点上面的按钮。</div>
+        <p class="gap-note">按钮底边 → 日志区顶边：10px</p>
+      </section>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
