@@ -65,7 +65,8 @@
        所以底边往上收 2px，四边才都看得见。 */
     inset: 0 0 2px 0;
     pointer-events: none;
-    border: 1px solid rgba(0, 0, 0, 0.14);
+    /* 窗口没有系统阴影，这圈线是唯一的分界，颜色压深一点才在任何背景上都看得见。 */
+    border: 1px solid rgba(0, 0, 0, 0.22);
     z-index: 9999;
   }
 
@@ -82,21 +83,8 @@
     cursor: default;
     user-select: none;
   }
-  .mark {
-    width: 18px; height: 18px;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: 5px;
-    /* 和 exe / 托盘那枚图标同一套配色：浅底、深 π、一圈细描边。 */
-    background: var(--page);
-    color: var(--text);
-    box-shadow: inset 0 0 0 1px var(--text);
-    /* 和 exe / 托盘图标同一套字形：Segoe UI Semibold 的 π。 */
-    font-family: "Segoe UI Semibold", "Segoe UI", sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1;
-    padding-bottom: 1px;
-  }
+  /* 标题栏这枚就是托盘 / exe 那张图，不在 CSS 里重画。 */
+  .mark { width: 18px; height: 18px; display: block; }
   .titlebar .name { font-size: 12.5px; color: var(--text-dim); }
   .titlebar .spacer { flex: 1; }
   .win-btn {
@@ -287,7 +275,7 @@
 <body>
 
 <div class="titlebar">
-  <span class="mark">π</span>
+  <img class="mark" src="mark.png" alt="" draggable="false" />
   <span class="name">Seven Station 中心</span>
   <span class="spacer"></span>
   <button class="win-btn" id="minBtn" title="最小化">—</button>

@@ -76,8 +76,11 @@ def main():
                  sizes=[(16, 16), (20, 20), (24, 24), (32, 32), (40, 40), (48, 48), (64, 64), (128, 128), (256, 256)])
 
     # 托盘单独一张：64 起步，任务栏缩放时不会糊
-    console.resize((64, 64), Image.LANCZOS).save(
-        r"E:\Dev\SevenStation\src\SevenStation.Control\icons\tray.png")
+    tray = console.resize((64, 64), Image.LANCZOS)
+    tray.save(r"E:\Dev\SevenStation\src\SevenStation.Control\icons\tray.png")
+
+    # 标题栏那枚直接用同一张图，别在 CSS 里再画一遍（画出来比例对不上）
+    tray.save(r"E:\Dev\SevenStation\src\SevenStation.Control\dist\mark.png")
 
     client.save(r"E:\Dev\SevenStation\src\SevenStation.Desktop\icons\icon.ico",
                 sizes=[(16, 16), (20, 20), (24, 24), (32, 32), (40, 40), (48, 48), (64, 64), (128, 128), (256, 256)])
