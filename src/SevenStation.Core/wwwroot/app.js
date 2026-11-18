@@ -54,7 +54,7 @@ function setConnectionState(text, ok) {
 
 function connect() {
   if (!transport.token) {
-    setConnectionState('这个地址缺少访问令牌，从中心启动时打印的地址打开', false);
+    setConnectionState('这个地址缺少访问令牌，用中心启动时打印的地址打开。', false);
     return;
   }
 
@@ -739,7 +739,7 @@ function confirmDelete(conversation) {
 
   const note = document.createElement('div');
   note.className = 'modal-message';
-  note.textContent = '「' + (conversation.title || '未命名对话') + '」的历史会从这个列表消失。Pi 那边的原始记录不删。';
+  note.textContent = '「' + (conversation.title || '未命名对话') + '」会从列表里移除，Pi 那边的原始记录还在。';
   card.appendChild(note);
 
   const actions = document.createElement('div');
@@ -1524,7 +1524,7 @@ function renderModelPanel() {
   if (!rows.length) {
     const empty = document.createElement('p');
     empty.className = 'model-empty';
-    empty.textContent = '没有匹配的模型。';
+    empty.textContent = '没有匹配的模型';
     list.appendChild(empty);
   } else {
     let lastRoute = null;
@@ -1789,7 +1789,7 @@ async function pickFolder(initial, onPick) {
       onPick(picked || '');
       return;
     } catch (error) {
-      console.warn('系统选目录没打开，改用页面里的目录树', error);
+      console.warn('系统的选目录窗口没打开，改用这里的目录树', error);
     }
   }
 
@@ -1884,7 +1884,7 @@ function renderDirListing(payload) {
   if (payload.parent) {
     const up = document.createElement('button');
     up.className = 'dir-row dir-up';
-    up.textContent = '.. 上一级';
+    up.textContent = '上一级';
     up.addEventListener('click', () => {
       send({ type: 'browse_dir', path: payload.parent });
     });
@@ -1929,6 +1929,10 @@ function openRestoreDialog() {
     commandBusy: false,
     commandResult: null,
     commandError: '',
+    restoring: false,
+    progress: null,
+    progressVisible: false,
+    progressTimer: 0,
   };
 
   const card = document.createElement('div');
@@ -1999,6 +2003,9 @@ function renderRestoreDialog() {
   card.appendChild(body);
 
   renderRestorePreview(state, preview);
+  if (state.restoring && state.progressVisible) {
+    card.appendChild(makeRestoreProgress(state));
+  }
   card.appendChild(makeRestoreFoot(state));
 }
 
@@ -2057,8 +2064,7 @@ function makeRestoreCommandBar(state) {
 
   const hint = document.createElement('span');
   hint.className = 'restore-hint' + (state.commandError ? ' is-bad' : '');
-  hint.textContent = state.commandError
-    || (state.commandResult?.item ? '找到了，下面这段对就恢复。' : '把 magpie 给的那条命令整段粘进来。');
+  hint.textContent = state.commandError || (state.commandResult?.item ? '' : '粘贴 magpie 的命令');
   actions.appendChild(hint);
 
   const pick = document.createElement('button');
@@ -2068,7 +2074,7 @@ function makeRestoreCommandBar(state) {
   pick.addEventListener('click', () => {
     const command = state.command.trim();
     if (!command) {
-      state.commandError = '先把命令粘进来。';
+      state.commandError = '先粘贴命令';
       renderRestoreDialog();
       return;
     }
@@ -2098,7 +2104,7 @@ function makeRestoreList(state) {
 
   const items = filterRestoreItems(state);
   if (!items.length) {
-    notice.textContent = state.filter ? '没有匹配的会话，换个词试试。' : 'Pi 那边还没有会话记录。';
+    notice.textContent = state.filter ? '没有匹配的会话，换个词试试' : 'Pi 那边还没有会话记录';
     list.appendChild(notice);
     return list;
   }
@@ -2129,7 +2135,7 @@ function makeRestoreList(state) {
 
     const name = document.createElement('span');
     name.className = 'name';
-    name.textContent = item.title || '（没有内容的会话）';
+    name.textContent = item.title || '（空会话）';
     row.appendChild(name);
 
     const when = document.createElement('span');
@@ -2180,16 +2186,14 @@ function renderRestorePreview(state, preview) {
   if (!item) {
     const hint = document.createElement('div');
     hint.className = 'restore-empty';
-    hint.textContent = state.source === 'magpie'
-      ? '命令对上之后，这里会显示这一段讲的是什么。'
-      : '左边挑一段，这里会先显示它讲的是什么。';
+    hint.textContent = state.source === 'magpie' ? '粘贴命令后在这里预览' : '挑一段看看';
     preview.appendChild(hint);
     return;
   }
 
   const title = document.createElement('p');
   title.className = 'preview-title';
-  title.textContent = item.title || '（没有内容的会话）';
+  title.textContent = item.title || '（空会话）';
   preview.appendChild(title);
 
   const facts = document.createElement('div');
@@ -2209,7 +2213,7 @@ function renderRestorePreview(state, preview) {
 
   const cwd = document.createElement('div');
   cwd.className = 'preview-cwd';
-  cwd.textContent = item.cwd || '（这段会话没记工作区）';
+  cwd.textContent = item.cwd || '没记工作区';
   preview.appendChild(cwd);
 
   if (item.lastMessage) {
@@ -2226,9 +2230,82 @@ function renderRestorePreview(state, preview) {
   if (item.imported) {
     const done = document.createElement('div');
     done.className = 'preview-done';
-    done.textContent = '这段已经在对话库里了，恢复会直接打开原来那一段。';
+    done.textContent = '已在对话库里，恢复会打开原来那段';
     preview.appendChild(done);
   }
+}
+
+/**
+ * 恢复时的进度（原型 G2）：读大文件按字节走，写库按条数走。
+ * 只在超过 250 ms 还没做完时才出现，两三百毫秒的那种不闪一下。
+ */
+function makeRestoreProgress(state) {
+  const card = document.createElement('div');
+  card.className = 'restore-progress';
+
+  const line = document.createElement('div');
+  line.className = 'line';
+  const label = document.createElement('span');
+  label.className = 'label';
+  line.appendChild(label);
+  const meta = document.createElement('span');
+  meta.className = 'meta';
+  line.appendChild(meta);
+  card.appendChild(line);
+
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  const fill = document.createElement('i');
+  bar.appendChild(fill);
+  card.appendChild(bar);
+
+  const sub = document.createElement('div');
+  sub.className = 'sub';
+  card.appendChild(sub);
+
+  applyRestoreProgress(card, state);
+  return card;
+}
+
+function updateRestoreProgress(state) {
+  const card = el.modal.querySelector('.restore-progress');
+  if (!card) return;
+  applyRestoreProgress(card, state);
+}
+
+function applyRestoreProgress(card, state) {
+  const progress = state.progress || { stage: 'read', done: 0, total: 0, messages: 0 };
+  const reading = progress.stage === 'read';
+  const ratio = progress.total > 0 ? Math.min(1, progress.done / progress.total) : 0;
+
+  card.querySelector('.label').textContent = reading ? '正在读会话' : '正在写入对话库';
+  card.querySelector('.meta').textContent = reading
+    ? formatBytes(progress.done) + ' / ' + formatBytes(progress.total)
+    : progress.done + ' 条';
+  card.querySelector('.bar i').style.width = Math.round((reading ? ratio : 1) * 100) + '%';
+  card.querySelector('.sub').textContent = reading
+    ? '已收 ' + (progress.messages || 0) + ' 条消息'
+    : '';
+}
+
+function beginRestore(state) {
+  state.restoring = true;
+  state.progress = null;
+  state.progressVisible = false;
+  clearTimeout(state.progressTimer);
+  state.progressTimer = setTimeout(() => {
+    if (!app.restore || !app.restore.restoring) return;
+    app.restore.progressVisible = true;
+    renderRestoreDialog();
+  }, 250);
+}
+
+function endRestore(state) {
+  clearTimeout(state.progressTimer);
+  state.progressTimer = 0;
+  state.restoring = false;
+  state.progressVisible = false;
+  state.progress = null;
 }
 
 function restoreCountText(state) {
@@ -2258,8 +2335,10 @@ function makeRestoreFoot(state) {
 
   const cancel = document.createElement('button');
   cancel.className = 'ghost-btn';
-  cancel.textContent = '取消';
+  // 恢复是中心那边接着干的事，关掉窗口不会取消它，所以按钮说实话。
+  cancel.textContent = state.restoring ? '关掉这个窗口' : '取消';
   cancel.addEventListener('click', () => {
+    if (state.restoring) endRestore(state);
     closeModal();
     app.restore = null;
   });
@@ -2268,13 +2347,14 @@ function makeRestoreFoot(state) {
   const target = currentRestoreTarget(state);
   const restore = document.createElement('button');
   restore.className = 'primary-btn';
-  restore.textContent = '恢复这段';
-  restore.disabled = !target;
+  restore.textContent = state.restoring ? '正在恢复…' : '恢复这段';
+  restore.disabled = state.restoring || !target;
   restore.addEventListener('click', () => {
     const chosen = currentRestoreTarget(state);
     if (!chosen) return;
     restore.disabled = true;
     restore.textContent = '正在恢复…';
+    beginRestore(state);
     send({ type: 'restore_session', sessionId: chosen.id });
   });
   buttons.appendChild(restore);
@@ -2336,11 +2416,6 @@ function askCwd() {
   const title = document.createElement('h3');
   title.textContent = '在哪个工作区新建对话';
   card.appendChild(title);
-
-  const note = document.createElement('div');
-  note.className = 'modal-message';
-  note.textContent = '填中心那台机器上的绝对路径，对话就绑定在这个目录下。';
-  card.appendChild(note);
 
   const inputRow = document.createElement('div');
   inputRow.className = 'path-row';
@@ -2437,7 +2512,7 @@ function startSession(cwd) {
   app.lastCwd = cwd;
   if (!send({ type: 'new_conversation', cwd })) {
     setOverlay(null);
-    toast('还没连上中心，等连接恢复再试。', 'warning');
+    toast('还没连上中心，等连接恢复再试', 'warning');
   }
 }
 
@@ -2585,7 +2660,7 @@ function makeInterruptToggle() {
   label.textContent = 'Ctrl+Enter 直接打断';
   const note = document.createElement('span');
   note.className = 'kv-toggle-note';
-  note.textContent = '关掉后只有停止键能停下，打字不会误中止。';
+  note.textContent = '关掉时只有停止键能停';
   left.appendChild(label);
   left.appendChild(note);
 
@@ -2720,10 +2795,7 @@ function renderClientCenterCard() {
   const invoke = clientInvoke();
   if (!invoke) return null;
 
-  const card = makePageCard(
-    '这台设备连的中心',
-    '只影响这台设备。中心换了地址或者令牌换了，改这里保存，客户端立刻重连。'
-  );
+  const card = makePageCard('这台设备连的中心');
 
   const urlRow = document.createElement('div');
   urlRow.className = 'row-edit';
@@ -2763,7 +2835,7 @@ function renderClientCenterCard() {
     const url = urlInput.value.trim();
     const token = tokenInput.value.trim();
     if (!url) {
-      status.textContent = '中心地址不能为空。';
+      status.textContent = '中心地址不能为空';
       return;
     }
 
@@ -2785,13 +2857,9 @@ function renderClientCenterCard() {
       urlInput.value = config.url || '';
       tokenInput.value = config.token || '';
 
-      const source = config.source === 'file'
-        ? '现在用的是这台设备上保存的地址'
-        : '现在用的是默认地址';
-      const tokenState = config.token
-        ? '令牌已保存（' + config.token.length + ' 位）。'
-        : '还没有令牌，连不上中心。';
-      status.textContent = source + '。' + tokenState;
+      status.textContent = config.token
+        ? ''
+        : '还没有令牌，连不上中心';
     })
     .catch((error) => {
       status.textContent = '读不到当前设置：' + (error && error.message ? error.message : error);
@@ -2827,11 +2895,11 @@ function renderSettingsPage() {
     : [['状态', '还没连上中心']]);
   el.pageInner.appendChild(card);
 
-  const recent = makePageCard('最近工作区', '点一下在那个目录里开新对话。');
+  const recent = makePageCard('最近工作区');
   if (!app.recentWorkspaces || !app.recentWorkspaces.length) {
     const empty = document.createElement('p');
     empty.className = 'page-note';
-    empty.textContent = '还没有用过工作区。';
+    empty.textContent = '还没有用过工作区';
     recent.appendChild(empty);
   } else {
     const list = document.createElement('div');
@@ -2937,15 +3005,10 @@ function renderSettingsPage() {
   logsHead.append(logsTitle, readLog);
   logs.appendChild(logsHead);
 
-  const logsNote = document.createElement('p');
-  logsNote.className = 'page-note';
-  logsNote.textContent = '中心那边的运行日志，排查问题时看这里。';
-  logs.appendChild(logsNote);
-
   const logBox = document.createElement('pre');
   logBox.className = 'log-tail';
   logBox.id = 'logTailBox';
-  logBox.textContent = app.logTail ? app.logTail.text || '（空）' : '还没有读，点上面的按钮。';
+  logBox.textContent = app.logTail ? app.logTail.text || '（空）' : '还没读过';
   logs.appendChild(logBox);
   el.pageInner.appendChild(logs);
 }
@@ -2978,7 +3041,7 @@ function renderSkillsPage() {
     const card = makePageCard();
     const empty = document.createElement('p');
     empty.className = 'page-note';
-    empty.textContent = '还没有技能。把带 SKILL.md 的目录放进 ~/.pi/agent/skills 或工作区的 .pi/skills 就会出现在这里。';
+    empty.textContent = '还没有技能。把带 SKILL.md 的目录放进 ~/.pi/agent/skills 或工作区的 .pi/skills。';
     card.appendChild(empty);
     el.pageInner.appendChild(card);
     return;
@@ -3048,11 +3111,11 @@ function renderExtensionsPage() {
 
   if (!data) return;
 
-  const packages = makePageCard('扩展包', data.settingsPath ? '读的是 ' + data.settingsPath : '');
+  const packages = makePageCard('扩展包');
   if (!data.packages.length) {
     const empty = document.createElement('p');
     empty.className = 'page-note';
-    empty.textContent = 'Pi 配置里还没有装扩展包。用 pi install 装一个再回来刷新。';
+    empty.textContent = '还没有装扩展包。用 pi install 装一个再刷新。';
     packages.appendChild(empty);
   } else {
     const list = document.createElement('div');
@@ -3096,11 +3159,11 @@ function renderExtensionsPage() {
 
   el.pageInner.appendChild(packages);
 
-  const commands = makePageCard('扩展命令', '只列当前工作区里能用的命令。');
+  const commands = makePageCard('扩展命令');
   if (!data.commands.length) {
     const empty = document.createElement('p');
     empty.className = 'page-note';
-    empty.textContent = '这个工作区还没有扩展命令。打开一个对话后再回来，这里会填上。';
+    empty.textContent = '这个工作区还没有扩展命令。打开一个对话后再回来。';
     commands.appendChild(empty);
   } else {
     const list = document.createElement('div');
@@ -3188,7 +3251,7 @@ function renameConversation() {
   const commit = () => {
     const next = input.value.trim();
     if (!next) {
-      toast('名字不能是空的。', 'warning');
+      toast('名字不能是空的', 'warning');
       return;
     }
     closeModal();
@@ -3665,7 +3728,7 @@ function renderListing(message) {
   el.filesBody.innerHTML = '';
 
   if (!message.exists) {
-    el.filesBody.innerHTML = '<div class="files-note">这里没有东西，或者已经不在工作区里了。</div>';
+    el.filesBody.innerHTML = '<div class="files-note">这个目录不在了</div>';
     return;
   }
 
@@ -3962,7 +4025,7 @@ async function prepareImage(file) {
 async function addImageFiles(files) {
   const images = files.filter((file) => file.type.startsWith('image/'));
   if (!images.length) {
-    if (files.length) toast('现在只能附加图片。', 'warning');
+    if (files.length) toast('现在只能附加图片', 'warning');
     return;
   }
 
@@ -4086,7 +4149,7 @@ function dispatch(message) {
         app.restore.commandBusy = false;
         app.restore.commandResult = { item: message.item, cwd: message.cwd };
         if (!message.item) {
-          app.restore.commandError = '没找到这段会话。';
+          app.restore.commandError = '没找到这段会话';
         }
         renderRestoreDialog();
       }
@@ -4100,8 +4163,21 @@ function dispatch(message) {
       }
       break;
 
+    case 'restore_progress':
+      if (app.restore) {
+        app.restore.progress = {
+          stage: message.stage || 'read',
+          done: Number(message.done) || 0,
+          total: Number(message.total) || 0,
+          messages: Number(message.messages) || 0,
+        };
+        updateRestoreProgress(app.restore);
+      }
+      break;
+
     case 'session_restored': {
       const state = app.restore;
+      if (state) endRestore(state);
       closeModal();
       app.restore = null;
       if (state) {
@@ -4114,9 +4190,9 @@ function dispatch(message) {
       }
 
       if (message.already) {
-        toast('这段会话早就在对话库里了，已经帮你打开。');
+        toast('这段已在对话库里，已打开');
       } else {
-        toast('已恢复 ' + message.messageCount + ' 条消息，可以接着聊。');
+        toast('已恢复 ' + message.messageCount + ' 条消息');
       }
       break;
     }
@@ -4222,7 +4298,7 @@ function dispatch(message) {
 
     case 'error':
       setOverlay(null);
-      toast(message.message || '这条操作没成功，可以再试一次。', 'error');
+      toast(message.message || '这条操作没成功，可以再试一次', 'error');
       break;
 
     default:

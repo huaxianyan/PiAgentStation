@@ -352,11 +352,41 @@ public sealed class CenterHub
         var cwd = candidate.Cwd;
         if (string.IsNullOrWhiteSpace(cwd))
         {
-            throw new InvalidOperationException("这段会话没有记下工作目录，先手工建一个对话再接着聊。");
+            throw new InvalidOperationException("这段会话没记工作目录，得先新建一个对话再接着聊。");
         }
 
         var conversation = _store.Create(cwd, candidate.Title, candidate.Path, candidate.StartedAt);
-        var added = _store.AppendMessages(conversation.Id, PiSessionLibrary.ReadMessages(candidate.Path).ToArray());
+
+        // 读大文件要一两秒，按字节回报，界面才不会一直只有转圈。
+        var lastReport = 0L;
+        var messages = PiSessionLibrary.ReadMessages(candidate.Path, (read, total, count) =>
+        {
+            var now = Environment.TickCount64;
+            if (now - lastReport < 120)
+            {
+                return;
+            }
+
+            lastReport = now;
+            sender.Send(new JsonObject
+            {
+                ["type"] = "restore_progress",
+                ["stage"] = "read",
+                ["done"] = read,
+                ["total"] = total,
+                ["messages"] = count,
+            });
+        });
+
+        var added = _store.AppendMessages(conversation.Id, messages.ToArray());
+        sender.Send(new JsonObject
+        {
+            ["type"] = "restore_progress",
+            ["stage"] = "write",
+            ["done"] = added,
+            ["total"] = added,
+            ["messages"] = added,
+        });
 
         Log.Write($"恢复会话 {candidate.Id} → {conversation.Id}（{added} 条消息）");
         Broadcast(new JsonObject { ["type"] = "conversation_saved" });
@@ -1037,7 +1067,7 @@ public sealed class CenterHub
                 }
                 else if (!isDirectory)
                 {
-                    reason = "这是一个文件，不是目录";
+                    reason = "这个路径是个文件，不是目录";
                 }
                 else
                 {

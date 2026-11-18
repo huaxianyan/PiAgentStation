@@ -314,7 +314,7 @@ public sealed class CoreSettings
         return changed;
     }
 
-    /// <summary>从 &lt;用户目录&gt;\.pigent 反推用户目录；不是这个形状就返回 null。</summary>
+    /// <summary>从 &lt;用户目录&gt;\.pi\agent 反推用户目录；不是这个形状就返回 null。</summary>
     private static string? HomeOf(string agentDirectory)
     {
         var pi = Path.GetDirectoryName(agentDirectory);

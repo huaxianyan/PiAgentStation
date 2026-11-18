@@ -120,14 +120,35 @@ public static class PiSessionLibrary
         return (id, cwd);
     }
 
-    /// <summary>把会话文件里真正的对话搬出来：只留用户、助手和工具结果。</summary>
-    public static JsonArray ReadMessages(string path)
+    /// <summary>
+    /// 把会话文件里真正的对话搬出来：只留用户、助手和工具结果。
+    /// <paramref name="progress"/> 每读一段回一次（已读字节、总字节、已收条数），
+    /// 37 MB 那种大文件要读一两秒，不回报进度界面就一直转圈。
+    /// </summary>
+    public static JsonArray ReadMessages(string path, Action<long, long, int>? progress = null)
     {
         var messages = new JsonArray();
+        long total = 0;
+        try
+        {
+            total = new FileInfo(path).Length;
+        }
+        catch (IOException)
+        {
+            // 拿不到大小就不报进度，读还是要读。
+        }
+
+        long read = 0;
         try
         {
             foreach (var line in File.ReadLines(path))
             {
+                read += System.Text.Encoding.UTF8.GetByteCount(line) + 1;
+                if (progress is not null && (messages.Count % 200 == 0))
+                {
+                    progress(read, total, messages.Count);
+                }
+
                 if (line.Length == 0)
                 {
                     continue;
@@ -163,6 +184,7 @@ public static class PiSessionLibrary
             // 读到一半文件被移走：已经读到的照用。
         }
 
+        progress?.Invoke(total, total, messages.Count);
         return messages;
     }
 
@@ -295,7 +317,7 @@ public static class PiSessionLibrary
 
         if (title.Length == 0)
         {
-            title = lastAssistant.Length > 0 ? Clip(lastAssistant, 60) : "（没有内容的会话）";
+            title = lastAssistant.Length > 0 ? Clip(lastAssistant, 60) : "（空会话）";
         }
 
         return new RestoreCandidate(id, cwd, title, startedAt, messageCount, info.Length, model, file, lastAssistant);

@@ -193,7 +193,8 @@
   align-items: center;
   gap: 7px;
   padding: 5px 12px;
-  border: 1px solid var(--border-strong);
+  /* 描边用内阴影画：1 px 真 border 在 125% 缩放下会在圆弧上留台阶。 */
+  box-shadow: inset 0 0 0 1px var(--border-strong);
   border-radius: var(--radius-pill);
   background: var(--card);
   font-family: inherit;
@@ -202,13 +203,17 @@
   cursor: pointer;
 }
 
-.palette-btn.is-on { border-color: var(--text); color: var(--text); }
+.palette-btn.is-on {
+  box-shadow: inset 0 0 0 1px var(--text-dim);
+  background: var(--panel);
+  color: var(--text);
+}
 
 .palette-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  border: 1px solid rgba(20, 20, 24, .14);
+  box-shadow: inset 0 0 0 1px rgba(20, 20, 24, .14);
 }
 
 * { box-sizing: border-box; }
@@ -299,9 +304,9 @@ button { cursor: pointer; }
 .new-row { display: flex; gap: 6px; align-items: stretch; margin-bottom: 6px; }
 .new-row .new-thread { margin-bottom: 0; }
 .new-restore {
-  flex: none; width: 38px;
+  flex: none; width: 34px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--card); border: 1px solid var(--border-strong);
+  background: var(--card); box-shadow: inset 0 0 0 1px var(--border-strong);
   border-radius: var(--radius-sm); color: var(--text-mute);
   transition: background .12s, color .12s;
 }
@@ -311,14 +316,15 @@ button { cursor: pointer; }
 .new-thread {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   width: 100%;
-  padding: 9px 12px;
+  height: 34px;
+  padding: 0 11px;
   margin-bottom: 6px;
   background: var(--card);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  font-size: 14.5px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--text);
   transition: background .12s, border-color .12s;
@@ -903,14 +909,6 @@ button { cursor: pointer; }
   font-weight: 600;
 }
 
-.eyebrow {
-  font-size: 12.5px;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: var(--text-mute);
-  text-transform: none;
-}
-
 .empty h2 {
   margin: 0;
   font-size: 30px;
@@ -926,13 +924,13 @@ button { cursor: pointer; }
   height: 30px;
   padding: 0 10px 0 12px;
   background: var(--card);
-  border: 1px solid var(--border-strong);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
   border-radius: var(--radius-pill);
   font-size: 12.5px;
   color: var(--text-dim);
 }
 
-.ws-select:hover { border-color: var(--text-mute); color: var(--text); }
+.ws-select:hover { box-shadow: inset 0 0 0 1px var(--text-mute); color: var(--text); }
 
 .ws-select-label {
   min-width: 0;
@@ -1162,7 +1160,7 @@ button { cursor: pointer; }
 .chip-btn {
   max-width: 100%;
   padding: 5px 10px;
-  border: 1px solid var(--border-strong);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
   border-radius: var(--radius-pill);
   background: var(--card);
   font-size: 12px;
@@ -1924,7 +1922,7 @@ body.dragging .composer-box {
   align-items: center;
   gap: 6px;
   padding: 4px 9px;
-  border: 1px solid var(--border);
+  box-shadow: inset 0 0 0 1px var(--border);
   border-radius: var(--radius-pill);
   background: #f7f7f9;
   font-size: 12px;
@@ -2043,13 +2041,18 @@ body.dragging .composer-box {
 .restore-sources { display: flex; gap: 6px; }
 .restore-sources .chip {
   padding: 4px 10px;
-  border: 1px solid var(--border);
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--border);
   border-radius: var(--radius-pill);
   background: var(--panel);
   color: var(--text-soft);
   font-size: 12px;
 }
-.restore-sources .chip.is-on { border-color: var(--border-strong); background: var(--card); color: var(--text); }
+.restore-sources .chip.is-on {
+  box-shadow: inset 0 0 0 1px var(--text-dim);
+  background: var(--panel);
+  color: var(--text);
+}
 
 .restore-search {
   display: flex;
@@ -2063,15 +2066,18 @@ body.dragging .composer-box {
 }
 .restore-search .mag { display: flex; }
 .restore-search .mag svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
-.restore-search input {
+.modal .restore-search input[type="text"] {
   flex: 1;
   min-width: 0;
+  padding: 0;
   border: 0;
+  border-radius: 0;
   outline: none;
   background: transparent;
   font-family: inherit;
   font-size: 12.5px;
   color: var(--text);
+  box-shadow: none;
 }
 
 .restore-command { margin: 0 18px 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -2186,6 +2192,26 @@ body.dragging .composer-box {
   line-height: 1.8;
   color: var(--text-faint);
 }
+
+.restore-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+.restore-progress .line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.restore-progress .meta { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
+.restore-progress .bar { height: 3px; border-radius: var(--radius-pill); background: var(--active); overflow: hidden; }
+.restore-progress .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: var(--radius-pill); transition: width .18s ease-out; }
+.restore-progress .sub { font-size: 11.5px; color: var(--text-faint); }
 
 .restore-foot {
   display: flex;

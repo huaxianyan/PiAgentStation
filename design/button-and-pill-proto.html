@@ -144,7 +144,16 @@
   .steps { display: flex; gap: 12px; font-size: 11.5px; color: var(--text-faint); }
   .steps .done { color: var(--text-mute); }
   .steps .now { color: var(--text-dim); }
-</style>
+.tag em {
+      margin-left: 6px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: #1b1b1f;
+      color: #fff;
+      font-style: normal;
+      font-size: 10.5px;
+    }
+  </style>
 </head>
 <body>
 <h1>按钮高度、选中态的边缘、恢复时的进度</h1>
@@ -181,7 +190,7 @@
           <div class="nav-row"><span class="ico"></span>技能<span class="cnt">18</span></div>
         </div>
       </div>
-      <p class="tag"><b>A1</b> · 34 px</p>
+      <p class="tag"><b>A1</b> · 34 px <em>已采用</em></p>
       <p class="kv">7/11 · 13.5 · 恢复 34×34</p>
     </div>
 
@@ -251,7 +260,7 @@
     </div>
 
     <div class="card">
-      <p class="tag"><b>S4</b> · 描边 + 淡底</p>
+      <p class="tag"><b>S4</b> · 描边 + 淡底 <em>已采用</em></p>
       <div class="pillset">
         <span class="sel-pill s4"><span class="swatch"></span>纸白</span>
         <span class="sel-pill s4 on"><span class="swatch"></span>暖砂</span>
@@ -324,7 +333,7 @@
           <div class="btns"><span class="btn">取消</span><span class="btn busy">恢复这段</span></div>
         </div>
       </div>
-      <p class="tag"><b>G2</b> · 对话框里一块进度卡</p>
+      <p class="tag"><b>G2</b> · 对话框里一块进度卡 <em>已采用</em></p>
       <p class="kv">给到字节与条数，但会把列表挤下去</p>
     </div>
 

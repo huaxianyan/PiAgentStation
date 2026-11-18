@@ -58,7 +58,7 @@
         </div>
 
         <div class="filterbar" id="filterbar" hidden>
-          <input id="sessionFilter" type="search" placeholder="按标题或目录筛选" autocomplete="off" />
+          <input id="sessionFilter" type="search" placeholder="标题或工作区" autocomplete="off" />
         </div>
 
         <div class="session-list" id="sessionList"></div>
@@ -105,8 +105,7 @@
 
           <div class="empty" id="empty">
             <div class="app-mark">π</div>
-            <div class="eyebrow">新对话</div>
-            <h2>开始动手</h2>
+            <h2>新对话</h2>
             <button class="ws-select" id="emptyNewBtn">
               <span class="ws-select-label" id="wsSelectText">选择工作区</span>
               <svg class="ws-select-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.2 6.6 8 10.4l3.8-3.8"/></svg>
@@ -156,7 +155,7 @@
             <div class="attachments" id="attachments" hidden></div>
             <div class="completions" id="completions" hidden></div>
             <div class="composer-box">
-              <textarea id="input" rows="1" placeholder="问点什么，用 / 触发命令与技能" spellcheck="false"></textarea>
+              <textarea id="input" rows="1" placeholder="问点什么，输入 / 调用命令" spellcheck="false"></textarea>
               <div class="composer-row">
                 <div class="pills">
                   <button class="pill pill-primary" id="workspacePill">
