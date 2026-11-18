@@ -23,6 +23,8 @@ function savePrefs() {
   }
 }
 
+/* 外观放在 appearance.js，那边先于渲染跑，这里只管画设置页那张卡。 */
+
 const transport = {
   socket: null,
   connected: false,
@@ -2149,8 +2151,53 @@ function listenText() {
 
 /* -------------------------------- 设置 -------------------------------- */
 
+function renderAppearanceCard() {
+  const card = makePageCard('外观');
+  const block = document.createElement('div');
+  block.className = 'appearance-block';
+
+  const seg = document.createElement('div');
+  seg.className = 'seg';
+  for (const theme of THEMES) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = theme.name;
+    button.classList.toggle('is-on', appearance.theme === theme.id);
+    button.addEventListener('click', () => {
+      setAppearance({ theme: theme.id });
+      card.replaceWith(renderAppearanceCard());
+    });
+    seg.appendChild(button);
+  }
+
+  const row = document.createElement('div');
+  row.className = 'palette-row';
+  for (const palette of PALETTES) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'palette-btn';
+    button.classList.toggle('is-on', appearance.palette === palette.id);
+    const dot = document.createElement('span');
+    dot.className = 'palette-dot';
+    dot.style.background = palette.dot;
+    button.appendChild(dot);
+    button.appendChild(document.createTextNode(palette.name));
+    button.addEventListener('click', () => {
+      setAppearance({ palette: palette.id });
+      card.replaceWith(renderAppearanceCard());
+    });
+    row.appendChild(button);
+  }
+
+  block.appendChild(seg);
+  block.appendChild(row);
+  card.appendChild(block);
+  return card;
+}
+
 function renderSettingsPage() {
   el.pageInner.appendChild(makePageHead('设置'));
+  el.pageInner.appendChild(renderAppearanceCard());
 
   const connection = makePageCard('连接');
   addKeyValues(connection, [

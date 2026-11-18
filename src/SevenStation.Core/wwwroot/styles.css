@@ -19,6 +19,7 @@
 
   --accent: #1a1a1d;
   --accent-soft: #ececef;
+  --on-accent: #ffffff;
   --focus: #c9c5f6;
   --green: #189a4a;
   --danger: #cf3b3b;
@@ -33,6 +34,181 @@
 
   --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, "Inter", "Microsoft YaHei UI", system-ui, sans-serif;
   --mono: "Cascadia Mono", "Consolas", "SFMono-Regular", ui-monospace, monospace;
+}
+
+
+/* 主题与配色：<html data-theme="light|dark" data-palette="paper|sand|mist|pine">。
+   中性色由主题决定，配色只覆盖底色、卡片、文字与强调。 */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --page: #121316;
+  --panel: #17181b;
+  --card: #1e2025;
+  --border: #2c2f35;
+  --border-strong: #3a3e45;
+  --bubble: #232529;
+  --active: #2a2d33;
+
+  --text: #ecedf0;
+  --text-soft: #a8abb2;
+  --text-dim: #d3d5da;
+  --text-mute: #8b8f97;
+  --text-faint: #6f747c;
+
+  --accent: #ecedf0;
+  --accent-soft: #2a2d33;
+  --on-accent: #14161a;
+  --focus: #6a63c8;
+  --green: #4ec27a;
+  --danger: #e87272;
+}
+
+:root[data-palette="sand"] {
+  --page: #efe9df;
+  --panel: #f7f3ec;
+  --card: #fffdf8;
+  --border: #e7e1d8;
+  --border-strong: #d8cfc2;
+  --bubble: #f1ece3;
+  --active: #ece5d9;
+  --text: #2b2620;
+  --text-dim: #423b33;
+  --text-soft: #5b544b;
+  --text-mute: #8d8377;
+  --accent: #a05b22;
+  --accent-soft: #f0e6d7;
+}
+:root[data-palette="sand"][data-theme="dark"] {
+  --page: #14100d;
+  --panel: #1b1714;
+  --card: #241f1a;
+  --border: #332b23;
+  --border-strong: #443930;
+  --bubble: #2a241d;
+  --active: #30281f;
+  --text: #efe8df;
+  --text-dim: #d5cabd;
+  --text-soft: #b3a89b;
+  --text-mute: #8e8478;
+  --accent: #d08a4a;
+  --accent-soft: #33281e;
+}
+
+:root[data-palette="mist"] {
+  --page: #e9eef5;
+  --panel: #f1f5fa;
+  --card: #ffffff;
+  --border: #dde4ee;
+  --border-strong: #cbd5e3;
+  --bubble: #edf2f8;
+  --active: #e3eaf3;
+  --text: #16202c;
+  --text-dim: #27303c;
+  --text-soft: #4d5865;
+  --text-mute: #7d8794;
+  --accent: #2f6fb5;
+  --accent-soft: #e2ecf8;
+}
+:root[data-palette="mist"][data-theme="dark"] {
+  --page: #10151c;
+  --panel: #131922;
+  --card: #1a222d;
+  --border: #26303d;
+  --border-strong: #333f4f;
+  --bubble: #1d2530;
+  --active: #232c38;
+  --text: #e6edf5;
+  --text-dim: #c8d2de;
+  --text-soft: #a3aebb;
+  --text-mute: #7f8b99;
+  --accent: #6aa3e8;
+  --accent-soft: #202a36;
+}
+
+:root[data-palette="pine"] {
+  --page: #e9efe9;
+  --panel: #f1f6f2;
+  --card: #ffffff;
+  --border: #dbe6de;
+  --border-strong: #c8d8cd;
+  --bubble: #edf3ee;
+  --active: #e3ece6;
+  --text: #15241b;
+  --text-dim: #253127;
+  --text-soft: #4b5850;
+  --text-mute: #7c8a80;
+  --accent: #2b7a52;
+  --accent-soft: #e0efe6;
+}
+:root[data-palette="pine"][data-theme="dark"] {
+  --page: #0e1411;
+  --panel: #111915;
+  --card: #182019;
+  --border: #24322a;
+  --border-strong: #31443a;
+  --bubble: #1b241d;
+  --active: #212b24;
+  --text: #e4efe7;
+  --text-dim: #c6d6ca;
+  --text-soft: #a2b3a7;
+  --text-mute: #7d8d82;
+  --accent: #58b183;
+  --accent-soft: #1c2a22;
+}
+
+/* 外观设置那一张卡 */
+.appearance-block { display: flex; flex-direction: column; gap: 10px; }
+
+.seg {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 3px;
+  background: var(--active);
+  border-radius: 9px;
+}
+
+.seg button {
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.seg button.is-on {
+  background: var(--card);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.palette-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.palette-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.palette-btn.is-on { border-color: var(--text); color: var(--text); }
+
+.palette-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid rgba(20, 20, 24, .14);
 }
 
 * { box-sizing: border-box; }
@@ -172,7 +348,7 @@ button { cursor: pointer; }
 }
 
 .nav-item:hover { background: var(--active); color: var(--text); }
-.nav-item.is-active { background: var(--active); color: var(--text); font-weight: 500; }
+.nav-item.is-active { background: var(--active); color: var(--accent); font-weight: 500; }
 
 .nav-count {
   margin-left: auto;
@@ -677,8 +853,8 @@ button { cursor: pointer; }
   align-items: center;
   justify-content: center;
   margin-bottom: 4px;
-  background: #1a1a1d;
-  color: #fff;
+  background: var(--text);
+  color: var(--card);
   border-radius: 12px;
   font-size: 22px;
   font-weight: 600;
@@ -1628,10 +1804,10 @@ body.dragging .composer-box {
 
 .send-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-.send-btn.ready { background: var(--accent); color: #fff; }
-.send-btn.ready:hover { background: #2b2b33; }
-.send-btn.stop { background: var(--accent); color: #fff; }
-.send-btn.stop:hover { background: #2b2b33; }
+.send-btn.ready { background: var(--accent); color: var(--on-accent); }
+.send-btn.ready:hover { filter: brightness(.92); }
+.send-btn.stop { background: var(--accent); color: var(--on-accent); }
+.send-btn.stop:hover { filter: brightness(.92); }
 
 /* 停止：圆底里一个 9 像素的白方块。 */
 .send-stop-mark {
