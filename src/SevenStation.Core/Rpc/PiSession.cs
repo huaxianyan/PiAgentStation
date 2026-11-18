@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Text.Json.Nodes;
+using SevenStation.Core.Agents;
 
 namespace SevenStation.Core.Rpc;
 
@@ -57,6 +58,15 @@ public sealed class PiSession : IAsyncDisposable
             StandardErrorEncoding = new UTF8Encoding(false),
         };
         psi.ArgumentList.Add(PiLocator.LauncherPath);
+        // 服务跑在系统账户下时，Pi 仍然要按真实用户的家目录找配置、写会话，
+        // 否则它看到的是一个空的 ~/.pi，连模型都调不起来。
+        var home = CoreSettings.Current.Agent(AgentRegistry.PiId)?.Home;
+        if (!string.IsNullOrWhiteSpace(home) && Directory.Exists(home))
+        {
+            psi.Environment["USERPROFILE"] = home;
+            psi.Environment["HOME"] = home;
+        }
+
         psi.ArgumentList.Add("--mode");
         psi.ArgumentList.Add("rpc");
         if (!string.IsNullOrEmpty(sessionPath))

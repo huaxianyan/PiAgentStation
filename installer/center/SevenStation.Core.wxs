@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SevenStation 中心的安装程序（MSI）。
+
+  中心是机器级的东西：装到 Program Files，注册成 Windows 服务，开机自己起来。
+  不用便携版——双击 exe 一跑了之的形态没法保证服务、开机启动和升级。
+  数据不放在安装目录：%ProgramData%\SevenStation.Core\（配置、令牌、对话库、日志），
+  卸载时留在原处，重装或升级接得上。
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+      Name="SevenStation 中心"
+      Manufacturer="SevenStation"
+      Version="$(var.Version)"
+      UpgradeCode="c262dd6d-8dae-4ad8-8e7e-4f05f8761264"
+      Scope="perMachine"
+      Compressed="yes"
+      InstallerVersion="500">
+
+    <SummaryInformation Description="SevenStation 中心：为客户端提供对话与 Agent 服务。" />
+
+    <!-- 升级时先停服务再换文件；旧版本自动卸掉。 -->
+    <MajorUpgrade DowngradeErrorMessage="已经装了更新的版本，请先卸载再装旧版。" Schedule="afterInstallValidate" />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="SevenStation Core" />
+    </StandardDirectory>
+
+    <!-- 主程序本体。服务要指向它，所以单独一个组件、KeyPath 就是 exe。 -->
+    <Component Id="CoreExecutable" Directory="INSTALLFOLDER" Guid="*">
+      <File Id="CoreExe" Source="$(var.PublishDir)\SevenStation.Core.exe" KeyPath="yes" />
+
+      <ServiceInstall
+          Id="CoreService"
+          Name="SevenStationCore"
+          DisplayName="SevenStation 中心"
+          Description="SevenStation 中心：管对话库与 Agent 子进程，客户端连它。"
+          Type="ownProcess"
+          Start="auto"
+          ErrorControl="normal"
+          Account="LocalSystem"
+          Vital="yes" />
+
+      <!-- 装完直接起；升级和卸载时先停；卸载时把服务摘掉。 -->
+      <ServiceControl Id="CoreServiceControl" Name="SevenStationCore"
+                      Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+    </Component>
+
+    <!-- 运行时与前端。逐个列太脆，按目录收。 -->
+    <ComponentGroup Id="CorePayload" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PublishDir)\*.dll" />
+      <Files Include="$(var.PublishDir)\*.json" />
+      <Files Include="$(var.PublishDir)\wwwroot\**" />
+    </ComponentGroup>
+
+    <!-- 开始菜单：打开中心页面（带令牌）、打开配置。 -->
+    <Component Id="StartMenuShortcuts" Directory="ProgramMenuFolder" Guid="892982fe-e529-4982-82cb-454e868408ea">
+      <File Id="OpenCenterCmd" Source="payload\打开中心.cmd" />
+      <File Id="OpenSettingsCmd" Source="payload\打开设置.cmd" />
+      <Shortcut Id="ShortcutOpenCenter" Name="打开中心页面" Target="[#OpenCenterCmd]" WorkingDirectory="INSTALLFOLDER" />
+      <Shortcut Id="ShortcutOpenSettings" Name="打开中心配置" Target="[#OpenSettingsCmd]" WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveShortcuts" On="uninstall" />
+    </Component>
+
+    <Feature Id="Main" Title="SevenStation 中心" Level="1" AllowAbsent="no">
+      <ComponentRef Id="CoreExecutable" />
+      <ComponentRef Id="StartMenuShortcuts" />
+      <ComponentGroupRef Id="CorePayload" />
+    </Feature>
+
+    <!-- 数据目录不归安装程序管：卸载后留着，重装接得上。 -->
+  </Package>
+</Wix>

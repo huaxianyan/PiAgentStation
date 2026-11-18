@@ -92,6 +92,46 @@ public sealed class CoreSettings
         return changed;
     }
 
+    /// <summary>系统账户下按用户目录找一遍 Pi，最近写过的排前面。</summary>
+    private static IEnumerable<(string Directory, string Home)> ProfileCandidates()
+    {
+        // 服务账户的家目录在 C:\Windows\system32\config 下，真正的用户目录要从 Windows 目录往上找。
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var usersRoot = Path.Combine(Path.GetDirectoryName(windows) ?? "C:", "Users");
+
+        string[] users;
+        try
+        {
+            users = Directory.GetDirectories(usersRoot);
+        }
+        catch (Exception)
+        {
+            yield break;
+        }
+
+        var found = new List<(string Directory, string Home, DateTime Stamp)>();
+        foreach (var user in users)
+        {
+            var candidate = Path.Combine(user, ".pi", "agent", "bin", "pi-launcher.js");
+            try
+            {
+                if (File.Exists(candidate))
+                {
+                    found.Add((Path.Combine(user, ".pi", "agent"), user, File.GetLastWriteTimeUtc(candidate)));
+                }
+            }
+            catch (Exception)
+            {
+                // 别的用户目录读不了就跳过，不是错误。
+            }
+        }
+
+        foreach (var item in found.OrderByDescending(entry => entry.Stamp))
+        {
+            yield return (item.Directory, item.Home);
+        }
+    }
+
     private static bool IsUsable(AgentSettings? agent) =>
         agent is not null && Directory.Exists(agent.Directory);
 
@@ -131,7 +171,21 @@ public sealed class CoreSettings
         {
             if (File.Exists(Path.Combine(candidate, "bin", "pi-launcher.js")))
             {
-                return new AgentSettings { Directory = candidate };
+                return new AgentSettings
+                {
+                    Directory = candidate,
+                    Home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                };
+            }
+        }
+
+        // 中心作为服务跑时用的是系统账户，它的家目录里没有 Pi；Pi 装在某个真实用户的家目录下。
+        // 这时候挨个用户目录找一遍，挑最近动过的那个——安装完成第一次启动就是靠这一步认出 Pi。
+        foreach (var (directory, home) in ProfileCandidates())
+        {
+            if (File.Exists(Path.Combine(directory, "bin", "pi-launcher.js")))
+            {
+                return new AgentSettings { Directory = directory, Home = home };
             }
         }
 
@@ -148,4 +202,10 @@ public sealed class AgentSettings
     public string Directory { get; set; } = string.Empty;
 
     public string? Node { get; set; }
+
+    /// <summary>
+    /// 以哪个用户的家目录跑这个 Agent。中心作为服务跑时进程属于系统账户，
+    /// 而 Pi 的配置与密钥在真实用户的家目录下，所以要显式指过去。
+    /// </summary>
+    public string? Home { get; set; }
 }

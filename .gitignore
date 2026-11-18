@@ -12,3 +12,7 @@ work/
 # Tauri 构建时生成，不入库。
 src/SevenStation.Desktop/gen/
 src/SevenStation.Desktop/permissions/
+
+# WiX 的中间产物
+installer/**/*.wixpdb
+installer/**/*.wixobj
