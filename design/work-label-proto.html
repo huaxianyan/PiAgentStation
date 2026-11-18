@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>工作标签分隔符 · 原型</title>
+<style>
+  :root {
+    --page: #ececee;
+    --card: #ffffff;
+    --panel: #f7f7f9;
+    --border: #e9e9ee;
+    --border-strong: #dcdce2;
+    --text: #1a1a1d;
+    --text-soft: #55555c;
+    --text-mute: #8a8a92;
+    --text-faint: #a9a9b1;
+    --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, "Inter", "Microsoft YaHei UI", system-ui, sans-serif;
+    --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 40px 60px;
+    background: var(--page); color: var(--text);
+    font-family: var(--font); -webkit-font-smoothing: antialiased;
+  }
+  h1 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
+  .lede { margin: 0 0 26px; font-size: 13px; color: var(--text-mute); }
+  .grid { display: flex; flex-wrap: wrap; gap: 18px; }
+  .card {
+    width: 340px; padding: 14px 18px 16px;
+    background: var(--card); border: 1px solid var(--border-strong);
+    border-radius: 14px;
+  }
+  .card h2 { margin: 0 0 4px; font-size: 12.5px; font-weight: 600; color: var(--text-mute); }
+  .why { margin: 0 0 10px; font-size: 12px; line-height: 1.65; color: var(--text-faint); }
+
+  /* 跟真界面的 .work-head 同一套度量 */
+  .work-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 0; border: 0; background: transparent;
+    font-family: inherit; text-align: left;
+    font-size: 12.5px; color: var(--text-mute); width: 100%;
+  }
+  .work-caret { font-size: 10px; color: var(--text-faint); }
+  .work-title { white-space: nowrap; }
+  .case { border-top: 1px dashed var(--border); }
+  .case:first-of-type { border-top: 0; }
+  .case .tag {
+    display: inline-block; margin: 0 0 0 22px;
+    font-size: 11px; color: var(--text-faint); font-family: var(--mono);
+  }
+  .note { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--text-faint); }
+  code { font-family: var(--mono); font-size: 11.5px; color: var(--text-soft); }
+  .sep { color: var(--text-faint); }
+</style>
+</head>
+<body>
+<h1>「工作 · 步数 · 时间」怎么写</h1>
+<p class="lede">下面是同一行标题的五种写法，每种都摆四个真实情形：常速一轮、快到不足一秒、跑很久、还在跑。</p>
+
+<div class="grid">
+
+  <section class="card">
+    <h2>现在这样</h2>
+    <p class="why">三段空格分开，读起来像三个并列的词，看不出哪段是主、哪段是补充。</p>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 47 秒 9 步</span></div>
+      <span class="tag">9 步 / 47 秒</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 1 步</span></div>
+      <span class="tag">不足一秒</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 2 分 10 秒 128 步</span></div>
+      <span class="tag">长跑</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▾</span><span class="work-title">工作 39 秒 12 步</span></div>
+      <span class="tag">还在跑</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>A · 中点，步数在前</h2>
+    <p class="why">步数是主体，时间退成补充。<code>·</code> 在中英混排里读起来最轻，也不会被当成句读。</p>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 9 步 <span class="sep">·</span> 47 秒</span></div>
+      <span class="tag">9 步 / 47 秒</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 1 步</span></div>
+      <span class="tag">不足一秒</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 128 步 <span class="sep">·</span> 2 分 10 秒</span></div>
+      <span class="tag">长跑</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▾</span><span class="work-title">工作 12 步 <span class="sep">·</span> 39 秒</span></div>
+      <span class="tag">还在跑</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>B · 逗号加「用时」</h2>
+    <p class="why">把时间说成人话，含意最明确，但标题变长，「用时」两个字每轮都占位。</p>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 9 步，用时 47 秒</span></div>
+      <span class="tag">9 步 / 47 秒</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 1 步</span></div>
+      <span class="tag">不足一秒</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 128 步，用时 2 分 10 秒</span></div>
+      <span class="tag">长跑</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▾</span><span class="work-title">工作 12 步，用时 39 秒</span></div>
+      <span class="tag">还在跑</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>C · 括号，时间当附注</h2>
+    <p class="why">时间明确是次要信息，扫一眼不会被它抢注意力；缺点是括号里的内容容易被忽略。</p>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 9 步（47 秒）</span></div>
+      <span class="tag">9 步 / 47 秒</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 1 步</span></div>
+      <span class="tag">不足一秒</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 128 步（2 分 10 秒）</span></div>
+      <span class="tag">长跑</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▾</span><span class="work-title">工作 12 步（39 秒）</span></div>
+      <span class="tag">还在跑</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>D · 去掉「工作」，只留数</h2>
+    <p class="why">最短。这行本来就长在助手回复的上方，语境已经说明是这一轮，不需要再点一次题。</p>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">9 步 <span class="sep">·</span> 47 秒</span></div>
+      <span class="tag">9 步 / 47 秒</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">1 步</span></div>
+      <span class="tag">不足一秒</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">128 步 <span class="sep">·</span> 2 分 10 秒</span></div>
+      <span class="tag">长跑</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▾</span><span class="work-title">12 步 <span class="sep">·</span> 39 秒</span></div>
+      <span class="tag">还在跑</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>E · 斜杠分开</h2>
+    <p class="why">像计数器的记法，紧凑、等宽感强；但斜杠在中文句子里偏技术味。</p>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 9 步 <span class="sep">/</span> 47 秒</span></div>
+      <span class="tag">9 步 / 47 秒</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 1 步</span></div>
+      <span class="tag">不足一秒</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▸</span><span class="work-title">工作 128 步 <span class="sep">/</span> 2 分 10 秒</span></div>
+      <span class="tag">长跑</span>
+    </div>
+    <div class="case">
+      <div class="work-head"><span class="work-caret">▾</span><span class="work-title">工作 12 步 <span class="sep">/</span> 39 秒</span></div>
+      <span class="tag">还在跑</span>
+    </div>
+  </section>
+
+</div>
+
+<p class="note">时间写法统一：不足 1 秒不写；不到 1 分钟写 <code>47 秒</code>；超过 1 分钟写 <code>2 分 10 秒</code>；超过 1 小时写 <code>1 小时 5 分</code>。步数只有 1 步时时间也一起省掉（不到一秒本来就没什么可说）。</p>
+
+</body>
+</html>
