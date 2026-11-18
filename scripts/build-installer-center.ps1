@@ -28,8 +28,15 @@ if (-not $match.Success) { throw "找不到版本号：$project" }
 $version = $match.Groups[1].Value.Trim()
 Write-Host "版本 $version"
 
+# MSI 判断"要不要替换文件"看的是文件版本号。程序集版本每次发布都写同一个数，
+# 同版本重装时 Windows Installer 就会跳过替换，装上的是上一份旧文件。
+# 这里给每个构建一个递增的 FileVersion，保证覆盖装真的换到新代码。
+$stamp = [int]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() % 60000)
+$fileVersion = "0.3.$stamp.0"
+
 if (-not $SkipPublish) {
-    dotnet publish $project -c Release -r win-x64 --self-contained -o $publish -v q --nologo
+    dotnet publish $project -c Release -r win-x64 --self-contained -o $publish -v q --nologo `
+        -p:FileVersion=$fileVersion
     if ($LASTEXITCODE -ne 0) { throw "中心发布失败" }
 }
 

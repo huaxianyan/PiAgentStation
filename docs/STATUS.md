@@ -12,6 +12,15 @@
 - 已知限制（写进发布说明）：中心目前只放 Windows 包，之后会出 Linux 版；局域网与 TLS 未做；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## 待办：图标与安装程序画面
+
+- 安装程序现在用的是 WiX 自带的画面：欢迎页横幅和左边那块红色圆盘是 WiX 的默认位图，
+  窗口图标是 MSI 的默认图标，都不是我们画的。要换成自己的图，得准备两张 BMP
+  （`WixUIBannerBmp` 493×58、`WixUIDialogBmp` 493×312），再用 `<WixVariable>` 指过去，
+  顺带用 `ARPPRODUCTICON` 给「应用和功能」里那一项配图标。
+- 程序自己的图标现在也是占位：`src/SevenStation.Desktop/icons/icon.png`（深色圆角方块加一个白色 π），
+  `index.html` 的 favicon 是同一个 π 的 data URI。用户 2026-11-18 说晚点要换，别当成最终稿。
+
 ## STATUS-001：Pi 桌面界面能开会话并流式对话
 
 - 做了什么：.NET 10 WPF 窗口托管 WebView2；C# 侧管 `pi --mode rpc` 子进程，一条命令一个
