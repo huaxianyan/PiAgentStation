@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>从 Pi 恢复会话 · 原型</title>
+<style>
+  :root {
+    --page: #ececee; --panel: #f7f7f9; --card: #ffffff;
+    --border: #e9e9ee; --border-strong: #dcdce2; --bubble: #f4f4f6; --active: #ececef;
+    --text: #1a1a1d; --text-soft: #55555c; --text-dim: #2c2c31;
+    --text-mute: #8a8a92; --text-faint: #a9a9b1;
+    --accent: #1a1a1d; --on-accent: #ffffff; --focus: #c9c5f6; --green: #189a4a;
+    --radius-sm: 8px; --radius-card: 14px; --radius-pill: 999px;
+    --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, "Inter", "Microsoft YaHei UI", system-ui, sans-serif;
+    --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 30px 36px 70px;
+    background: var(--page); color: var(--text);
+    font-family: var(--font); -webkit-font-smoothing: antialiased;
+  }
+  h1 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
+  .lede { margin: 0 0 26px; font-size: 13px; color: var(--text-mute); }
+  .block { margin-bottom: 34px; }
+  .block > h2 { margin: 0 0 3px; font-size: 13.5px; font-weight: 600; }
+  .block > .why { margin: 0 0 14px; font-size: 12px; color: var(--text-faint); }
+  .row { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  .tag {
+    display: inline-block; margin: 8px 0 0; font-size: 11.5px; color: var(--text-faint);
+  }
+  .tag b { font-weight: 600; color: var(--text-mute); }
+
+  /* ---------- 侧栏（真界面 318px 的下半截） ---------- */
+  .sidebar {
+    width: 300px; padding: 10px; border-radius: var(--radius-card);
+    background: var(--panel); border: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .side-top { display: flex; gap: 6px; }
+  .new-btn {
+    flex: 1; display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    background: var(--card); font-size: 12.5px; color: var(--text-dim);
+  }
+  .icon-btn {
+    width: 30px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    background: var(--card); color: var(--text-mute); font-size: 13px;
+  }
+  .side-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: var(--radius-sm);
+    font-size: 12.5px; color: var(--text-soft);
+  }
+  .side-item.is-active { background: var(--active); color: var(--text); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+  .dot.idle { background: #c9c9d0; }
+  .side-item .meta { margin-left: auto; font-size: 11.5px; color: var(--text-faint); }
+  .empty-hint {
+    margin: 4px 0 0; padding: 16px 12px; border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm); text-align: center;
+    font-size: 12.5px; color: var(--text-mute); line-height: 1.9;
+  }
+  .empty-hint a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+  .card-mini {
+    margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); background: var(--card);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 12.5px; color: var(--text-soft);
+  }
+  .mini-btn {
+    padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius-pill);
+    background: var(--panel); font-size: 12px; color: var(--text-dim); white-space: nowrap;
+  }
+
+  /* ---------- 选择器 P1：左列表右预览 ---------- */
+  .dialog {
+    width: 720px; border-radius: var(--radius-card); background: var(--card);
+    border: 1px solid var(--border-strong); overflow: hidden;
+    box-shadow: 0 18px 48px rgba(20, 20, 30, .08);
+  }
+  .dialog-head { padding: 16px 18px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .dialog-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .dialog-head .sub { margin: 0; font-size: 12px; color: var(--text-mute); }
+  .sources { display: flex; gap: 6px; align-items: center; }
+  .chip {
+    padding: 4px 10px; border-radius: var(--radius-pill); border: 1px solid var(--border);
+    background: var(--panel); font-size: 12px; color: var(--text-soft);
+  }
+  .chip.on { border-color: var(--text-dim); color: var(--text); background: var(--card); }
+  .chip.off { color: var(--text-faint); border-style: dashed; }
+  .search {
+    display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    font-size: 12.5px; color: var(--text-faint);
+  }
+  .search .mag { font-size: 12px; }
+  .dialog-body { display: flex; border-top: 1px solid var(--border); height: 322px; }
+  .list { width: 336px; overflow: hidden; border-right: 1px solid var(--border); padding: 6px 6px 6px; }
+  .group { padding: 8px 10px 4px; font-size: 11.5px; color: var(--text-faint); }
+  .group span { color: var(--text-mute); }
+  .rowitem {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 7px 10px; border-radius: var(--radius-sm); font-size: 12.5px; color: var(--text-soft);
+  }
+  .rowitem .name {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .rowitem .when { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; }
+  .rowitem.sel { background: var(--active); color: var(--text); }
+  .rowitem.done { color: var(--text-faint); }
+  .badge-done {
+    font-size: 11px; color: var(--text-faint); border: 1px solid var(--border);
+    border-radius: var(--radius-pill); padding: 0 6px;
+  }
+  .preview { flex: 1; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .preview .ptitle { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.5; }
+  .preview .pfacts {
+    display: flex; gap: 10px; flex-wrap: wrap; font-size: 11.5px; color: var(--text-faint);
+    font-family: var(--mono);
+  }
+  .quote {
+    margin: 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--panel);
+    font-size: 12.5px; line-height: 1.75; color: var(--text-soft);
+    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .quote .who { display: block; font-size: 11px; color: var(--text-faint); margin-bottom: 2px; }
+  .dialog-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px 16px; border-top: 1px solid var(--border); background: var(--card);
+  }
+  .count { font-size: 11.5px; color: var(--text-faint); }
+  .buttons { display: flex; gap: 8px; }
+  .btn {
+    padding: 6px 14px; border-radius: var(--radius-sm); font-size: 12.5px;
+    border: 1px solid var(--border-strong); background: var(--card); color: var(--text-dim);
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn.ghost { border-color: var(--border); color: var(--text-mute); }
+
+  /* ---------- 选择器 P2：单栏、选中行展开 ---------- */
+  .dialog.narrow { width: 460px; }
+  .narrow .dialog-body { display: block; height: 360px; overflow: hidden; }
+  .narrow .list { width: auto; border-right: 0; }
+  .inline {
+    margin: 2px 10px 8px; padding: 10px 12px; border-radius: var(--radius-sm);
+    background: var(--panel); font-size: 12px; line-height: 1.7; color: var(--text-soft);
+  }
+  .inline .facts { font-size: 11px; color: var(--text-faint); font-family: var(--mono); margin-top: 6px; }
+
+  /* ---------- 恢复之后 ---------- */
+  .after { width: 620px; }
+  .notice {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+    border-radius: var(--radius-sm); background: var(--panel); border: 1px solid var(--border);
+    font-size: 12.5px; color: var(--text-soft);
+  }
+  .notice .ok { color: var(--green); font-size: 13px; }
+  .notice .x { margin-left: auto; color: var(--text-faint); font-size: 12px; }
+  .from {
+    display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: var(--radius-pill);
+    border: 1px solid var(--border); font-size: 10.5px; color: var(--text-faint);
+  }
+  .conv {
+    margin-top: 8px; padding: 12px 14px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); background: var(--card);
+    display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text);
+  }
+  .conv .meta { margin-left: auto; font-size: 11.5px; color: var(--text-faint); }
+  code { font-family: var(--mono); font-size: 11.5px; color: var(--text-soft); }
+</style>
+</head>
+<body>
+<h1>从 agent 恢复会话</h1>
+<p class="lede">把 Pi 那边已经存在的会话找回来，恢复成对话库里的一段，接着往下聊。界面原型，先看形态，功能还没做。</p>
+
+<!-- ============ 一、入口三版 ============ -->
+<div class="block">
+  <h2>一 · 入口放哪</h2>
+  <p class="why">三种都可能，各自代价不同：常驻在侧栏最显眼但平时用不到；只在空态出现不打扰老用户，但会话多了就找不到。</p>
+  <div class="row">
+
+    <div>
+      <div class="sidebar">
+        <div class="side-top">
+          <div class="new-btn">＋ 新建对话</div>
+          <div class="icon-btn">⟲</div>
+        </div>
+        <div class="side-item is-active"><span class="dot"></span>设置页那两行怎么排<span class="meta">18:56</span></div>
+        <div class="side-item"><span class="dot"></span>技能和扩展为什么是 0<span class="meta">19:04</span></div>
+        <div class="side-item"><span class="dot idle"></span>新的对话<span class="meta">昨天</span></div>
+      </div>
+      <p class="tag"><b>A</b> · 「新建」旁边一个恢复按钮，一直都在</p>
+    </div>
+
+    <div>
+      <div class="sidebar">
+        <div class="side-top"><div class="new-btn">＋ 新建对话</div></div>
+        <div class="empty-hint">
+          还没有对话。<br>
+          <a>从 Pi 恢复一段旧会话</a>
+        </div>
+      </div>
+      <p class="tag"><b>B</b> · 只在列表为空时出现</p>
+    </div>
+
+    <div>
+      <div class="sidebar">
+        <div class="side-top"><div class="new-btn">＋ 新建对话</div></div>
+        <div class="side-item"><span class="dot"></span>设置页那两行怎么排<span class="meta">18:56</span></div>
+        <div class="card-mini">
+          <span>Pi 里还有 194 段没恢复</span>
+          <span class="mini-btn">恢复</span>
+        </div>
+      </div>
+      <p class="tag"><b>C</b> · 侧栏底部一块提示，有存货才出现</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============ 二、选择器两版 ============ -->
+<div class="block">
+  <h2>二 · 选择器</h2>
+  <p class="why">Pi 那台机器上现在有 197 段会话，多数只有一两句，所以要能按工作区收起来、能搜；挑错了要能先看一眼再决定。</p>
+  <div class="row">
+
+    <div>
+      <div class="dialog">
+        <div class="dialog-head">
+          <h3>恢复会话</h3>
+          <div class="sources">
+            <span class="chip on">Pi 1.5.2</span>
+            <span class="chip off">magpie（还没做）</span>
+          </div>
+          <div class="search"><span class="mag">⌕</span>搜标题或工作区</div>
+        </div>
+        <div class="dialog-body">
+          <div class="list">
+            <div class="group">SevenStation <span>· E:\Dev\SevenStation</span></div>
+            <div class="rowitem sel"><span class="name">从 agent 或者 magpie 里恢复会话，先做界面原型</span><span class="when">19:42</span></div>
+            <div class="rowitem"><span class="name">看一下 docs 目录里的 md 文件，给个清单</span><span class="when">06:49</span></div>
+            <div class="rowitem done"><span class="name">只改四个字</span><span class="when">08:21</span><span class="badge-done">已恢复</span></div>
+            <div class="group">PiAgentStation <span>· E:\Dev\PiAgentStation</span></div>
+            <div class="rowitem"><span class="name">读 HANDOFF-2026-11-17-pi-gui.md，把里面的…</span><span class="when">11-16</span></div>
+            <div class="group">Android <span>· D:\X\Android</span></div>
+            <div class="rowitem"><span class="name">帮我看一下那个 ReSuSFS 的设备能不能…</span><span class="when">11-18</span></div>
+            <div class="group">PC <span>· D:\Tools\PC</span></div>
+            <div class="rowitem"><span class="name">我发现 jpegview 也…</span><span class="when">11-17</span></div>
+          </div>
+          <div class="preview">
+            <p class="ptitle">从 agent 或者 magpie 里恢复会话，先做界面原型</p>
+            <div class="pfacts"><span>32 条消息</span><span>·</span><span>184 KB</span><span>·</span><span>magpie/auto/deepseek-v4.1-flash</span></div>
+            <p class="quote"><span class="who">这一段的开头</span>现在要加一个新功能，从 agent 或者 magpie 里恢复会话，agent 目前只适配 pi，先做个界面原型</p>
+            <p class="quote"><span class="who">最近一条</span>原型做好了，三个入口和两种选择器都在这一页，你看完定一个我就开始实现。</p>
+          </div>
+        </div>
+        <div class="dialog-foot">
+          <span class="count">197 段 · 已恢复 3 段</span>
+          <div class="buttons">
+            <span class="btn ghost">取消</span>
+            <span class="btn primary">恢复这段</span>
+          </div>
+        </div>
+      </div>
+      <p class="tag"><b>P1</b> · 左列表右预览，看得清再决定；弹窗 720 宽</p>
+    </div>
+
+    <div>
+      <div class="dialog narrow">
+        <div class="dialog-head">
+          <h3>恢复会话</h3>
+          <div class="sources">
+            <span class="chip on">Pi</span>
+            <span class="chip off">magpie</span>
+          </div>
+          <div class="search"><span class="mag">⌕</span>搜标题或工作区</div>
+        </div>
+        <div class="dialog-body">
+          <div class="list">
+            <div class="group">SevenStation <span>· E:\Dev\SevenStation</span></div>
+            <div class="rowitem sel"><span class="name">从 agent 或者 magpie 里恢复会话…</span><span class="when">19:42</span></div>
+            <div class="inline">
+              现在要加一个新功能，从 agent 或者 magpie 里恢复会话，agent 目前只适配 pi，先做个界面原型
+              <div class="facts">32 条消息 · 184 KB · magpie/auto/deepseek-v4.1-flash</div>
+            </div>
+            <div class="rowitem"><span class="name">看一下 docs 目录里的 md 文件</span><span class="when">06:49</span></div>
+            <div class="rowitem done"><span class="name">只改四个字</span><span class="when">08:21</span><span class="badge-done">已恢复</span></div>
+            <div class="group">PiAgentStation <span>· E:\Dev\PiAgentStation</span></div>
+            <div class="rowitem"><span class="name">读 HANDOFF-2026-11-17-pi-gui.md</span><span class="when">11-16</span></div>
+          </div>
+        </div>
+        <div class="dialog-foot">
+          <span class="count">197 段 · 已恢复 3 段</span>
+          <div class="buttons">
+            <span class="btn ghost">取消</span>
+            <span class="btn primary">恢复这段</span>
+          </div>
+        </div>
+      </div>
+      <p class="tag"><b>P2</b> · 单栏，选中就地展开；弹窗 460 宽，窗口小也好放</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============ 三、恢复之后 ============ -->
+<div class="block">
+  <h2>三 · 恢复之后</h2>
+  <p class="why">恢复到列表里的那一段要能一眼看出是捡回来的历史，不是刚聊完的；点进去接着发消息就走中心那边的新会话。</p>
+  <div class="after">
+    <div class="notice">
+      <span class="ok">✓</span>
+      <span>已恢复「从 agent 或者 magpie 里恢复会话」，32 条消息都在，可以接着聊。</span>
+      <span class="x">✕</span>
+    </div>
+    <div class="conv">
+      从 agent 或者 magpie 里恢复会话…<span class="from">来自 Pi · 11-18 19:42</span>
+      <span class="meta">刚刚</span>
+    </div>
+    <div class="conv">
+      设置页那两行怎么排<span class="meta">18:56</span>
+    </div>
+    <div class="conv">
+      技能和扩展为什么是 0<span class="meta">19:04</span>
+    </div>
+  </div>
+  <p class="tag"><b>R</b> · 恢复出来的对话带一个来源标记，时间取原来那段的首条时间</p>
+</div>
+
+</body>
+</html>
