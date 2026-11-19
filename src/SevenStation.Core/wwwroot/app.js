@@ -340,19 +340,31 @@ function buildToast(text, kind, busy) {
   return node;
 }
 
-/** 进场是往上冒，退场就得往下收：高度同时收成 0，后面的卡片跟着合上来。 */
+/**
+ * 进场是往上冒，退场就对称地往下沉。
+ * 分两段：先整块淡出下移（看得见的动作，文字和框一起走），
+ * 等它透明了再把高度收掉——收的时候看不见框，只有下面的卡片在往上合。
+ */
 function dismissToast(node) {
   if (!node.isConnected || node.dataset.leaving) return;
   node.dataset.leaving = '1';
 
-  const animation = node.animate(
+  const fade = node.animate(
     [
-      { opacity: 1, transform: 'none', height: node.getBoundingClientRect().height + 'px' },
-      { opacity: 0, transform: 'translateY(6px)', height: '0px' },
+      { opacity: 1, transform: 'none' },
+      { opacity: 0, transform: 'translateY(6px)' },
     ],
-    { duration: 180, easing: 'ease-in' },
+    { duration: 150, easing: 'ease-in', fill: 'forwards' },
   );
-  animation.onfinish = () => node.remove();
+
+  fade.onfinish = () => {
+    node.style.overflow = 'hidden';
+    const collapse = node.animate(
+      [{ height: node.getBoundingClientRect().height + 'px' }, { height: '0px' }],
+      { duration: 120, easing: 'ease-out' },
+    );
+    collapse.onfinish = () => node.remove();
+  };
 }
 
 /** 换文案：新字淡入，卡片高度按新旧差值过渡，变长变短都不跳。 */
@@ -360,6 +372,7 @@ function setToastText(node, text) {
   const label = node.querySelector('.toast-text') || node;
   if (label.textContent === text) return;
 
+  const labelHeight = label.getBoundingClientRect().height;
   const before = node.getBoundingClientRect().height;
   label.textContent = text;
   const after = node.getBoundingClientRect().height;
@@ -367,6 +380,7 @@ function setToastText(node, text) {
   label.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
 
   if (Math.abs(after - before) < 1) return;
+  if (Math.abs(labelHeight - label.getBoundingClientRect().height) < 1) return;
   node.style.overflow = 'hidden';
   const animation = node.animate(
     [{ height: before + 'px' }, { height: after + 'px' }],
