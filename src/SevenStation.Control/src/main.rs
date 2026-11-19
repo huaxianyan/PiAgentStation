@@ -64,6 +64,28 @@ fn open_target(target: String) -> Result<(), String> {
 }
 
 /// 状态变了就往页面推一次，同时把托盘上的文字换掉。
+// 排查用：关窗这条路到底有没有进来。写到 %LOCALAPPDATA%\SevenStation.Control\control.log。
+fn log_line(text: &str) {
+    use std::io::Write;
+    let base = std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let dir = base.join("SevenStation.Control");
+    let _ = std::fs::create_dir_all(&dir);
+    let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("control.log"))
+    else {
+        return;
+    };
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let _ = writeln!(file, "{stamp} {text}");
+}
+
 fn publish(app: &tauri::AppHandle) {
     let snapshot = core::snapshot();
     let _ = app.emit("state", &snapshot);
@@ -146,6 +168,10 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 }
 
 fn main() {
+    log_line(&format!(
+        "控制台启动，exe = {:?}",
+        std::env::current_exe().ok()
+    ));
     // 提权子进程只做一件事就退，别建窗口、别起 WebView。
     let args: Vec<String> = std::env::args().collect();
     if args.len() >= 3 && args[1] == core::ELEVATE_FLAG {
@@ -183,8 +209,12 @@ fn main() {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     // 关窗口只是收进托盘，中心照常跑；真退出走托盘右键。
                     // 收到就立刻收，不加延迟也不弹提示。
+                    log_line("收到关闭请求");
                     api.prevent_close();
-                    let _ = handle.hide();
+                    match handle.hide() {
+                        Ok(()) => log_line("已隐藏窗口"),
+                        Err(error) => log_line(&format!("隐藏窗口失败: {error}")),
+                    }
                 }
             });
 
