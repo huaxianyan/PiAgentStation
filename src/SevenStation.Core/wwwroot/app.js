@@ -4134,6 +4134,48 @@ el.terminalInput.addEventListener('keydown', (event) => {
   }
 });
 
+/**
+ * 先把这句话画在对话里再发出去。
+ * 等 Pi 把话收下再显示（实测 3~4 秒）会让人以为卡住了；实际投递的细节不必暴露。
+ * Core 那边收到真正的用户消息后，把这条回显换成正牌。
+ */
+function echoPrompt(session, text, images) {
+  if (!session) return;
+  app.echoSeq = (app.echoSeq || 0) + 1;
+  const item = {
+    id: 'echo' + app.echoSeq,
+    kind: 'user',
+    text,
+    images: images || [],
+    ts: Date.now(),
+    echo: true,
+  };
+
+  session.items.push(item);
+  session.streaming = true;
+
+  if (session === current()) {
+    patchItem(item);
+    scrollToBottom(true);
+    renderComposerState();
+  }
+}
+
+/** 提示失败时把还没被确认的回显撤掉，别留一条其实没发出去的话。 */
+function dropEchoes(key) {
+  const session = key ? app.byKey.get(key) : current();
+  if (!session) return;
+  const before = session.items.length;
+  session.items = session.items.filter((item) => !item.echo);
+  if (session.items.length === before) return;
+
+  if (session === current()) renderThread(true);
+  if (!session.liveId) {
+    session.streaming = false;
+    renderComposerState();
+  }
+}
+
 function submitPrompt() {
   const text = el.input.value.trim();
 
@@ -4179,6 +4221,11 @@ function submitPrompt() {
       data: attachment.data,
       mimeType: attachment.mimeType,
     }));
+  }
+
+  // 排队中的话不进对话，只看得到待发送面板；空闲时立刻把这句话画出来。
+  if (!session.streaming) {
+    echoPrompt(session, text, app.attachments.map((attachment) => attachment.dataUrl));
   }
 
   send(message);
@@ -4615,6 +4662,7 @@ function dispatch(message) {
 
     case 'error':
       setOverlay(null);
+      dropEchoes(message.key);
       toast(message.message || '这条操作没成功，可以再试一次', 'error');
       break;
 
@@ -4765,6 +4813,10 @@ function onEvent(key, event) {
           if (key === app.currentKey) schedule(item.id);
         }
       } else if (message.role === 'user') {
+        // 回显的那条换成 Core 确认过的这条，不然会重复两条。
+        const echoAt = session.items.findIndex((entry) => entry.echo);
+        if (echoAt >= 0) session.items.splice(echoAt, 1);
+
         const item = {
           id: 'i' + session.seq++,
           kind: 'user',
@@ -4775,7 +4827,8 @@ function onEvent(key, event) {
         session.items.push(item);
         session.raw.push(message);
         if (key === app.currentKey) {
-          patchItem(item);
+          if (echoAt >= 0) renderThread(true);
+          else patchItem(item);
           scrollToBottom(false);
         }
       }
