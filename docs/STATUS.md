@@ -2,27 +2,28 @@
 
 ## 当前主线
 
-- 现在在做什么：0.3.0 的首次公开发布。功能面已经齐（Seven Station Core + 桌面客户端、对话库、流式、工具卡片、
-  模型与思考等级、`@` 补全、终端、文件浏览、导出、搜索、自启），剩下的是打包与文档收口。
-- 发布物是**两个 Windows x64 包**：`SevenStation-center-<版本>-win-x64.zip`（自包含 Seven Station Core）与
-  `SevenStation-client-<版本>-win-x64.zip`（单个 Tauri exe）。手机端不在这一版范围内。
-- 交付形态改成安装程序：Seven Station Core MSI（装服务、自动启动）已装上并验证服务里 Pi 能跑；
-  客户端 MSI（整机安装、装时填 Seven Station Core 地址与令牌、写 HKLM 供所有用户共用）已产出，待实装验证。
-- 客户端连接信息改为装完之后在「设置 → 这台设备连的 Seven Station Core」里填，写在 `%LOCALAPPDATA%\SevenStation\center.json`（带 userSet 标记，优先级高于安装时写进注册表的值）。
-- 下一步：两个 MSI 在干净环境各跑一遍 → 建两个 Release（`SevenStationCore-win-x64-0.3.0`、
-  `SevenStation-win-x64-0.3.0`），各自的包与校验和。
+- 现在在做什么：0.4.0 出包。相对 0.3.0 的增量是 Seven Station Control（并进 Seven Station Core 的 MSI）、
+  安装程序自己的画面与图标、局域网连接开关、命名统一。
+- 发布物仍是**两个 Windows x64 安装程序**：`SevenStationCore-win-x64-0.4.0.msi`（含 Control，43.3 MB）与
+  `SevenStation-win-x64-0.4.0.msi`（3.2 MB）。都不做便携版。
+- 已验完：两个 MSI 出包、本机 0.3.0 覆盖装到 0.4.0（服务重启、版本变 0.4.0、`%ProgramData%\SevenStation.Core`
+  的令牌与设置一字不差、对话库 1.7 MB 保留）、`ui-smoke.mjs` 全绿。
+- 顺手清了本机两个历史残留安装：一个旧 0.3.0 中心的 ProductCode（`{B0F57C2D…}`）与一个探针包（`0.0.1`）。
+  这类残留会让「应用和功能」出现同名两条，`MajorUpgrade` 一次只清掉一条。
+- 下一步：建两个 Release（`SevenStationCore-win-x64-0.4.0`、`SevenStation-win-x64-0.4.0`），
+  正文用 `build/release/core.md` 与 `build/release/client.md`。
 - 已知阻塞：无。
-- 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网与 TLS 未做；
+- 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
-## 待办：图标与安装程序画面
+## 已收口：图标与安装程序画面
 
-- 安装程序现在用的是 WiX 自带的画面：欢迎页横幅和左边那块红色圆盘是 WiX 的默认位图，
-  窗口图标是 MSI 的默认图标，都不是我们画的。要换成自己的图，得准备两张 BMP
-  （`WixUIBannerBmp` 493×58、`WixUIDialogBmp` 493×312），再用 `<WixVariable>` 指过去，
-  顺带用 `ARPPRODUCTICON` 给「应用和功能」里那一项配图标。
-- 程序自己的图标现在也是占位：`src/SevenStation.Desktop/icons/icon.png`（深色圆角方块加一个白色 π），
-  `index.html` 的 favicon 是同一个 π 的 data URI。用户 2026-11-18 说晚点要换，别当成最终稿。
+- 图标不再是手画：`design/make-icons.py` 用 Segoe UI Semibold 的 π 按包围盒栅格化，一次产出
+  Control 的 `icon.ico`/`tray.png`、客户端的深底 `icon.ico`、网页用的 `mark-light.png`/`mark-dark.png`。
+- 安装程序画面：`design/make-installer-art.py` 生成 `installer/assets/banner.bmp`（493×58）与
+  `dialog.bmp`（493×312），两个 wxs 用 `WixVariable` 指过去，`Icon + ARPPRODUCTICON` 给「应用和功能」配图标。
+- 真跑一次向导的截图在 `design/shots/msi-wizard-real.png`：顶栏会被 493×312 的对话框底图盖住，
+  页面上看不到 banner；要留顶栏得改底图尺寸，WiX 那个控件尺寸固定，塞进去会拉伸，所以这版就是没有顶栏的样子。
 
 ## STATUS-001：Pi 桌面界面能开会话并流式对话
 

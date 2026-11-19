@@ -2,9 +2,10 @@
 
 ## 发布前置
 
-- 版本号写在两处：Seven Station Core 在 `src/SevenStation.Core/SevenStation.Core.csproj` 的 `<Version>`，
-  客户端在 `src/SevenStation.Desktop/Cargo.toml` 的 `version`（Tauri 客户端是 Rust，没有 csproj）。
-  两处一致，产物文件名与发布说明里的版本号才跟着对。
+- 版本号写在三处，必须同号：Seven Station Core 在 `src/SevenStation.Core/SevenStation.Core.csproj` 的 `<Version>`，
+  Seven Station Control 与客户端在各自 `Cargo.toml` 的 `version`（Tauri 应用是 Rust，没有 csproj），
+  对应的 `tauri.conf.json` 里也有一份。三处一致，产物文件名与发布说明里的版本号才跟着对。
+- Seven Station Control 不单独发：它打进 Seven Station Core 的 MSI（`docs/DECISIONS.md` D9），跟着一起装、一起卸。
 - 发布说明写在 `docs/release-notes/v<版本>-core.md`（Seven Station Core）与 `v<版本>-client.md`（客户端），
   两份都要过门禁：`python scripts/verify_release_notes.py --link-pattern '/blob/[^/\s]+/' docs/release-notes/*.md`
 - 发布前必须跑通：`dotnet build SevenStation.slnx`，以及
@@ -17,13 +18,16 @@ Seven Station Core 要靠服务起来、要有开机自启和升级路径，双�
 
 | 包 | 内容 | 命名 |
 | --- | --- | --- |
-| Seven Station Core | MSI：装到 `%ProgramFiles%\SevenStation Core`，注册服务 `SevenStationCore`（自动启动、系统账户），开始菜单两个快捷方式 | `SevenStationCore-win-x64-<版本>.msi`（约 40 MB） |
+| Seven Station Core | MSI：装到 `%ProgramFiles%\SevenStation Core`，注册服务 `SevenStationCore`（自动启动、系统账户），带 Seven Station Control，开始菜单三个快捷方式 | `SevenStationCore-win-x64-<版本>.msi`（约 43 MB） |
 | 客户端 | MSI：装到 `%ProgramFiles%\SevenStation`，开始菜单与桌面快捷方式；第一次打开走引导页填 Seven Station Core 地址与令牌 | `SevenStation-win-x64-<版本>.msi`（约 2.8 MB） |
 
 命名规则：`<项目名>-<平台>-<架构>-<版本>.msi`，只用 ASCII 字母、数字、`-` 和 `.`；
 校验文件同名加 `.sha256`，内容是 `<哈希> <文件名>`，`sha256sum -c` 能直接读。
 
-- Seven Station Core：`powershell -File scripts/build-installer-center.ps1`（`-SkipPublish` 复用已有发布输出）。
+- Seven Station Core（含 Seven Station Control）：`powershell -File scripts/build-installer-center.ps1`
+  （`-SkipPublish` 复用已有发布输出，脚本会自己构建 Control；`cargo` 不在 PATH 里也没关系，脚本会补）。
+- 安装画面素材（`installer/assets/banner.bmp`、`dialog.bmp`）由 `python design/make-installer-art.py` 生成，
+  图形取自 `src/SevenStation.Control/icons/tray.png`，不另画。
 - 客户端：`powershell -File scripts/build-installer-client.ps1`（`-SkipBuild` 复用已有 `target/release`）。
 - 两个安装程序的许可页读 `installer/license.rtf`（GPLv3 说明），构建脚本用 `-d LicenseRtf=` 传进去。
 - `scripts/build-release.ps1` 打的是便携 zip，只给本机试跑用，正式发布不发。

@@ -63,7 +63,8 @@
 
     <!-- Seven Station Control：跟 Seven Station Core 装在一起，用来开停服务、看日志、改监听地址（DECISIONS D9）。 -->
     <Component Id="ControlExecutable" Directory="INSTALLFOLDER" Guid="*">
-      <File Id="ControlExe" Source="$(var.ControlExe)" KeyPath="yes" />
+      <!-- 装到安装目录时按产品名命名，别留 cargo 的 sevenstation-control.exe -->
+      <File Id="ControlExe" Source="$(var.ControlExe)" Name="SevenStation.Control.exe" KeyPath="yes" />
     </Component>
 
     <!-- 开始菜单：打开 Seven Station Core 页面（带令牌）、打开配置、Seven Station Control。 -->

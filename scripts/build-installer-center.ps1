@@ -41,7 +41,9 @@ Write-Host "版本 $version"
 # 同版本重装时 Windows Installer 就会跳过替换，装上的是上一份旧文件。
 # 这里给每个构建一个递增的 FileVersion，保证覆盖装真的换到新代码。
 $stamp = [int]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() % 60000)
-$fileVersion = "0.3.$stamp.0"
+# FileVersion 取版本号前两段 + 一个滚动数，升级时才会真的换文件（见上面这段说明）。
+$filePrefix = ($version -split '\.')[0..1] -join '.'
+$fileVersion = "$filePrefix.$stamp.0"
 
 if (-not $SkipPublish) {
     dotnet publish $project -c Release -r win-x64 --self-contained -o $publish -v q --nologo `

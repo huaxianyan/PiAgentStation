@@ -1,32 +1,30 @@
-七站的桌面窗口：一个薄壳，连到 Seven Station Core 那台机器上用 Pi，本机不跑任何模型和子进程。
-这是第一个发布版本，只发 Windows x64 包。
+客户端的这一版是收尾：安装程序换了自己的画面，产品名统一成 Seven Station。只发 Windows x64 包。
 
 ## 新功能
 
-- **第一次打开先连 Seven Station Core**：没配置过的时候进来是一张引导页，填 Seven Station Core 地址和访问令牌，测通才能进去；填错令牌会说清是令牌的问题，地址不通会说清是连不上的问题。
-- **随时换 Seven Station Core**：设置页里「这台设备连的 Seven Station Core」可以直接改地址、换令牌，保存就重连，不用重装。
-- **对话**：流式正文与思考过程（思考默认收起）、工具调用卡片（状态、参数摘要、耗时，展开看输出）、代码块一键复制、整段对话导出成 Markdown。
-- **输入**：`@` 补全工作区文件且能往下钻目录，`/` 列出 Pi 的命令、提示词模板与技能，图片可以粘贴也可以拖进来，流式期间回车把消息排进队列。
-- **模型与上下文**：按会话切模型和思考等级，看上下文用量，手动压缩。
-- **找东西**：侧栏搜索连正文一起搜，结果带命中的那一段；头部能开一个常驻 PowerShell，也能只读浏览工作区文件。
-- **桌面集成**：工作区目录用系统对话框选，窗口圆角跟随系统，记住上次的位置与大小，`Ctrl+K`、`Ctrl+B`、`Ctrl+J`、`Ctrl+E`、`Ctrl+F` 一整套快捷键。
+- **安装向导有自己的画面**：顶栏、侧图、图标都是 Seven Station 自己的，「应用和功能」里也是同一枚图标。
+- **产品名统一**：安装程序与快捷方式都叫 Seven Station，面向用户的文字里不再出现「客户端」这类译名。
 
-需要 WebView2 运行时（Win11 自带，Win10 多数已经装过）；Seven Station Core 要先装好，客户端版本与 Seven Station Core 版本保持一致。
+## 问题修复
 
-完整实现与验收记录见 [进度记录](https://github.com/huaxianyan/SevenStation/blob/SevenStation-win-x64-0.3.0/docs/STATUS.md)。
+- 同版本重装时 Windows Installer 会跳过替换文件，这回的安装包每次构建都带新的文件版本号，覆盖装必定换到新文件。
 
-本项目采用 GNU 通用公共许可证第 3 版发布，许可证全文见 [LICENSE](https://github.com/huaxianyan/SevenStation/blob/SevenStation-win-x64-0.3.0/LICENSE)。
+连接信息还在 `%LOCALAPPDATA%\SevenStation\center.json`，覆盖装不用重新填地址和令牌。
+
+完整实现与验收记录见 [进度记录](https://github.com/huaxianyan/SevenStation/blob/SevenStation-win-x64-0.4.0/docs/STATUS.md)。
+
+本项目采用 GNU 通用公共许可证第 3 版发布，许可证全文见 [LICENSE](https://github.com/huaxianyan/SevenStation/blob/SevenStation-win-x64-0.4.0/LICENSE)。
 
 ## 构建信息
 
 | 项目 | 值 |
 | --- | --- |
-| 版本 | `0.3.0` |
-| 平台 | `Windows 10 1809 及以上 / Windows 11` |
+| 版本 | `0.4.0` |
+| 平台 | `Windows` |
 | 架构 | `x64` |
-| 运行时 | WebView2 Evergreen（Win11 自带，Win10 多数已装） |
-| 安装形态 | MSI，整机安装，开始菜单与桌面快捷方式 |
-| 连接配置 | `%LOCALAPPDATA%\SevenStation\center.json`，第一次打开在引导页填 |
-| 源码提交 | `dcbd9532d7c14daa68dc158059e227b97d45b1ad` |
-| 产物 | `SevenStation-win-x64-0.3.0.msi` |
-| SHA-256 | `89d80bae9dbc47d7d52ada6c89d00b9bae1b0e49ea6f0400393aeafa5c72a21b` |
+| 运行时 | WebView2（Win11 自带，Win10 多数已装） |
+| 安装形态 | MSI，开始菜单与桌面快捷方式 |
+| 连接信息 | `%LOCALAPPDATA%\SevenStation\center.json`（覆盖装保留） |
+| 源码提交 | `8ae247c0b7dc9d98e9ca3f72b2fc78fac4de6664` |
+| 产物 | `SevenStation-win-x64-0.4.0.msi`（3.2 MB） |
+| SHA-256 | `ce08ca64ed796f9e0afcc95c4e2196d9c02a67a7d1f12fcbca75cea84e111f51` |
