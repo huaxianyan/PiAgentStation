@@ -1,10 +1,13 @@
 using System.Net.WebSockets;
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using SevenStation.Core;
 using SevenStation.Core.Storage;
 using SevenStation.Shared;
+
+[assembly: SupportedOSPlatform("windows")]
 
 var runningAsService = WindowsServiceHelpers.IsWindowsService();
 Log.Initialize(ProductPaths.CoreLogs, "center.log");

@@ -22,6 +22,26 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-031：服务的 Pi 探测补上用户变量与任意盘用户档案（2026-11-19，未发版）
+
+- 用户反馈：他们机器上 `pi` 直接能跑（Pi 装在 PATH 上），Core 却报「还没有配置 Pi」。
+  原因有两层，都是因为 Seven Station Core 跑在 **LocalSystem** 下：
+  1. `Environment.GetEnvironmentVariable("PI_AGENT_DIR")` 只拿到**机器级**变量，用户在「环境变量」
+     对话框里设的是 `HKEY_USERS\<SID>\Environment`（用户级），服务账户根本看不到。
+  2. 用户档案扫描写死了 `C:\Users\*`，家目录在别的盘或自定义路径的用户直接漏掉。
+- 改法（`CoreSettings`）：
+  - 新增 `UserEnvironmentPiDirectories()`：遍历 `HKEY_USERS\<SID>\Environment` 读 `PI_AGENT_DIR`，
+    支持 `%VAR%` 展开；hive 没挂载（用户未登录）时跳过。
+  - 新增 `UserHomes()`：从 `HKLM\...\ProfileList\<SID>\ProfileImagePath` 取全部用户家目录（任意盘、任意路径），
+    再补 `C:\Users\*` 兜底；跳过 `systemprofile` 与 `Default`。
+  - `ProfileCandidates()` 改用 `UserHomes()`。
+  - 程序集级 `[assembly: SupportedOSPlatform("windows")]`（读注册表、跑服务本来就只对 Windows 成立），
+    消掉 CA1416；`Microsoft.Win32.Registry` 包引用不需要，net10.0 自带。
+- 实测：把 `PI_AGENT_DIR=E:\tmp\fake-pi` 写进用户级注册表（服务账户读不到的位置），
+  冷启动一个临时实例，`settings.json` 的 `Agents.pi.Directory` 就是 `E:\tmp\fake-pi`——这条路径以前必然漏。
+  测完已删除该注册表值、清掉临时目录。
+- 出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 已含本次改动（43.7 MB）。
+
 ## STATUS-030：Seven Station Control 里能改 Pi 安装目录了（2026-11-19，未发版）
 
 - 起因：另一个用户装完之后 `list_models` 一直报「还没有配置 Pi」。Core 的自动探测只扫

@@ -1,4 +1,5 @@
 using System.IO;
+using Microsoft.Win32;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SevenStation.Shared;
@@ -249,19 +250,94 @@ public sealed class CoreSettings
         }
     }
 
+    /// <summary>
+    /// 已登录用户自己设的 <c>PI_AGENT_DIR</c>。服务账户看不到用户变量，只能读各用户的注册表配置单元；
+    /// 用户没登录时那份 hive 没挂载，读不到就跳过——这种情况由用户档案扫描兜底。
+    /// </summary>
+    private static IEnumerable<string> UserEnvironmentPiDirectories()
+    {
+        string[] sids;
+        try
+        {
+            using var users = Registry.Users;
+            sids = users.GetSubKeyNames();
+        }
+        catch (Exception)
+        {
+            yield break;
+        }
+
+        foreach (var sid in sids)
+        {
+            string? value = null;
+            try
+            {
+                using var environment = Registry.Users.OpenSubKey(sid + @"\Environment");
+                value = environment?.GetValue("PI_AGENT_DIR") as string;
+            }
+            catch (Exception)
+            {
+                // 别的用户的 hive 读不了就跳过。
+            }
+
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            yield return Environment.ExpandEnvironmentVariables(value.Trim());
+        }
+    }
+
+    /// <summary>
+    /// 所有用户的家目录：注册表里的 ProfileList 最全（家目录可能在别的盘，也可以是自定义路径），
+    /// 再补上 C:\Users 下的目录兜底。
+    /// </summary>
+    private static IEnumerable<string> UserHomes()
+    {
+        var homes = new List<string>();
+
+        try
+        {
+            using var list = Registry.LocalMachine.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList");
+            foreach (var sid in list?.GetSubKeyNames() ?? [])
+            {
+                using var entry = list?.OpenSubKey(sid);
+                if (entry?.GetValue("ProfileImagePath") is not string raw) continue;
+
+                var home = Environment.ExpandEnvironmentVariables(raw);
+                // 系统账户和默认档案里不会有 Pi，扫了也是白跑。
+                var name = Path.GetFileName(home.TrimEnd(Path.DirectorySeparatorChar));
+                if (string.Equals(name, "systemprofile", StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.Equals(name, "Default", StringComparison.OrdinalIgnoreCase)) continue;
+                if (Directory.Exists(home)) homes.Add(home);
+            }
+        }
+        catch (Exception)
+        {
+            // 注册表读不了就只用下面的兜底。
+        }
+
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var usersRoot = Path.Combine(Path.GetDirectoryName(windows) ?? "C:", "Users");
+        try
+        {
+            foreach (var directory in Directory.GetDirectories(usersRoot))
+            {
+                if (!homes.Contains(directory, StringComparer.OrdinalIgnoreCase)) homes.Add(directory);
+            }
+        }
+        catch (Exception)
+        {
+            // C:\Users 都读不了就认了。
+        }
+
+        return homes;
+    }
+
     /// <summary>系统账户下按用户目录找一遍 Pi，最近写过的排前面。</summary>
     private static IEnumerable<(string Directory, string Home)> ProfileCandidates()
     {
         // 服务账户的家目录在 C:\Windows\system32\config 下，真正的用户目录要从 Windows 目录往上找。
-        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        var usersRoot = Path.Combine(Path.GetDirectoryName(windows) ?? "C:", "Users");
-
-        string[] users;
-        try
-        {
-            users = Directory.GetDirectories(usersRoot);
-        }
-        catch (Exception)
+        var users = UserHomes().ToList();
+        if (users.Count == 0)
         {
             yield break;
         }
@@ -338,11 +414,16 @@ public sealed class CoreSettings
     {
         var candidates = new List<string>();
 
+        // 机器级变量（服务和任何账户都看得到）。
         var fromEnvironment = Environment.GetEnvironmentVariable("PI_AGENT_DIR");
         if (!string.IsNullOrWhiteSpace(fromEnvironment))
         {
             candidates.Add(fromEnvironment.Trim());
         }
+
+        // 用户变量：服务跑在系统账户下，`Environment.GetEnvironmentVariable` 只拿到机器级的那份，
+        // 用户在「环境变量」对话框里设的是 HKEY_USERS\<SID>\Environment，得自己去读。
+        candidates.AddRange(UserEnvironmentPiDirectories());
 
         var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (!string.IsNullOrEmpty(profile))
