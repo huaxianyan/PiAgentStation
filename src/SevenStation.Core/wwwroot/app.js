@@ -200,6 +200,10 @@ const el = {
   thread: document.getElementById('thread'),
   threadInner: document.getElementById('threadInner'),
   composer: document.getElementById('composer'),
+  queuePanel: document.getElementById('queuePanel'),
+  queueTitle: document.getElementById('queueTitle'),
+  queueList: document.getElementById('queueList'),
+  queueClear: document.getElementById('queueClear'),
   empty: document.getElementById('empty'),
   input: document.getElementById('input'),
   sendBtn: document.getElementById('sendBtn'),
@@ -839,47 +843,18 @@ function userNode(item) {
 
 /**
  * 一轮 = 一条用户消息 + 之后的所有助手动作。
- * 模型还在干活的时候把每一步都摆出来（一行一步，不展开）；
- * 正文一出现就把这些收成一行「工作过程」，让回答站在前面。
+ * 模型还在干活的时候只摆最新那一步；正文一出现就把这些收成一行「工作过程」。
  */
 function turnNode(turn, session, isLast) {
   const node = document.createElement('div');
   node.className = 'turn';
 
-  const work = [];
-  const texts = [];
-  const images = [];
-
   for (const item of turn.items) {
-    if (item.kind === 'user') {
-      node.appendChild(userNode(item));
-      continue;
-    }
-
-    for (const block of item.blocks || []) {
-      if (block.type === 'text' && block.text) {
-        texts.push(block.text);
-      } else if (block.type === 'thinking' && block.text) {
-        work.push({ kind: 'thinking', block, item });
-      } else if (block.type === 'toolCall') {
-        work.push({ kind: 'tool', block, item });
-      } else if (block.type === 'image') {
-        images.push(block);
-      }
-    }
+    if (item.kind !== 'user') continue;
+    node.appendChild(userNode(item));
   }
 
-  // 一轮的用时按消息自己的时间点算——这个时间点是我们存下来的，不依赖 Pi 现给。
-  let turnMs = null;
-  const ask = turn.items.find((item) => item.kind === 'user');
-  if (ask && ask.ts) {
-    let end = 0;
-    for (const item of turn.items) {
-      if (item.endTs > end) end = item.endTs;
-      if (item.ts > end) end = item.ts;
-    }
-    if (end > ask.ts) turnMs = end - ask.ts;
-  }
+  const { ask, work, texts, images, turnMs } = turnParts(turn);
 
   const streaming = Boolean(session.streaming) && isLast;
   const answered = texts.length > 0;
@@ -914,11 +889,48 @@ function turnNode(turn, session, isLast) {
   return node;
 }
 
+/** 把一轮拆成可画的几部分：用户提问、工作步骤、正文、图片、耗时。 */
+function turnParts(turn) {
+  const work = [];
+  const texts = [];
+  const images = [];
+
+  for (const item of turn.items) {
+    if (item.kind === 'user') continue;
+    for (const block of item.blocks || []) {
+      if (block.type === 'text' && block.text) {
+        texts.push(block.text);
+      } else if (block.type === 'thinking' && block.text) {
+        work.push({ kind: 'thinking', block, item });
+      } else if (block.type === 'toolCall') {
+        work.push({ kind: 'tool', block, item });
+      } else if (block.type === 'image') {
+        images.push(block);
+      }
+    }
+  }
+
+  // 一轮的用时按消息自己的时间点算——这个时间点是我们存下来的，不依赖 Pi 现给。
+  const ask = turn.items.find((item) => item.kind === 'user');
+  let turnMs = null;
+  if (ask && ask.ts) {
+    let end = 0;
+    for (const item of turn.items) {
+      if (item.endTs > end) end = item.endTs;
+      if (item.ts > end) end = item.ts;
+    }
+    if (end > ask.ts) turnMs = end - ask.ts;
+  }
+
+  return { ask, work, texts, images, turnMs };
+}
+
 /** 「工作 9 步 · 47 秒」——时间是一轮的实际耗时，不是各步相加。 */
-function workLabel(totalMs, count) {
+function workLabel(totalMs, count, live) {
   const spent = formatSpent(totalMs);
   const steps = count + ' 步';
-  return spent ? '工作 ' + steps + ' · ' + spent : '工作 ' + steps;
+  const prefix = live ? '工作中 ' : '工作 ';
+  return spent ? prefix + steps + ' · ' + spent : prefix + steps;
 }
 
 /**
@@ -962,12 +974,14 @@ function workGroup(work, collapsed, turnMs, since) {
   }
   head.innerHTML =
     '<span class="work-caret">▸</span>' +
-    '<span class="work-title">' + escapeHtml(workLabel(totalMs, work.length)) + '</span>';
+    '<span class="work-title">' + escapeHtml(workLabel(totalMs, work.length, since > 0)) + '</span>';
 
   const body = document.createElement('div');
   body.className = 'work-body';
 
-  for (const entry of work) {
+  // 干活时只留最新一条：上一步一完成就折进摘要行，不堆一串。
+  const shown = since > 0 ? work.slice(-1) : work;
+  for (const entry of shown) {
     body.appendChild(stepRow(entry));
   }
 
@@ -1177,7 +1191,136 @@ function renderThread(keepAnchor) {
   } else {
     scrollToBottom(true);
   }
+
+  renderQueue();
 }
+
+/* ------------------------------ 追加输入 ------------------------------ *
+ * 工作中回车的话先落在 Core 的队列里，这里只画那份状态：
+ * 能看到、能改、能删，这一轮结束后 Core 依次送出。
+ * -------------------------------------------------------------------- */
+
+const ICON_EDIT =
+  '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.6 2.9l2.5 2.5-7.2 7.2-2.9.4.4-2.9z"/><path d="M9.4 4.1l2.5 2.5"/></svg>';
+const ICON_CHECK =
+  '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.4 8.4l3 3 6.2-6.8"/></svg>';
+const ICON_CANCEL =
+  '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.6 4.6l6.8 6.8M11.4 4.6l-6.8 6.8"/></svg>';
+
+function renderQueue() {
+  const session = current();
+  const entries = (session && session.queue) || [];
+
+  el.queuePanel.hidden = entries.length === 0;
+  if (!entries.length) {
+    if (el.queueList.childElementCount) el.queueList.innerHTML = '';
+    return;
+  }
+
+  el.queueTitle.textContent = '已追加 ' + entries.length + ' 条 · 送出前可以改';
+
+  // 条目集合没变就只改文字：编辑到一半被整段重建会掉焦点。
+  const shown = [...el.queueList.children].map((node) => node.dataset.id);
+  const wanted = entries.map((entry) => entry.id);
+  if (shown.join('\u0000') !== wanted.join('\u0000')) {
+    el.queueList.innerHTML = '';
+    for (const entry of entries) el.queueList.appendChild(queueRow(entry));
+  } else {
+    entries.forEach((entry, index) => {
+      const node = el.queueList.children[index];
+      const label = node.querySelector('.queue-index');
+      if (label) label.textContent = String(index + 1);
+      if (!node.classList.contains('is-editing')) {
+        const text = node.querySelector('.queue-text');
+        if (text) text.textContent = entry.text;
+      }
+    });
+  }
+}
+
+function queueRow(entry) {
+  const row = document.createElement('li');
+  row.className = 'queue-item';
+  row.dataset.id = entry.id;
+  row.innerHTML =
+    '<span class="queue-index"></span>' +
+    '<span class="queue-text"></span>' +
+    '<div class="queue-actions">' +
+    '<button class="queue-btn" type="button" data-act="edit" title="编辑" aria-label="编辑">' + ICON_EDIT + '</button>' +
+    '<button class="queue-btn danger" type="button" data-act="remove" title="取消这条" aria-label="取消这条">' + ICON_CANCEL + '</button>' +
+    '</div>';
+  row.querySelector('.queue-text').textContent = entry.text;
+
+  row.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-act]');
+    if (!action) return;
+    if (action.dataset.act === 'edit') startQueueEdit(row, entry);
+    if (action.dataset.act === 'save' && row.commit) row.commit();
+    if (action.dataset.act === 'remove') send({ type: 'queue_remove', key: app.currentKey, id: entry.id });
+  });
+
+  return row;
+}
+
+function startQueueEdit(row, entry) {
+  if (row.classList.contains('is-editing')) return;
+  row.classList.add('is-editing');
+
+  const field = document.createElement('textarea');
+  field.className = 'queue-edit';
+  field.rows = Math.min(4, Math.max(2, Math.ceil(entry.text.length / 32)));
+  field.value = entry.text;
+  row.querySelector('.queue-text').replaceWith(field);
+
+  const button = row.querySelector('[data-act="edit"]');
+  button.dataset.act = 'save';
+  button.title = '保存';
+  button.innerHTML = ICON_CHECK;
+
+  field.focus();
+  field.setSelectionRange(field.value.length, field.value.length);
+
+  let done = false;
+  const finish = (text) => {
+    if (done) return;
+    done = true;
+    row.classList.remove('is-editing');
+    const span = document.createElement('span');
+    span.className = 'queue-text';
+    span.textContent = text;
+    field.replaceWith(span);
+    button.dataset.act = 'edit';
+    button.title = '编辑';
+    button.innerHTML = ICON_EDIT;
+    row.commit = null;
+  };
+
+  row.commit = () => {
+    const text = field.value.trim();
+    if (!text) {
+      finish(entry.text);
+      send({ type: 'queue_remove', key: app.currentKey, id: entry.id });
+      return;
+    }
+    finish(text);
+    send({ type: 'queue_edit', key: app.currentKey, id: entry.id, message: text });
+  };
+
+  field.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      row.commit();
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      finish(entry.text);
+    }
+  });
+}
+
+el.queueClear.addEventListener('click', () => {
+  send({ type: 'queue_clear', key: app.currentKey });
+});
 
 /** 顶部那行「加载更早的消息」：只在 Seven Station Core 说上面还有的时候出现。 */
 function olderRow(session) {
@@ -1217,21 +1360,93 @@ function patchItem(item) {
 
   const turn = turns[index];
   const isLast = index === turns.length - 1;
-  const node = turnNode(turn, session, isLast);
   const known = app.turnNodes[index];
 
-  if (known && known.node.isConnected) {
-    known.node.replaceWith(node);
-    known.node = node;
-    known.items = turn.items;
-  } else {
+  if (!known || !known.node.isConnected) {
     renderThread();
     return;
   }
+
+  // 正在跑、还没出正文的那一轮：只就地改最新那一行步骤的文字。
+  // 整颗换掉的话，鼠标底下的节点被替换，看起来就是在闪。
+  if (isLast && session.streaming && item.kind === 'assistant' && updateLiveTurn(known.node, turn)) {
+    known.items = turn.items;
+    return;
+  }
+
+  const node = turnNode(turn, session, isLast);
+  known.node.replaceWith(node);
+  known.node = node;
+  known.items = turn.items;
 }
 
+/**
+ * 正在跑的一轮：内容只增不减，所以可以就地更新。
+ * 任务完成后的正文和展开的步骤详情不在这里处理，交给整轮重画。
+ */
+function updateLiveTurn(node, turn) {
+  const assistant = node.querySelector('.msg.assistant');
+  const wrap = assistant && assistant.querySelector('.work');
+  if (!wrap) return false;
+
+  const { work, texts } = turnParts(turn);
+  if (!work.length || texts.length) return false;
+
+  const row = wrap.querySelector('.work-body .step');
+  // 详情展开着就不动它，里面的内容是旧的，重新点开才看得到。
+  if (!row || row.classList.contains('is-open')) return false;
+
+  updateStepRow(row, work[work.length - 1]);
+
+  const head = wrap.querySelector('.work-head');
+  if (head) {
+    head.dataset.steps = String(work.length);
+    const title = head.querySelector('.work-title');
+    if (title) {
+      const since = Number(head.dataset.since || 0) || Date.now();
+      title.textContent = workLabel(Date.now() - since, work.length, true);
+    }
+  }
+  return true;
+}
+
+/** 把一行步骤的文字换掉，节点不动。 */
+function updateStepRow(row, entry) {
+  const head = row.querySelector('.step-head');
+  if (!head) return;
+
+  const label = entry.kind === 'thinking' ? '思考' : toolLabel(entry.block.name);
+  const summary = entry.kind === 'thinking'
+    ? String(entry.block.text).replace(/\s+/g, ' ').slice(0, 46)
+    : toolSummary(entry.block);
+  const running = entry.kind === 'tool' && !entry.block.done;
+
+  row.className = 'step' + (entry.kind === 'thinking' ? ' is-thinking' : '') + ' is-current';
+  head.querySelector('.step-name').textContent = label;
+  head.querySelector('.step-text').textContent = summary;
+  head.querySelector('.step-status').textContent = running ? '运行中' : '完成';
+  head.querySelector('.step-dot').className = 'step-dot' + (running ? ' is-running' : '');
+
+  let time = head.querySelector('.step-time');
+  if (entry.block.durationMs != null) {
+    const text = formatDuration(entry.block.durationMs);
+    if (time) {
+      time.textContent = text;
+    } else {
+      time = document.createElement('span');
+      time.className = 'step-time';
+      time.textContent = text;
+      head.appendChild(time);
+    }
+  } else if (time) {
+    time.textContent = '';
+  }
+}
+
+/* 24 px 以内才箮「贴底」：以前是 90，稍往下拖一点就被当成在底部，
+   于是新步骤一进来就把人拽回去。 */
 function atBottom() {
-  return el.thread.scrollHeight - el.thread.scrollTop - el.thread.clientHeight < 90;
+  return el.thread.scrollHeight - el.thread.scrollTop - el.thread.clientHeight < 24;
 }
 
 function scrollToBottom(force) {
@@ -1701,7 +1916,7 @@ function paintWorkHint() {
   if (head) {
     const title = head.querySelector('.work-title');
     if (title) {
-      title.textContent = workLabel(Date.now() - Number(head.dataset.since), Number(head.dataset.steps));
+      title.textContent = workLabel(Date.now() - Number(head.dataset.since), Number(head.dataset.steps), true);
     }
   }
 }
@@ -2778,6 +2993,17 @@ function renderAppearanceCard() {
   const block = document.createElement('div');
   block.className = 'appearance-block';
 
+  const group = (label, control) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'appearance-group';
+    const caption = document.createElement('span');
+    caption.className = 'appearance-label';
+    caption.textContent = label;
+    wrap.appendChild(caption);
+    wrap.appendChild(control);
+    return wrap;
+  };
+
   const seg = document.createElement('div');
   seg.className = 'seg';
   for (const theme of THEMES) {
@@ -2792,8 +3018,8 @@ function renderAppearanceCard() {
     seg.appendChild(button);
   }
 
-  const row = document.createElement('div');
-  row.className = 'palette-row';
+  const paletteRow = document.createElement('div');
+  paletteRow.className = 'palette-row';
   for (const palette of PALETTES) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -2808,11 +3034,31 @@ function renderAppearanceCard() {
       setAppearance({ palette: palette.id });
       card.replaceWith(renderAppearanceCard());
     });
-    row.appendChild(button);
+    paletteRow.appendChild(button);
   }
 
-  block.appendChild(seg);
-  block.appendChild(row);
+  const bubbleRow = document.createElement('div');
+  bubbleRow.className = 'palette-row';
+  for (const tone of BUBBLE_TONES) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'palette-btn';
+    button.classList.toggle('is-on', appearance.bubble === tone.id);
+    const dot = document.createElement('span');
+    dot.className = 'palette-dot';
+    dot.style.background = tone.dot;
+    button.appendChild(dot);
+    button.appendChild(document.createTextNode(tone.name));
+    button.addEventListener('click', () => {
+      setAppearance({ bubble: tone.id });
+      card.replaceWith(renderAppearanceCard());
+    });
+    bubbleRow.appendChild(button);
+  }
+
+  block.appendChild(group('主题', seg));
+  block.appendChild(group('配色', paletteRow));
+  block.appendChild(group('用户气泡', bubbleRow));
   card.appendChild(block);
   return card;
 }
@@ -3911,10 +4157,6 @@ function submitPrompt() {
     }));
   }
 
-  if (session.streaming) {
-    message.streamingBehavior = 'steer';
-  }
-
   send(message);
   el.input.value = '';
   app.attachments = [];
@@ -4359,6 +4601,7 @@ function onSessionState(message) {
   session.stats = message.stats || null;
   session.hasMore = Boolean(message.hasMore);
   session.loadingOlder = false;
+  session.queue = (message.state && Array.isArray(message.state.queue)) ? message.state.queue : [];
   if (previous) {
     session.models = previous.models;
     session.levels = previous.levels;
@@ -4465,7 +4708,7 @@ function onEvent(key, event) {
         session.streaming = true;
         if (key === app.currentKey) {
           patchItem(item);
-          scrollToBottom(true);
+          scrollToBottom(false);
           renderComposerState();
         }
       }
@@ -4502,7 +4745,7 @@ function onEvent(key, event) {
         session.raw.push(message);
         if (key === app.currentKey) {
           patchItem(item);
-          scrollToBottom(true);
+          scrollToBottom(false);
         }
       }
       break;
@@ -4566,10 +4809,16 @@ function onEvent(key, event) {
     }
 
     case 'queue_update':
+      // 排队由 Seven Station Core 管（queue_state），Pi 那边应当一直是空的；
+      // 真出现内容说明有别的路径往里塞了东西，照实刷新一次输入区状态。
+      if (key === app.currentKey) renderComposerState();
+      break;
+
+    case 'queue_state':
       if (key === app.currentKey) {
-        const count = (event.steering || []).length + (event.followUp || []).length;
-        el.hint.textContent = count ? '队列里还有 ' + count + ' 条' : '';
-        if (!count) renderComposerState();
+        const session = app.byKey.get(key);
+        if (session) session.queue = Array.isArray(event.entries) ? event.entries : [];
+        renderQueue();
       }
       break;
 

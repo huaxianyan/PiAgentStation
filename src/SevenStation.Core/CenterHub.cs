@@ -22,9 +22,17 @@ public sealed class CenterHub
         public required PiSession Session { get; init; }
         public bool Streaming { get; set; }
 
+        /// <summary>
+        /// 工作中追加的输入。存在这里而不是直接推给 Pi：
+        /// Pi 的队列只有 clear_queue（整队清空），单条改不了也删不掉。
+        /// </summary>
+        public List<QueuedPrompt> Queue { get; } = new();
+
         /// <summary>本轮已经写进库的消息指纹，同一条只落一次。</summary>
         public HashSet<string> Persisted { get; } = new();
     }
+
+    private sealed record QueuedPrompt(string Id, string Text, JsonArray? Images);
 
     public static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -33,6 +41,7 @@ public sealed class CenterHub
 
     private readonly object _gate = new();
     private readonly Dictionary<string, Live> _live = new();
+    private int _queueSeq;
     private readonly Dictionary<string, TerminalSession> _terminals = new();
     private readonly object _terminalGate = new();
     private readonly List<CenterConnection> _clients = new();
@@ -133,6 +142,18 @@ public sealed class CenterHub
 
                 case "prompt":
                     await PromptAsync(Require(key, "对话标识"), message, sender);
+                    break;
+
+                case "queue_edit":
+                    EditQueued(LiveFor(Require(key, "对话标识")), message);
+                    break;
+
+                case "queue_remove":
+                    RemoveQueued(LiveFor(Require(key, "对话标识")), message["id"]?.GetValue<string>());
+                    break;
+
+                case "queue_clear":
+                    ClearQueue(LiveFor(Require(key, "对话标识")));
                     break;
 
                 case "abort":
@@ -456,7 +477,7 @@ public sealed class CenterHub
             ["key"] = id,
             ["cwd"] = conversation.Cwd,
             ["title"] = conversation.Title,
-            ["state"] = BuildState(conversation, live?.Streaming == true),
+            ["state"] = BuildState(conversation, live?.Streaming == true, live is null ? null : QueueEntries(live)),
             ["messages"] = messages,
             ["messageTotal"] = total,
             ["hasMore"] = total > messages.Count,
@@ -1391,13 +1412,18 @@ public sealed class CenterHub
         });
     }
 
-    private static JsonObject BuildState(Conversation conversation, bool streaming)
+    private static JsonObject BuildState(Conversation conversation, bool streaming, JsonArray? queue)
     {
         var state = new JsonObject
         {
             ["sessionName"] = conversation.Title,
             ["isStreaming"] = streaming,
         };
+
+        if (queue is not null)
+        {
+            state["queue"] = queue;
+        }
 
         if (Parse(conversation.Model) is { } model)
         {
@@ -1502,10 +1528,17 @@ public sealed class CenterHub
                     live.Persisted.Clear();
                 }
             }
+            else if (name == "agent_end")
+            {
+                // 一次运行结束。只借它把「忙」标识放掉，排队交给下面的 agent_settled，
+                // 两个事件都会来，都触发会把整队一次送完。
+                live.Streaming = false;
+            }
             else if (name == "agent_settled")
             {
                 live.Streaming = false;
                 _ = PersistTurnAsync(live);
+                _ = DeliverQueuedAsync(live);
             }
             else if (name == "message_end")
             {
@@ -1702,6 +1735,14 @@ public sealed class CenterHub
         var conversation = RequireConversation(id);
         var live = EnsureLive(conversation);
 
+        // 工作中说的话不再直接丢给 Pi：那边只能整队清空，单条改不了。
+        // 先存在 Core 里，等 agent_settled 时再依次送出去。
+        if (live.Streaming)
+        {
+            EnqueuePrompt(live, message);
+            return;
+        }
+
         var command = new JsonObject
         {
             ["type"] = "prompt",
@@ -1711,12 +1752,6 @@ public sealed class CenterHub
         if (message["images"] is JsonArray images)
         {
             command["images"] = images.DeepClone();
-        }
-
-        var behavior = message["streamingBehavior"]?.GetValue<string>();
-        if (!string.IsNullOrEmpty(behavior))
-        {
-            command["streamingBehavior"] = behavior;
         }
 
         // 第一次说话就用这句话当标题，省一次模型调用。
@@ -1733,6 +1768,9 @@ public sealed class CenterHub
             }
         }
 
+        // 从这里开始算「正在干活」：Pi 的 agent_start 不一定每次都到，
+        // 用自己发出去的这条 prompt 来判断，排队才不会漏。
+        live.Streaming = true;
         var response = await live.Session.SendAsync(command, TimeSpan.FromSeconds(60));
         sender.Send(new JsonObject
         {
@@ -1740,6 +1778,130 @@ public sealed class CenterHub
             ["key"] = id,
             ["disposition"] = Data(response)?["disposition"]?.GetValue<string>(),
         });
+    }
+
+    /// <summary>取已经在跑的会话；没跑就等于没东西可排，直接忽略。</summary>
+    private Live? LiveFor(string id)
+    {
+        lock (_gate)
+        {
+            return _live.TryGetValue(id, out var live) ? live : null;
+        }
+    }
+
+    private void EnqueuePrompt(Live live, JsonObject message)
+    {
+        var text = message["message"]?.GetValue<string>()?.TrimEnd();
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        var images = message["images"] is JsonArray source ? (JsonArray)source.DeepClone() : null;
+        var id = "q" + Interlocked.Increment(ref _queueSeq);
+        lock (live.Queue)
+        {
+            live.Queue.Add(new QueuedPrompt(id, text, images));
+        }
+
+        BroadcastQueue(live);
+    }
+
+    private void EditQueued(Live? live, JsonObject message)
+    {
+        if (live is null) return;
+
+        var id = message["id"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(id)) throw new InvalidOperationException("缺少条目标识。");
+
+        var text = message["message"]?.GetValue<string>()?.TrimEnd();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            RemoveQueued(live, id);
+            return;
+        }
+
+        lock (live.Queue)
+        {
+            var index = live.Queue.FindIndex((item) => item.Id == id);
+            if (index >= 0) live.Queue[index] = live.Queue[index] with { Text = text };
+        }
+
+        BroadcastQueue(live);
+    }
+
+    private void RemoveQueued(Live? live, string? id)
+    {
+        if (live is null || string.IsNullOrEmpty(id)) return;
+        lock (live.Queue)
+        {
+            live.Queue.RemoveAll((item) => item.Id == id);
+        }
+
+        BroadcastQueue(live);
+    }
+
+    private void ClearQueue(Live? live)
+    {
+        if (live is null) return;
+        lock (live.Queue)
+        {
+            live.Queue.Clear();
+        }
+
+        BroadcastQueue(live);
+    }
+
+    /// <summary>排队条目的对外样子：只给标识和正文，图片不出界面。</summary>
+    private static JsonArray QueueEntries(Live live)
+    {
+        var entries = new JsonArray();
+        lock (live.Queue)
+        {
+            foreach (var item in live.Queue)
+            {
+                entries.Add(new JsonObject { ["id"] = item.Id, ["text"] = item.Text });
+            }
+        }
+
+        return entries;
+    }
+
+    private void BroadcastQueue(Live live)
+    {
+        Broadcast(new JsonObject
+        {
+            ["type"] = "queue_state",
+            ["key"] = live.Conversation.Id,
+            ["entries"] = QueueEntries(live),
+        });
+    }
+
+    /// <summary>这一轮结束后送下一条。一次只送一条，剩下的等下一轮，跟排队时看到的一致。</summary>
+    private async Task DeliverQueuedAsync(Live live)
+    {
+        QueuedPrompt? next;
+        lock (live.Queue)
+        {
+            if (live.Queue.Count == 0) return;
+            next = live.Queue[0];
+            live.Queue.RemoveAt(0);
+        }
+
+        BroadcastQueue(live);
+
+        var command = new JsonObject { ["type"] = "prompt", ["message"] = next.Text };
+        if (next.Images is not null)
+        {
+            command["images"] = next.Images.DeepClone();
+        }
+
+        try
+        {
+            live.Streaming = true;
+            await live.Session.SendAsync(command, TimeSpan.FromSeconds(60));
+        }
+        catch (Exception error)
+        {
+            Log.Write($"送出排队消息失败 {live.Conversation.Id}：{error.Message}");
+        }
     }
 
     private async Task SimpleAsync(string id, string command)
