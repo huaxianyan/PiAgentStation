@@ -1040,6 +1040,7 @@ button { cursor: pointer; }
  * ---------------------------------------------------------------- */
 
 .composer {
+  position: relative;
   width: 100%;
   max-width: var(--col-w);
   margin: 0 auto;
@@ -2086,29 +2087,43 @@ body.dragging .composer-box {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* 通知落在正文与输入框之间的留白里：不压正文右下角，也不占常驻位置。
+   绝对定位贴住输入区上沿，出现和消失都不会顶动下面的东西。 */
 .toasts {
   position: absolute;
-  right: 16px;
-  bottom: 16px;
+  left: 24px;
+  right: 24px;
+  bottom: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 6px;
+  padding-bottom: 10px;
+  pointer-events: none;
   z-index: 40;
 }
 
 .toast {
-  max-width: 380px;
-  padding: 9px 13px;
-  background: #1c1c22;
-  color: #fff;
-  border-radius: 10px;
+  max-width: 100%;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--card);
+  color: var(--text);
   font-size: 12.5px;
-  box-shadow: 0 8px 20px rgba(16, 16, 20, .18);
+  box-shadow: 0 2px 10px rgba(16, 16, 20, .07);
   animation: rise .16s ease-out;
 }
 
-.toast.warning { background: #7a4a10; }
-.toast.error { background: #8f2a20; }
+.toast.warning {
+  border-color: color-mix(in oklab, #c8891a 45%, var(--border));
+  background: color-mix(in oklab, #f0b63c 12%, var(--card));
+}
+
+.toast.error {
+  border-color: color-mix(in oklab, var(--danger) 45%, var(--border));
+  background: color-mix(in oklab, var(--danger) 10%, var(--card));
+}
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(6px); }
