@@ -27,7 +27,7 @@ Seven Station Core 的这一版把控制台也装进来了：装一次，服务�
 | 架构 | `x64` |
 | 运行时 | `.NET 10`（自包含，目标机器不用装 .NET） |
 | 安装形态 | MSI，注册服务 `SevenStationCore`（系统账户、开机自启），带 Seven Station Control |
-| 监听地址 | `http://127.0.0.1:8787`，令牌在 `%ProgramData%\SevenStation.Core	oken.txt` |
+| 监听地址 | `http://127.0.0.1:8787`，令牌在 `%ProgramData%\SevenStation.Core\token.txt` |
 | 数据目录 | `%ProgramData%\SevenStation.Core`（卸载保留） |
 | 源码提交 | `86aa138dff9d968621cdb694aa04a10c480fa854` |
 | 产物 | `SevenStationCore-win-x64-0.4.0.msi`（43.3 MB） |

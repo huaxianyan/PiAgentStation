@@ -10,8 +10,8 @@
   的令牌与设置一字不差、对话库 1.7 MB 保留）、`ui-smoke.mjs` 全绿。
 - 顺手清了本机两个历史残留安装：一个旧 0.3.0 中心的 ProductCode（`{B0F57C2D…}`）与一个探针包（`0.0.1`）。
   这类残留会让「应用和功能」出现同名两条，`MajorUpgrade` 一次只清掉一条。
-- 下一步：建两个 Release（`SevenStationCore-win-x64-0.4.0`、`SevenStation-win-x64-0.4.0`），
-  正文用 `build/release/core.md` 与 `build/release/client.md`。
+- 已发布（2026-11-19）：`SevenStationCore-win-x64-0.4.0` 与 `SevenStation-win-x64-0.4.0` 两个 Release，
+  各带 MSI 与 `.sha256`；GitHub 记录的资产 sha256 与本地文件一致。
 - 已知阻塞：无。
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
