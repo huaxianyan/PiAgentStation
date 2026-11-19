@@ -46,16 +46,6 @@ def banner() -> Image.Image:
     return image
 
 
-def banner_dark() -> Image.Image:
-    """备选：深色顶栏，标题会反白画在上面。"""
-    image = Image.new("RGB", (493, 58), INK)
-    mark = icon(20, light=True)
-    faded = mark.copy()
-    faded.putalpha(mark.getchannel("A").point(lambda value: int(value * 0.45)))
-    image.paste(faded, (455, 18), faded)
-    return image
-
-
 def dialog() -> Image.Image:
     image = Image.new("RGB", (493, 312), PAPER)
     draw = ImageDraw.Draw(image)
@@ -76,8 +66,6 @@ def main() -> None:
     SHOTS.mkdir(parents=True, exist_ok=True)
 
     pieces = {"banner": banner(), "dialog": dialog()}
-    banner_dark().save(SHOTS / "installer-banner-dark.png", "PNG")
-
     for name, image in pieces.items():
         # WiX 只吃 BMP，24 位不压缩最稳
         image.save(ASSETS / f"{name}.bmp", "BMP")
