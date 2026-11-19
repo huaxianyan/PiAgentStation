@@ -29,6 +29,6 @@ Seven Station Core 的这一版把控制台也装进来了：装一次，服务�
 | 安装形态 | MSI，注册服务 `SevenStationCore`（系统账户、开机自启），带 Seven Station Control |
 | 监听地址 | `http://127.0.0.1:8787`，令牌在 `%ProgramData%\SevenStation.Core	oken.txt` |
 | 数据目录 | `%ProgramData%\SevenStation.Core`（卸载保留） |
-| 源码提交 | `8ae247c0b7dc9d98e9ca3f72b2fc78fac4de6664` |
+| 源码提交 | `86aa138dff9d968621cdb694aa04a10c480fa854` |
 | 产物 | `SevenStationCore-win-x64-0.4.0.msi`（43.3 MB） |
 | SHA-256 | `50ea243b1bb202094f530717f7ecb585a79cabefec2380d17deb3d7c223d41b1` |

@@ -25,6 +25,6 @@
 | 运行时 | WebView2（Win11 自带，Win10 多数已装） |
 | 安装形态 | MSI，开始菜单与桌面快捷方式 |
 | 连接信息 | `%LOCALAPPDATA%\SevenStation\center.json`（覆盖装保留） |
-| 源码提交 | `8ae247c0b7dc9d98e9ca3f72b2fc78fac4de6664` |
+| 源码提交 | `86aa138dff9d968621cdb694aa04a10c480fa854` |
 | 产物 | `SevenStation-win-x64-0.4.0.msi`（3.2 MB） |
 | SHA-256 | `ce08ca64ed796f9e0afcc95c4e2196d9c02a67a7d1f12fcbca75cea84e111f51` |
