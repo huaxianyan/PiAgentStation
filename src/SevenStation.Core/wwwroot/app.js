@@ -2130,10 +2130,17 @@ function renderAttachments() {
     chip.className = 'attachment';
     const img = document.createElement('img');
     img.src = attachment.dataUrl;
+    img.alt = '';
     const label = document.createElement('span');
+    label.className = 'attachment-name';
     label.textContent = attachment.name || 'image';
+    label.title = attachment.name || 'image';
     const remove = document.createElement('button');
-    remove.textContent = '×';
+    remove.className = 'attachment-remove';
+    remove.type = 'button';
+    remove.title = '移除这张图';
+    remove.setAttribute('aria-label', '移除这张图');
+    remove.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>';
     remove.addEventListener('click', () => {
       app.attachments.splice(index, 1);
       renderAttachments();

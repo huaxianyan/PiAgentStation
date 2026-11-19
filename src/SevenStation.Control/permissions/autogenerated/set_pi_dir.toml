@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-pi-dir"
+description = "Enables the set_pi_dir command without any pre-configured scope."
+commands.allow = ["set_pi_dir"]
+
+[[permission]]
+identifier = "deny-set-pi-dir"
+description = "Denies the set_pi_dir command without any pre-configured scope."
+commands.deny = ["set_pi_dir"]

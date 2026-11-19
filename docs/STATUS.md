@@ -22,6 +22,23 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-034：Control 改 Pi 目录被 ACL 挡了 + 待发图片挪到空隙里（2026-11-19，未发版）
+
+- **`Command set_pi_dir not allowed by ACL`**：新增壳命令要登记两处，我只做了一处。
+  `src/SevenStation.Control/build.rs` 的 `AppManifest::commands` 补 `"set_pi_dir"`，
+  `capabilities/control.json` 的 `permissions` 补 `allow-set-pi-dir`。
+  核对 `gen/schemas/acl-manifests.json` 里已经出现 `allow-set-pi-dir`，权限这次真的生成了。
+  （桌面客户端那边一直是这么要求的，AGENTS.md 里也记着「新增壳命令要在 build.rs 登记」，这次漏的是能力表。）
+- **粘贴图片把正文顶上去**：`.attachments` 原本是 `.composer` 里的普通流元素，多一行就把上面正文区挤下去。
+  现在和提示合并成一个 `.composer-dock`（`position: absolute; bottom: 100%`，容器 `pointer-events: none`，
+  只有 `.attachments` 打开点击），两者都不参与布局，正文区纹丝不动。
+- **那个叉太丑**：原来是个默认样式的 `<button>×</button>`，浏览器给它画了边框。
+  改成 20px 圆形按钮 + 11px 的 SVG 叉（`stroke-width 1.4`），平时只有淡淡的叉，悬停铺一层 `--border`。
+  文件名超长时按 260px 封顶、省略号收尾，留 `title` 看全名；缩略图 22px 圆角 5px；
+  底色从写死的 `#f7f7f9` 换成 `var(--panel)`，深色主题不会再冒出白块。
+- 出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 43.7 MB（`7672200fcbacbb74…`）。
+- 未验证：界面观感（叉的样子、图片条浮在空隙里的实际位置）没法在这台机器上截图，需要人眼确认。
+
 ## STATUS-033：安装时自动收掉在跑的程序（2026-11-19，未发版）
 
 - 只靠 `util:CloseApplication` 不行：它发的是关闭消息，而 Control 收到关闭请求是 `prevent_close` + 缩回托盘

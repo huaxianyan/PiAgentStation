@@ -3,6 +3,7 @@ fn main() {
     let attributes = tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "read_state",
+            "set_pi_dir",
             "control",
             "set_autostart",
             "set_lan",

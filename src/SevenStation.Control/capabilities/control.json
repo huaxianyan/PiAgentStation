@@ -5,6 +5,7 @@
   "permissions": [
     "core:default",
     "allow-read-state",
+    "allow-set-pi-dir",
     "allow-control",
     "allow-set-autostart",
     "allow-set-lan",
