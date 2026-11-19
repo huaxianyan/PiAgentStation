@@ -22,6 +22,27 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-036：工作过程只留最新一条但能翻出来，细节改成看得懂的写法（2026-11-20，未发版）
+
+- **翻不出已完成步骤**：`workGroup` 里 `work.slice(-1)` 是「只画最新一条」，画完就没了——展开/收起只能操作整组，
+  前面完成的步骤根本不在 DOM 里。现在会全部画出来：干活时最新那条直接摆在正文，
+  其余的收进「前 N 步已完成」的折子里（`work-more` / `work-earlier`），点一下就展开，再点收起。
+  跑完之后整组照旧按状态折叠。
+- **就地更新认错行**：`updateLiveTurn` 原来取 `.work-body .step` 的第一个，加了折子之后可能抓到折子里的旧行。
+  改成只认 `.work-body` 的直接子节点、按 `data-step`（工具调用 id）比对；对不上就整轮重画，
+  对上才就地改文字。
+- **细节全是原始 JSON**：`toolCard` 以前把 `args` 原样 `JSON.stringify` 加整段输出倒进 `<pre>`。
+  现在按工具给分段（`toolSections`）：`read` 给文件 + 行范围 + 内容，`bash` 给命令 + 输出，
+  `edit/multi_edit` 给「原来 / 换成」两条（红底 / 绿底），`write` 给写入 + 内容，
+  `web_search` / `fetch_content` / `grep` / `glob` 各给对应的字段，其余退回参数 JSON。
+  输出超过 80 行就掐头 60、留尾 20，中间标「…省略 N 行…」；路径用 `shortenPath` 相对当前工作区显示，
+  点一下能在文件面板里打开。
+- 加工放在前端（`wwwroot/app.js`）而不是 Core：事件里该有的字段都有，加工只是排版；
+  前端改了两端（桌面与手机共用一份 wwwroot）同时生效，也不用动库里的历史 payload。
+- 验证：`shortenPath` / `trimOutput` / `toolSections` 用 node 逐类跑过（read 带 limit、read 长文件、
+  bash、edit、write、未知工具出错），分段与截断都对；界面实际观感没法在这台机器上截图。
+- 出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 43.7 MB（`0a01ea231366fd88…`）。
+
 ## STATUS-035：追加输入改为「回合边界」送出，不再等整轮结束（2026-11-20，未发版）
 
 - 用户报的现象属实：`DeliverQueuedAsync` 只在 `agent_settled` 里调用，也就是整轮任务彻底结束后才把

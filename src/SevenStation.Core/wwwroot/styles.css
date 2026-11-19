@@ -963,6 +963,46 @@ button { cursor: pointer; }
 
 .err-text { color: var(--danger); }
 
+/* 改动前后用一点底色区分，比一大段 JSON 好认。 */
+.tool-body pre.is-removed {
+  background: color-mix(in oklab, var(--danger) 9%, transparent);
+  border-radius: 5px;
+  padding: 4px 6px;
+}
+
+.tool-body pre.is-added {
+  background: color-mix(in oklab, #2f9e44 11%, transparent);
+  border-radius: 5px;
+  padding: 4px 6px;
+}
+
+/* 干活时前面完成的步骤收在这行折子里，点一下展开。 */
+.work-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 6px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--text-mute);
+  font-size: 12.5px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.work-more:hover { color: var(--text-dim); }
+
+.work-earlier {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+  padding-left: 2px;
+  border-left: 1px solid var(--border);
+}
+
 /* ---------------------------------------------------------------- *
  * 空状态
  * ---------------------------------------------------------------- */

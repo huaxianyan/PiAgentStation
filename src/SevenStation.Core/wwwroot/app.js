@@ -1143,9 +1143,35 @@ function workGroup(work, collapsed, turnMs, since) {
   const body = document.createElement('div');
   body.className = 'work-body';
 
-  // 干活时只留最新一条：上一步一完成就折进摘要行，不堆一串。
-  const shown = since > 0 ? work.slice(-1) : work;
-  for (const entry of shown) {
+  // 干活的时候正文只摆最新那条；完成的收在上面的折子里，点一下就能翻出来看。
+  // （以前是直接不画，翻都翻不出来。）
+  const earlier = live ? work.slice(0, -1) : [];
+  if (earlier.length) {
+    const fold = document.createElement('button');
+    fold.className = 'work-more';
+    fold.type = 'button';
+
+    const list = document.createElement('div');
+    list.className = 'work-earlier';
+    list.hidden = true;
+    for (const entry of earlier) list.appendChild(stepRow(entry));
+
+    let open = false;
+    const label = () => (open ? '收起前面 ' + earlier.length + ' 步' : '前 ' + earlier.length + ' 步已完成');
+    fold.textContent = label();
+    fold.addEventListener('click', (event) => {
+      event.stopPropagation();
+      open = !open;
+      list.hidden = !open;
+      fold.textContent = label();
+      fold.classList.toggle('is-open', open);
+    });
+
+    body.appendChild(fold);
+    body.appendChild(list);
+  }
+
+  for (const entry of live ? work.slice(-1) : work) {
     body.appendChild(stepRow(entry));
   }
 
@@ -1167,6 +1193,8 @@ function workGroup(work, collapsed, turnMs, since) {
 function stepRow(entry) {
   const row = document.createElement('div');
   row.className = 'step' + (entry.kind === 'thinking' ? ' is-thinking' : '');
+  // 记下是哪一步：就地更新时要认出「还是同一条」，换了就整轮重画。
+  row.dataset.step = String(entry.block.id || '');
 
   const head = document.createElement('button');
   head.className = 'step-head';
@@ -1213,6 +1241,109 @@ function formatDuration(ms) {
   return ms >= 1000 ? (ms / 1000).toFixed(1) + ' 秒' : Math.round(ms) + ' 毫秒';
 }
 
+/** 正文里的路径太长时只留尾巴，前面用省略号，别让一行被路径撑满。 */
+function shortenPath(value) {
+  const text = String(value || '').replace(/\\/g, '/');
+  const cwd = (current()?.cwd || '').replace(/\\/g, '/');
+  if (cwd && text.toLowerCase().startsWith(cwd.toLowerCase() + '/')) {
+    return text.slice(cwd.length + 1);
+  }
+  return text.length > 58 ? '…' + text.slice(-57) : text;
+}
+
+/** 输出太长就掐头留尾，中间标出省略了多少行——比让人翻几千行强。 */
+function trimOutput(value, head = 60, tail = 20) {
+  const text = String(value ?? '').replace(/\r\n/g, '\n').replace(/\s+$/, '');
+  const lines = text.split('\n');
+  if (lines.length <= head + tail) return text;
+  const skipped = lines.length - head - tail;
+  return lines.slice(0, head).join('\n') + '\n…省略 ' + skipped + ' 行…\n' + lines.slice(-tail).join('\n');
+}
+
+/** 把一条工具调用翻成人话：给几段「标签 + 内容」，前端照着排。 */
+function toolSections(block) {
+  const args = block.args || {};
+  const sections = [];
+  const add = (label, text, mono = true) => {
+    if (text === undefined || text === null || text === '') return;
+    sections.push({ label, text: String(text), mono });
+  };
+
+  const path = args.path || args.file_path;
+  const output = block.output;
+
+  switch (block.name) {
+    case 'read': {
+      add('文件', path);
+      const from = Number(args.offset) || 0;
+      const count = Number(args.limit) || 0;
+      if (from || count) {
+        add('范围', '第 ' + (from + 1) + ' 行起' + (count ? '，共 ' + count + ' 行' : ''));
+      }
+      add('内容', trimOutput(output));
+      break;
+    }
+    case 'write': {
+      add('写入', path);
+      add('内容', trimOutput(args.content));
+      add('结果', block.isError ? '' : '已写入');
+      break;
+    }
+    case 'edit':
+    case 'multi_edit': {
+      add('修改', path);
+      const edits = Array.isArray(args.edits) ? args.edits : [args];
+      for (const [index, edit] of edits.entries()) {
+        if (edits.length > 1) add('第 ' + (index + 1) + ' 处', '');
+        add('- 原来', trimOutput(edit.oldText ?? edit.old_string, 30, 6));
+        add('+ 换成', trimOutput(edit.newText ?? edit.new_string, 30, 6));
+      }
+      break;
+    }
+    case 'bash':
+    case 'shell': {
+      add('命令', args.command);
+      add(block.isError ? '输出（出错）' : '输出', trimOutput(output));
+      break;
+    }
+    case 'web_search': {
+      add('查询', args.queries ? [].concat(args.queries).join('、') : args.query);
+      add('结果', trimOutput(output));
+      break;
+    }
+    case 'fetch_content': {
+      add('地址', args.url || (args.urls ? [].concat(args.urls).join('\n') : ''));
+      add('结果', trimOutput(output));
+      break;
+    }
+    case 'grep':
+    case 'search': {
+      add('模式', args.pattern || args.query);
+      add('目录', path);
+      add('结果', trimOutput(output));
+      break;
+    }
+    case 'glob':
+    case 'list_dir': {
+      add('要找', args.pattern);
+      add('目录', path || args.directory);
+      add('结果', trimOutput(output));
+      break;
+    }
+    default: {
+      const keys = Object.keys(args);
+      if (keys.length) add('参数', JSON.stringify(args, null, 2));
+      add(block.isError ? '输出（出错）' : '输出', trimOutput(output));
+    }
+  }
+
+  // 兜底：哪个分支都没给出内容、但确实有输出，就把输出放上。
+  if (!sections.some((section) => section.label !== '结果' && section.label !== '范围' && section.text)) {
+    add('输出', trimOutput(output));
+  }
+  return sections.filter((section) => section.text !== '' || section.label.startsWith('第 '));
+}
+
 function toolCard(block) {
   const card = document.createElement('div');
   card.className = 'tool' + (block.open ? ' open' : '');
@@ -1230,6 +1361,7 @@ function toolCard(block) {
   const args = document.createElement('span');
   args.className = 'tool-args';
   args.textContent = toolSummary(block);
+  args.title = toolSummary(block);
 
   // 工具读写的路径点一下就能在文件面板里看，省得自己去目录里翻。
   const target = block.args?.path || block.args?.file_path;
@@ -1270,25 +1402,26 @@ function toolCard(block) {
   const body = document.createElement('div');
   body.className = 'tool-body';
 
-  if (block.argsText) {
-    const label = document.createElement('div');
-    label.className = 'label';
-    label.textContent = '参数';
+  for (const section of toolSections(block)) {
+    if (section.label) {
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = section.label;
+      body.appendChild(label);
+    }
     const pre = document.createElement('pre');
-    pre.textContent = block.argsText;
-    body.appendChild(label);
+    if (section.label === '- 原来') pre.className = 'is-removed';
+    if (section.label === '+ 换成') pre.className = 'is-added';
+    if (block.isError && section.label.startsWith('输出')) pre.className += ' err-text';
+    pre.textContent = section.text;
     body.appendChild(pre);
   }
 
-  if (block.output) {
-    const label = document.createElement('div');
-    label.className = 'label';
-    label.textContent = block.isError ? '输出（出错）' : '输出';
-    const pre = document.createElement('pre');
-    if (block.isError) pre.className = 'err-text';
-    pre.textContent = block.output;
-    body.appendChild(label);
-    body.appendChild(pre);
+  if (!body.childNodes.length) {
+    const empty = document.createElement('div');
+    empty.className = 'label';
+    empty.textContent = block.running ? '进行中…' : '没有更多细节';
+    body.appendChild(empty);
   }
 
   card.appendChild(head);
@@ -1319,14 +1452,22 @@ function toolLabel(name) {
 
 function toolSummary(block) {
   const args = block.args || {};
-  const pick = args.command || args.path || args.file_path || args.pattern || args.query || args.url;
-  if (typeof pick === 'string') {
-    return pick.length > 110 ? pick.slice(0, 110) + '…' : pick;
+  const path = args.path || args.file_path;
+  if (typeof path === 'string' && path) {
+    const limit = Number(args.limit) || 0;
+    const offset = Number(args.offset) || 0;
+    const range = limit || offset ? ' · 第 ' + (offset + 1) + ' 行' + (limit ? '起 ' + limit + ' 行' : '起') : '';
+    return shortenPath(path) + range;
   }
-  if (block.argsText) {
-    const flat = block.argsText.replace(/\s+/g, ' ');
+
+  const pick = args.command || args.pattern || args.query || args.url;
+  if (typeof pick === 'string' && pick) {
+    const flat = pick.replace(/\s+/g, ' ').trim();
     return flat.length > 110 ? flat.slice(0, 110) + '…' : flat;
   }
+
+  if (block.running) return '进行中…';
+  if (block.isError) return '出错';
   return '';
 }
 
@@ -1544,9 +1685,13 @@ function updateLiveTurn(node, turn) {
   const { work, texts } = turnParts(turn);
   if (!work.length || texts.length) return false;
 
-  const row = wrap.querySelector('.work-body .step');
+  const target = work[work.length - 1];
+  const rows = wrap.querySelectorAll('.work-body > .step');
+  const row = rows[rows.length - 1];
+  // 换到下一步了就整轮重画：刚才那条得折进「前 N 步」里。
+  if (!row || row.getAttribute('data-step') !== String(target.block.id || '')) return false;
   // 详情展开着就不动它，里面的内容是旧的，重新点开才看得到。
-  if (!row || row.classList.contains('is-open')) return false;
+  if (row.classList.contains('is-open')) return false;
 
   updateStepRow(row, work[work.length - 1]);
 
