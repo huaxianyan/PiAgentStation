@@ -10,6 +10,7 @@
   的令牌与设置一字不差、对话库 1.7 MB 保留）、`ui-smoke.mjs` 全绿。
 - 顺手清了本机两个历史残留安装：一个旧 0.3.0 中心的 ProductCode（`{B0F57C2D…}`）与一个探针包（`0.0.1`）。
   这类残留会让「应用和功能」出现同名两条，`MajorUpgrade` 一次只清掉一条。
+- README 与仓库描述按 `readme-standard` 重写过，截图在 `docs/images/`。
 - 已发布（2026-11-19）：Release `v0.4.0` 一个页面，装 Seven Station Core 与客户端的两个 MSI 加各自 `.sha256`；
   0.3.0 也按同一形态重做成 `v0.3.0`。标签只有版本号，一版一 Release。
 - 已知阻塞：无。
