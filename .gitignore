@@ -18,3 +18,7 @@ src/SevenStation.Desktop/permissions/
 # WiX 的中间产物
 installer/**/*.wixpdb
 installer/**/*.wixobj
+
+# Python 缓存
+__pycache__/
+*.pyc
