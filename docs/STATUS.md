@@ -22,6 +22,19 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-030：Seven Station Control 里能改 Pi 安装目录了（2026-11-19，未发版）
+
+- 起因：另一个用户装完之后 `list_models` 一直报「还没有配置 Pi」。Core 的自动探测只扫
+  `C:\Users\*\.pi\agent\bin\pi-launcher.js`，Pi 装在别处（或没装在系统盘家目录）就找不到。
+- Control 的「连接」区加了一行 **Pi 安装目录**：显示当前配置（读 `settings.json` 的 `Agents.pi.Directory`），
+  不可用会显示一行提示；「更改」就地变输入框（Enter 存、Esc 取消），「重新探测」把目录清空、重启服务让 Core 重新找。
+- Rust：`Snapshot` 加 `pi_directory` / `pi_ready`；`set_pi_dir()` 先校验 `bin/pi-launcher.js` 存在，
+  再走提权写配置（`--do pi <path>`）；`write_pi_dir()` 改 `Agents.pi` 只动 `Directory`/`Home`，
+  `Node` 等其它键保持不变，`<用户>\.pi\agent` 这种标准位置顺手推出家目录；写完重启服务。
+- 校验在提权入口里也做了一遍，绕不过去。实测三种情况都对：`E:/tmp` → 退出码 4 且配置不动；
+  清空 → `Directory` 变空、`Home` 保留；设好 → `Directory`/`Home` 正确、`Node` 原样保留。
+- 出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 已含新版 Control。界面观感需要人眼确认。
+
 ## STATUS-029：安装包的版本倒退已修（2026-11-19，未发版）
 
 - `scripts/build-installer-center.ps1`：FileVersion 改成 `0.<年>.<月日>.<时分>`（如 `0.26.1119.2211`）——
