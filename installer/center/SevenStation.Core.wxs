@@ -23,13 +23,25 @@
 
     <SummaryInformation Description="Seven Station Core：为客户端提供对话与 Agent 服务。" />
 
-    <!-- 升级前先把还在跑的旧进程关掉：文件被占用时 Windows Installer 会跳过替换，装完等于没装。 -->
-    <util:CloseApplication Id="CloseCore" Target="SevenStation.Core.exe"
-                           CloseMessage="no" PromptToContinue="no" RebootPrompt="no" />
+    <!--
+      装之前把还在跑的都结束掉：文件被占用时 Windows Installer 会跳过替换，装完等于没装。
+      服务由下面的 ServiceControl 停；托盘里的 Control 点关闭只会缩回托盘、不会退出，
+      便携方式跑的 Core 也没人管，所以统一用 taskkill 收掉。
+      /T 连 Pi 子进程一起带走，别留一个孤儿 node 占着会话。
+    -->
+    <Property Id="KillRunningOnInstall"
+              Value="&quot;[System64Folder]taskkill.exe&quot; /F /T /IM SevenStation.Control.exe /IM SevenStation.Core.exe" />
+    <Property Id="KillRunningOnRemove"
+              Value="&quot;[System64Folder]taskkill.exe&quot; /F /T /IM SevenStation.Control.exe /IM SevenStation.Core.exe" />
+    <CustomAction Id="KillRunningOnInstall" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec"
+                  Execute="immediate" Return="ignore" />
+    <CustomAction Id="KillRunningOnRemove" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec"
+                  Execute="immediate" Return="ignore" />
 
-    <!-- Control 平时就待在托盘里，同样会占着 exe；不先关掉，升级会卡在「需要重启」。 -->
-    <util:CloseApplication Id="CloseControl" Target="SevenStation.Control.exe"
-                           CloseMessage="no" PromptToContinue="no" RebootPrompt="no" />
+    <InstallExecuteSequence>
+      <Custom Action="KillRunningOnInstall" Before="InstallFiles" Condition="1" />
+      <Custom Action="KillRunningOnRemove" Before="RemoveFiles" Condition='REMOVE~="ALL"' />
+    </InstallExecuteSequence>
 
     <!-- 「应用和功能」里那一项的图标 -->
     <Icon Id="AppIcon" SourceFile="$(var.IconFile)" />

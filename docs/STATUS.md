@@ -22,15 +22,24 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
-## STATUS-033：升级时 Control 也会被自动关掉（2026-11-19，未发版）
+## STATUS-033：安装时自动收掉在跑的程序（2026-11-19，未发版）
 
-- 服务那边一直是 `ServiceControl Stop="both" Wait="yes" Start="install"`，装前停、装后起，不用手动关。
-- 但 Control 常驻托盘，`SevenStation.Control.exe` 一直被占用；之前只有 `CloseCore`（`SevenStation.Core.exe`），
-  Control 没被覆盖就会走到「需要重启」，装完还是旧程序。
-- 新增 `util:CloseApplication Id="CloseControl" Target="SevenStation.Control.exe"`（与 Core 同样 `PromptToContinue="no"`）。
-  核对 MSI：`Wix4CloseApplication` 两行（CloseCore / CloseControl），`ServiceControl` 事件位 163（装时起、装与卸时停、卸时摘）。
-- 出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 43.7 MB，SHA-256 `33164b2ff20da71d8bedf91492d33fc1a34228f1069d8da4aad72d40ab18f4f1`。
-- 仍未真机验证：在跑着服务的机器上直接双击安装的表现（这次不比 0.4.0→0.4.1 那次，得等用户自己在别的机器上装）。
+- 只靠 `util:CloseApplication` 不行：它发的是关闭消息，而 Control 收到关闭请求是 `prevent_close` + 缩回托盘
+  （`src/SevenStation.Control/src/main.rs:232`），进程还在、exe 继续被占着，装完还是旧程序。
+  便携方式跑的 Core 更是没人管。
+- 改成 taskkill：`WixQuietExec`（Util 扩展）执行
+  `taskkill /F /T /IM SevenStation.Control.exe /IM SevenStation.Core.exe`（客户端包只有 `/IM SevenStation.exe`）。
+  `/T` 连 Pi 子进程与 WebView2 的浏览器进程一起带走，不留孤儿。
+- 装与卸各一条：`KillRunningOnInstall` 在 `InstallFiles` 前、「`KillRunningOnRemove`」在 `RemoveFiles` 前。
+  服务仍然由 `ServiceControl` 先停（`StopServices`=1900 早于 3999）。
+- 踩到两条 WiX 规矩：`BinaryRef` 不是元素（`WIX0005`），扩展的 CA 二进制直接用
+  `BinaryRef="Wix4UtilCA_X64"` 属性引用即可；同一个 Action 在序列里只能出现一次（`WIX0091`），
+  所以装/卸各建一条 CA。CA 用 `Execute="immediate"`——WixQuietExec 靠与 CA 同名的 Property 取命令，
+  deferred 方式拿不到。
+- 核对 MSI（`CustomAction` / `InstallExecuteSequence` 两张表）：类型 65（immediate）、
+  3999 < 4000、3499 < 3500，命令串与预期一致；两个包都通过。
+- 出包：Core `c26414fcf6445af…`（43.7 MB）、客户端 `58c23878860d0596…`（3660 KB）。
+- 未真机验证：装的时候真的把托盘里的 Control 杀掉这件事，得在别人的机器上装一次才知道。
 
 ## STATUS-032：可点位置双管齐下——渲染器兼容 + 给 Pi 的写法约定（2026-11-19，未发版）
 

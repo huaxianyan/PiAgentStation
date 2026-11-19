@@ -22,9 +22,23 @@
 
     <SummaryInformation Description="SevenStation 客户端：连上 Seven Station Core 看任务、下指令。" />
 
-    <!-- 升级前先关掉开着的客户端，否则 exe 被占用会跳过替换。 -->
-    <util:CloseApplication Id="CloseClient" Target="SevenStation.exe"
-                           CloseMessage="no" PromptToContinue="no" RebootPrompt="no" />
+    <!--
+      升级前先关掉开着的客户端，否则 exe 被占用会跳过替换。
+      走 taskkill 而不是发关闭消息：WebView2 的浏览器进程会占着缓存目录，/T 一起收干净。
+    -->
+    <Property Id="KillRunningOnInstall"
+              Value="&quot;[System64Folder]taskkill.exe&quot; /F /T /IM SevenStation.exe" />
+    <Property Id="KillRunningOnRemove"
+              Value="&quot;[System64Folder]taskkill.exe&quot; /F /T /IM SevenStation.exe" />
+    <CustomAction Id="KillRunningOnInstall" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec"
+                  Execute="immediate" Return="ignore" />
+    <CustomAction Id="KillRunningOnRemove" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec"
+                  Execute="immediate" Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="KillRunningOnInstall" Before="InstallFiles" Condition="1" />
+      <Custom Action="KillRunningOnRemove" Before="RemoveFiles" Condition='REMOVE~="ALL"' />
+    </InstallExecuteSequence>
 
     <Icon Id="AppIcon" SourceFile="$(var.IconFile)" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
