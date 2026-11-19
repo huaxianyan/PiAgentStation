@@ -22,6 +22,21 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-028：0.4.1 升级踩到「文件被占用」的坑（2026-11-19）
+
+- 现象：用户在自己机器上装 0.4.1 的 Core MSI，安装报成功、ARP 显示 0.4.1，但
+  `C:\Program Files\SevenStation Core\SevenStation.Core.exe` 不存在、`SevenStationCore` 服务也没注册；
+  Seven Station Control 起成便携模式，弹「没找到 SevenStation.Core.exe」。
+- 根因：安装时 0.4.0 的 `SevenStation.Core.exe` 还在跑（服务默认开机自启）。major upgrade 先卸旧版本再装新版本，
+  Windows Installer 把被占用的文件推迟处理，但组件 `CoreExecutable` 被记成「已安装」——
+  `/fa` 修复日志里能看到 `Component: CoreExecutable; Installed: Local` 而文件并不存在。
+- 处理：`msiexec /fa {976887C6-70AC-4EE9-9EA4-2174D2F41D72} /qn` 修复安装，文件与服务都回来了，
+  `127.0.0.1:8787` 返回 200。
+- 待修（0.4.2）：在 MSI 里用 `util:CloseApplication` 在 InstallFiles 之前关掉正在跑的
+  `SevenStation.Core.exe` / `SevenStation.exe`，并给 WiX 加 `WixToolset.Util.wixext`；
+  升级前先停服务这条写进发布说明的升级注意事项。
+- 影响面：所有从 0.4.0 升级的机器都会碰到（服务默认常驻），不是个例。
+
 ## STATUS-027：0.4.1 发布（2026-11-19）
 
 - 版本号三处改到 `0.4.1`（Core csproj、两个 Cargo.toml、两个 tauri.conf.json），
