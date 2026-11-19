@@ -33,7 +33,6 @@ pub struct Snapshot {
     pub autostart: bool,
     pub scope: String,
     pub local_address: Option<String>,
-    pub firewall_rule: bool,
     pub logs: Vec<String>,
     pub since: String,
 }
@@ -74,7 +73,6 @@ pub fn snapshot() -> Snapshot {
     let installed = service_exists();
     let running = if installed { service_running() } else { portable_running() };
     let listen = read_listen();
-    let port = port_of(&listen);
 
     Snapshot {
         service_installed: installed,
@@ -93,7 +91,6 @@ pub fn snapshot() -> Snapshot {
         autostart: installed && autostart_on(),
         scope: if is_lan(&listen) { "lan" } else { "local" }.to_string(),
         local_address: local_address(),
-        firewall_rule: has_firewall_rule(port),
         logs: tail_log(6),
         since: since_text(),
     }
@@ -247,20 +244,29 @@ pub fn set_autostart(on: bool) -> Result<(), String> {
 // ------------------------------ 监听范围与防火墙 ------------------------------
 
 pub fn set_lan(on: bool) -> Result<(), String> {
+    // 改监听、放行防火墙、重启服务都要管理员，没提权就整套交给提权进程做。
+    if !is_elevated() {
+        return elevate(&["lan", if on { "on" } else { "off" }]);
+    }
+    set_lan_now(on)
+}
+
+fn set_lan_now(on: bool) -> Result<(), String> {
     let port = port_of(&read_listen());
     let listen = if on {
         format!("http://0.0.0.0:{port}")
     } else {
         format!("http://127.0.0.1:{port}")
     };
-    write_listen(&listen)?;
 
-    if on && !has_firewall_rule(port) && add_firewall_rule(port).is_err() {
-        // 防火墙没放行也要把监听改回去，不然局域网连不上还留着个开着的端口。
-        write_listen(&format!("http://127.0.0.1:{port}"))?;
-        return Err("没在防火墙里放行，还是只允许本机连接。".into());
+    // 先放行，再改监听：反过来的话中间有一段时间端口开着却没规则。
+    if on && !has_firewall_rule(port) {
+        if let Err(message) = add_firewall_rule(port) {
+            return Err(format!("局域网还是没打开：{message}"));
+        }
     }
 
+    write_listen(&listen)?;
     restart()
 }
 
@@ -294,7 +300,8 @@ fn add_firewall_rule(port: u16) -> Result<(), String> {
 
     match code {
         0 => Ok(()),
-        ERROR_ACCESS_DENIED => elevate(&["firewall", &port.to_string()]),
+        // netsh 没提权时返回 1（"请求的操作需要提升"），不是 5；两个都当要提权。
+        ERROR_ACCESS_DENIED | 1 => elevate(&["firewall", &port.to_string()]),
         _ => Err(format!("防火墙规则没加上（netsh 返回 {code}）。")),
     }
 }
@@ -446,6 +453,11 @@ fn parse_log_time(line: &str) -> Option<time::OffsetDateTime> {
 // ------------------------------ 提权 ------------------------------
 
 /// 需要管理员时把自己再拉起来一次（UAC），子进程做完就退。
+/// 当前进程有没有管理员权限：`net session` 只有管理员跑得动。
+fn is_elevated() -> bool {
+    run("net.exe", &["session"]).0 == 0
+}
+
 fn elevate(args: &[&str]) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|error| format!("找不到自己的位置：{error}"))?;
     let script = format!(
@@ -494,6 +506,17 @@ pub fn run_elevated(args: &[String]) -> i32 {
         }
         "autostart-on" => run("sc.exe", &["config", SERVICE, "start=", "auto"]).0,
         "autostart-off" => run("sc.exe", &["config", SERVICE, "start=", "demand"]).0,
+        "lan" => match args.get(1).map(|value| value.as_str()) {
+            Some("on") => match set_lan_now(true) {
+                Ok(()) => 0,
+                Err(_) => 4,
+            },
+            Some("off") => match set_lan_now(false) {
+                Ok(()) => 0,
+                Err(_) => 4,
+            },
+            _ => 3,
+        },
         "firewall" => match args.get(1).and_then(|port| port.parse::<u16>().ok()) {
             Some(port) => match add_firewall_rule(port) {
                 Ok(()) => 0,
