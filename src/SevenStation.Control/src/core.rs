@@ -9,6 +9,8 @@ use serde::Serialize;
 /// 服务名、防火墙规则名、中心可执行文件名，都只在这里出现一次。
 pub const SERVICE: &str = "SevenStationCore";
 pub const FIREWALL_RULE: &str = "Seven Station 中心";
+/// 规则参数改过就把这串跟着改，老规则会被当成过期重建。
+const FIREWALL_MARK: &str = "SevenStation-LAN-V2";
 pub const CORE_EXE: &str = "SevenStation.Core.exe";
 
 /// 要提权才能做的事，把自己再拉起来一次，带上这个参数。
@@ -265,6 +267,11 @@ pub fn set_lan(on: bool) -> Result<(), String> {
 fn add_firewall_rule(port: u16) -> Result<(), String> {
     let local_port = format!("localport={port}");
     let name = format!("name={FIREWALL_RULE}");
+    let mark = format!("description={FIREWALL_MARK}");
+
+    // 参数变了就重建：老规则可能只放行专用网络，留着等于没生效。
+    let _ = run("netsh.exe", &["advfirewall", "firewall", "delete", "rule", &name]);
+
     let (code, _) = run(
         "netsh.exe",
         &[
@@ -273,11 +280,15 @@ fn add_firewall_rule(port: u16) -> Result<(), String> {
             "add",
             "rule",
             &name,
+            &mark,
             "dir=in",
             "action=allow",
             "protocol=TCP",
             &local_port,
-            "profile=private,domain",
+            // 系统常把家用网络判成「公用」，只写 private,domain 等于没放行；
+            // 靠 remoteip 限住来源网段，别把端口摊到整个互联网。
+            "profile=any",
+            "remoteip=localsubnet",
         ],
     );
 
@@ -288,10 +299,11 @@ fn add_firewall_rule(port: u16) -> Result<(), String> {
     }
 }
 
-fn has_firewall_rule(port: u16) -> bool {
+fn has_firewall_rule(_port: u16) -> bool {
     let name = format!("name={FIREWALL_RULE}");
     let (code, text) = run("netsh.exe", &["advfirewall", "firewall", "show", "rule", &name]);
-    code == 0 && text.contains(&port.to_string())
+    // 认标记不认端口：参数一变就要重建，否则老规则会被当成已经放行。
+    code == 0 && text.contains(FIREWALL_MARK)
 }
 
 // ------------------------------ 令牌 ------------------------------
