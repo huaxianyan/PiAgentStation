@@ -109,10 +109,14 @@ fn publish(app: &tauri::AppHandle) {
 }
 
 fn show_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
+    match app.get_webview_window("main") {
+        None => log_line("叫窗口回来：找不到 main 窗口"),
+        Some(window) => {
+            let _ = window.unminimize();
+            let shown = window.show();
+            let _ = window.set_focus();
+            log_line(&format!("叫窗口回来：显示结果 {shown:?}"));
+        }
     }
 }
 
@@ -180,6 +184,7 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            log_line("又启动了一次，交给已有实例");
             show_window(app);
         }))
         .invoke_handler(tauri::generate_handler![
