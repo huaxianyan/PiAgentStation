@@ -70,7 +70,10 @@ fn log_line(text: &str) {
     let base = std::env::var_os("LOCALAPPDATA")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    let dir = base.join("SevenStation.Control");
+    let dir = match core::profile() {
+        Some(profile) => base.join(format!("SevenStation.Control-{profile}")),
+        None => base.join("SevenStation.Control"),
+    };
     let _ = std::fs::create_dir_all(&dir);
     let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
@@ -173,8 +176,10 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
 fn main() {
     log_line(&format!(
-        "Seven Station Control 启动，exe = {:?}",
-        std::env::current_exe().ok()
+        "Seven Station Control 启动，exe = {:?}，档案 = {:?}，服务 = {}",
+        std::env::current_exe().ok(),
+        core::profile(),
+        core::service()
     ));
     // 提权子进程只做一件事就退，别建窗口、别起 WebView。
     let args: Vec<String> = std::env::args().collect();
@@ -182,11 +187,18 @@ fn main() {
         std::process::exit(core::run_elevated(&args[2..]));
     }
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    // 测试档案（SEVENSTATION_PROFILE）不挂单实例插件：否则测试版会并进正在用的正式版，
+    // 用户那边会莫名其妙弹出一个窗口，测试也会读到正式版的真实状态。
+    let profile = core::profile();
+    let mut builder = tauri::Builder::default();
+    if profile.is_none() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             log_line("又启动了一次，交给已有实例");
             show_window(app);
-        }))
+        }));
+    }
+
+    builder
         .invoke_handler(tauri::generate_handler![
             read_state,
             control,

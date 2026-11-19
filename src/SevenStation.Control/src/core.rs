@@ -9,6 +9,35 @@ use serde::Serialize;
 /// 服务名、防火墙规则名、Seven Station Core 可执行文件名，都只在这里出现一次。
 pub const SERVICE: &str = "SevenStationCore";
 pub const FIREWALL_RULE: &str = "Seven Station Core";
+
+/// 服务名：`SEVENSTATION_SERVICE` 可覆盖。
+/// 隔离测试用它指到一个不存在的服务名上，免得测试时把正在用的那份停掉。
+pub fn service() -> &'static str {
+    static NAME: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    NAME.get_or_init(|| override_or("SEVENSTATION_SERVICE", SERVICE))
+}
+
+/// 防火墙规则名：`SEVENSTATION_FIREWALL_RULE` 可覆盖，测试时不碰真正在用的那条。
+pub fn firewall_rule() -> &'static str {
+    static NAME: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    NAME.get_or_init(|| override_or("SEVENSTATION_FIREWALL_RULE", FIREWALL_RULE))
+}
+
+/// 测试档案。设了 `SEVENSTATION_PROFILE` 就走测试档案：不挂单实例、日志与配置各放一处，
+/// 免得测试时动到正在用的那份。
+pub fn profile() -> Option<String> {
+    match std::env::var("SEVENSTATION_PROFILE") {
+        Ok(value) if !value.trim().is_empty() => Some(value.trim().to_string()),
+        _ => None,
+    }
+}
+
+fn override_or(key: &str, fallback: &str) -> String {
+    match std::env::var(key) {
+        Ok(value) if !value.trim().is_empty() => value.trim().to_string(),
+        _ => fallback.to_string(),
+    }
+}
 /// 规则参数改过就把这串跟着改，老规则会被当成过期重建。
 const FIREWALL_MARK: &str = "SevenStation-LAN-V2";
 
@@ -121,16 +150,16 @@ fn run(program: &str, args: &[&str]) -> (i32, String) {
 }
 
 fn service_exists() -> bool {
-    run("sc.exe", &["query", SERVICE]).0 == 0
+    run("sc.exe", &["query", service()]).0 == 0
 }
 
 fn service_running() -> bool {
-    let (code, text) = run("sc.exe", &["query", SERVICE]);
+    let (code, text) = run("sc.exe", &["query", service()]);
     code == 0 && text.contains("RUNNING")
 }
 
 fn autostart_on() -> bool {
-    let (code, text) = run("sc.exe", &["qc", SERVICE]);
+    let (code, text) = run("sc.exe", &["qc", service()]);
     code == 0 && text.contains("AUTO_START")
 }
 
@@ -141,7 +170,7 @@ fn portable_running() -> bool {
 
 pub fn start() -> Result<(), String> {
     if service_exists() {
-        let (code, _) = run("sc.exe", &["start", SERVICE]);
+        let (code, _) = run("sc.exe", &["start", service()]);
         return match code {
             0 => wait_for(true),
             ERROR_ACCESS_DENIED => elevate(&["start"]),
@@ -164,7 +193,7 @@ pub fn start() -> Result<(), String> {
 
 pub fn stop() -> Result<(), String> {
     if service_exists() {
-        let (code, _) = run("sc.exe", &["stop", SERVICE]);
+        let (code, _) = run("sc.exe", &["stop", service()]);
         return match code {
             0 => wait_for(false),
             ERROR_ACCESS_DENIED => elevate(&["stop"]),
@@ -186,14 +215,14 @@ pub fn stop() -> Result<(), String> {
 pub fn restart() -> Result<(), String> {
     if service_exists() {
         // 直接 sc stop + sc start 要两跳，提权时也只要一次 UAC，所以合并成一条。
-        let (code, _) = run("sc.exe", &["stop", SERVICE]);
+        let (code, _) = run("sc.exe", &["stop", service()]);
         match code {
             0 => {}
             ERROR_ACCESS_DENIED => return elevate(&["restart"]),
             _ => {}
         }
         wait_for(false)?;
-        let (code, _) = run("sc.exe", &["start", SERVICE]);
+        let (code, _) = run("sc.exe", &["start", service()]);
         return match code {
             0 => wait_for(true),
             ERROR_ACCESS_DENIED => elevate(&["restart"]),
@@ -237,7 +266,7 @@ pub fn set_autostart(on: bool) -> Result<(), String> {
     }
 
     let value = if on { "auto" } else { "demand" };
-    let (code, _) = run("sc.exe", &["config", SERVICE, "start=", value]);
+    let (code, _) = run("sc.exe", &["config", service(), "start=", value]);
     match code {
         0 => Ok(()),
         ERROR_ACCESS_DENIED => elevate(&[if on { "autostart-on" } else { "autostart-off" }]),
@@ -276,7 +305,7 @@ fn set_lan_now(on: bool) -> Result<(), String> {
 
 fn add_firewall_rule(port: u16) -> Result<(), String> {
     let local_port = format!("localport={port}");
-    let name = format!("name={FIREWALL_RULE}");
+    let name = format!("name={}", firewall_rule());
     let mark = format!("description={FIREWALL_MARK}");
 
     // 参数变了就重建：老规则可能只放行专用网络，留着等于没生效。
@@ -315,7 +344,7 @@ fn add_firewall_rule(port: u16) -> Result<(), String> {
 }
 
 fn has_firewall_rule(_port: u16) -> bool {
-    let name = format!("name={FIREWALL_RULE}");
+    let name = format!("name={}", firewall_rule());
     let (code, text) = run("netsh.exe", &["advfirewall", "firewall", "show", "rule", &name]);
     // 认标记不认端口：参数一变就要重建，否则老规则会被当成已经放行。
     code == 0 && text.contains(FIREWALL_MARK)
@@ -496,24 +525,24 @@ pub fn run_elevated(args: &[String]) -> i32 {
 
     match first {
         "start" => {
-            run("sc.exe", &["start", SERVICE]);
+            run("sc.exe", &["start", service()]);
             wait_for(true).ok();
             0
         }
         "stop" => {
-            run("sc.exe", &["stop", SERVICE]);
+            run("sc.exe", &["stop", service()]);
             wait_for(false).ok();
             0
         }
         "restart" => {
-            run("sc.exe", &["stop", SERVICE]);
+            run("sc.exe", &["stop", service()]);
             wait_for(false).ok();
-            run("sc.exe", &["start", SERVICE]);
+            run("sc.exe", &["start", service()]);
             wait_for(true).ok();
             0
         }
-        "autostart-on" => run("sc.exe", &["config", SERVICE, "start=", "auto"]).0,
-        "autostart-off" => run("sc.exe", &["config", SERVICE, "start=", "demand"]).0,
+        "autostart-on" => run("sc.exe", &["config", service(), "start=", "auto"]).0,
+        "autostart-off" => run("sc.exe", &["config", service(), "start=", "demand"]).0,
         "lan" => match args.get(1).map(|value| value.as_str()) {
             Some("on") => match set_lan_now(true) {
                 Ok(()) => 0,

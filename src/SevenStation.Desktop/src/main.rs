@@ -8,9 +8,20 @@ use serde_json::{json, Value};
 use tauri::{Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 
 /// 壳自己的东西都放这个目录：Seven Station Core 地址、令牌、窗口位置、日志。
+/// 设了 `SEVENSTATION_PROFILE` 就换成 `SevenStation-<档案>`，测试不碰正在用的那份配置。
 fn data_dir() -> PathBuf {
     let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(base).join("SevenStation")
+    match profile() {
+        Some(profile) => PathBuf::from(base).join(format!("SevenStation-{profile}")),
+        None => PathBuf::from(base).join("SevenStation"),
+    }
+}
+
+fn profile() -> Option<String> {
+    match std::env::var("SEVENSTATION_PROFILE") {
+        Ok(value) if !value.trim().is_empty() => Some(value.trim().to_string()),
+        _ => None,
+    }
 }
 
 fn log(message: &str) {
@@ -287,14 +298,19 @@ fn center_local(app: tauri::AppHandle) -> bool {
 }
 
 fn main() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    // 测试档案不挂单实例：否则测试版开门就并进正在用的那一个窗口。
+    let mut builder = tauri::Builder::default();
+    if profile().is_none() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // 已经开着一个了：把那个窗口提到前面，不再开第二个。
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
-        }))
+        }));
+    }
+
+    builder
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             pick_folder,

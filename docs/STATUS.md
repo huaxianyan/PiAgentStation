@@ -11,6 +11,8 @@
 - 顺手清了本机两个历史残留安装：一个旧 0.3.0 中心的 ProductCode（`{B0F57C2D…}`）与一个探针包（`0.0.1`）。
   这类残留会让「应用和功能」出现同名两条，`MajorUpgrade` 一次只清掉一条。
 - README 与仓库描述按 `readme-standard` 重写过，截图在 `docs/images/`。
+- **本机装着的 v0.4.0 是用户的生产环境**（2026-11-19 起他用这两个软件干活）：测试一律用
+  `SEVENSTATION_PROFILE=test` + 临时 `SEVENSTATION_CORE_HOME` + 8899 端口，详见 `AGENTS.md` 的「生产与测试隔离」。
 - 2026-11-19 起用户把日常开发搬到这里来用（正式版 `v0.4.0`）。装前备份在
   `%USERPROFILE%\SevenStation-backup-20261119-1458\`；工作区都在 Seven Station Core 那台机器上，
   客户端设备的本地文件不参与。
