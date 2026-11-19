@@ -11,6 +11,9 @@
 - 顺手清了本机两个历史残留安装：一个旧 0.3.0 中心的 ProductCode（`{B0F57C2D…}`）与一个探针包（`0.0.1`）。
   这类残留会让「应用和功能」出现同名两条，`MajorUpgrade` 一次只清掉一条。
 - README 与仓库描述按 `readme-standard` 重写过，截图在 `docs/images/`。
+- 2026-11-19 起用户把日常开发搬到这里来用（正式版 `v0.4.0`）。装前备份在
+  `%USERPROFILE%\SevenStation-backup-20261119-1458\`；工作区都在 Seven Station Core 那台机器上，
+  客户端设备的本地文件不参与。
 - 已发布（2026-11-19）：Release `v0.4.0` 一个页面，装 Seven Station Core 与客户端的两个 MSI 加各自 `.sha256`；
   0.3.0 也按同一形态重做成 `v0.3.0`。标签只有版本号，一版一 Release。
 - 已知阻塞：无。
