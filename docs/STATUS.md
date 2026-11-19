@@ -24,7 +24,8 @@
 
 ## STATUS-034：Control 改 Pi 目录被 ACL 挡了 + 待发图片挪到空隙里（2026-11-19，未发版）
 
-- **`Command set_pi_dir not allowed by ACL`**：新增壳命令要登记两处，我只做了一处。
+- **`Command set_pi_dir not allowed by ACL`**：用户点的是「重新探测」（空路径 = 清掉后让 Core 重找），
+  与「更改」走的是同一条命令，ACL 一挡两个按钮都动不了。新增壳命令要登记两处，我只做了一处。
   `src/SevenStation.Control/build.rs` 的 `AppManifest::commands` 补 `"set_pi_dir"`，
   `capabilities/control.json` 的 `permissions` 补 `allow-set-pi-dir`。
   核对 `gen/schemas/acl-manifests.json` 里已经出现 `allow-set-pi-dir`，权限这次真的生成了。
