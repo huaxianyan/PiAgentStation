@@ -22,6 +22,21 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-022：三处「界面在说谎」修掉（2026-11-19）
+
+- 侧栏「工作中」指示器时有时无：`SendConversationList` 只在 list/new/rename/delete 时推送，
+  流式开始和结束都不推，客户端也不本地改 `working`。现在状态变化统一走 `SetStreaming()`，
+  它会在状态真的变化时 `BroadcastConversations()` 给所有连接。
+- 新对话模型显示成 GLM-5.2：新对话 `conversations.Model` 为空，客户端 `currentModel()` 兜到
+  模型列表第一条（`v2ex/coder`，显示名 GLM-5.2），而实际跑的是 Pi 的默认。现在 Core 读
+  `<agent>/settings.json` 的 `defaultProvider` + `defaultModel`，用缓存列表补全字段后塞进
+  `state.model`，胶囊显示的就是真正在跑的模型。
+- 模型缓存永不过期：`models` / `thinkingLevels` 加上 `modelsAt` 时间戳，24 小时后自动重取；
+  模型面板底部加了「刷新」，发 `list_models` 带 `force: true` 当场重取。
+- 验证：临时实例（8899）跑一次真实对话，实测 `state.model = magpie/auto/deepseek-v4.1-flash`、
+  `conversation_list` 在开始时 `working=true`、结束时 `working=false`、`modelsAt` 落库。
+  界面观感仍需人眼确认。
+
 ## STATUS-021：对话区细节与追加输入队列（2026-11-19，开发中）
 
 - 目标：用户提的六条界面问题——自己发的消息认不出来、左侧栏「工作中」指示器不刷新、工作中

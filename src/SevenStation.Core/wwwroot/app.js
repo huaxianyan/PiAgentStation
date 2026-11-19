@@ -1791,9 +1791,26 @@ function renderModelPanel() {
   foot.className = 'model-foot';
   const keys = document.createElement('span');
   keys.textContent = '↑↓ 移动 · Enter 选中 · Esc 关闭';
+
+  // 缓存会过期，但用户在意的往往是「我刚改完配置」，所以给一个当场重取的入口。
+  const refresh = document.createElement('button');
+  refresh.type = 'button';
+  refresh.className = 'model-refresh';
+  refresh.textContent = '刷新';
+  refresh.title = '重新向 Pi 取一次模型列表';
+  refresh.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const session = current();
+    if (!session) return;
+    refresh.disabled = true;
+    refresh.textContent = '正在刷新…';
+    send({ type: 'list_models', key: session.key, force: true });
+  });
+
   const count = document.createElement('span');
   count.textContent = rows.length + ' 个模型';
   foot.appendChild(keys);
+  foot.appendChild(refresh);
   foot.appendChild(count);
   el.modelPanel.appendChild(foot);
 }

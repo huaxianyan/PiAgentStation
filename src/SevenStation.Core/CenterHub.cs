@@ -42,6 +42,9 @@ public sealed class CenterHub
     private readonly object _gate = new();
     private readonly Dictionary<string, Live> _live = new();
     private int _queueSeq;
+
+    /// <summary>模型缓存的保鲜期：超过就从 Pi 重新取一次。</summary>
+    private const long ModelsTtlMs = 24 * 60 * 60 * 1000;
     private readonly Dictionary<string, TerminalSession> _terminals = new();
     private readonly object _terminalGate = new();
     private readonly List<CenterConnection> _clients = new();
@@ -173,7 +176,7 @@ public sealed class CenterHub
                     break;
 
                 case "list_models":
-                    await SendModelsAsync(Require(key, "对话标识"), sender);
+                    await SendModelsAsync(Require(key, "对话标识"), sender, message["force"]?.GetValue<bool>() == true);
                     break;
 
                 case "list_commands":
@@ -426,6 +429,32 @@ public sealed class CenterHub
         });
     }
 
+    /// <summary>
+    /// 侧栏的「工作中」跟着跑：开始和结束都要告诉所有连着的客户端，
+    /// 以前只在 list/new/rename/delete 时推，转圈就时有时无。
+    /// </summary>
+    private void BroadcastConversations()
+    {
+        CenterConnection[] targets;
+        lock (_gate)
+        {
+            targets = _clients.ToArray();
+        }
+
+        foreach (var target in targets)
+        {
+            SendConversationList(target);
+        }
+    }
+
+    /// <summary>改「工作中」状态并顺手刷新侧栏，状态没变就不打扰别人。</summary>
+    private void SetStreaming(Live live, bool value)
+    {
+        if (live.Streaming == value) return;
+        live.Streaming = value;
+        BroadcastConversations();
+    }
+
     private void SendConversationList(CenterConnection sender)
     {
         var items = new JsonArray();
@@ -477,7 +506,7 @@ public sealed class CenterHub
             ["key"] = id,
             ["cwd"] = conversation.Cwd,
             ["title"] = conversation.Title,
-            ["state"] = BuildState(conversation, live?.Streaming == true, live is null ? null : QueueEntries(live)),
+            ["state"] = StateWithModel(conversation, live),
             ["messages"] = messages,
             ["messageTotal"] = total,
             ["hasMore"] = total > messages.Count,
@@ -1412,6 +1441,64 @@ public sealed class CenterHub
         });
     }
 
+    /// <summary>
+    /// 对话没选过模型时补上 Pi 自己的默认（settings.json 的 defaultProvider + defaultModel）。
+    /// 不补的话界面会兜到模型列表第一条，显示成根本不是当前在跑的那个模型。
+    /// </summary>
+    private JsonObject StateWithModel(Conversation conversation, Live? live)
+    {
+        var state = BuildState(conversation, live?.Streaming == true, live is null ? null : QueueEntries(live));
+        if (!state.ContainsKey("model") && PiDefaultModel() is { } fallback)
+        {
+            state["model"] = fallback;
+        }
+
+        return state;
+    }
+
+    /// <summary>Pi 配置文件里的默认模型，补全字段时优先用缓存下来的模型列表。</summary>
+    private JsonObject? PiDefaultModel()
+    {
+        var agent = CoreSettings.Current.Agent(AgentRegistry.PiId);
+        var directory = agent?.Directory;
+        if (string.IsNullOrWhiteSpace(directory)) return null;
+
+        var path = Path.Combine(directory, "settings.json");
+        string? provider = null;
+        string? modelId = null;
+        try
+        {
+            var settings = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
+            provider = settings?["defaultProvider"]?.GetValue<string>();
+            modelId = settings?["defaultModel"]?.GetValue<string>();
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(modelId))
+        {
+            return null;
+        }
+
+        if (Parse(_store.GetSetting("models")) is JsonObject cached
+            && cached["models"] is JsonArray entries)
+        {
+            foreach (var entry in entries)
+            {
+                if (entry is not JsonObject model) continue;
+                if (model["id"]?.GetValue<string>() != modelId) continue;
+                if (provider is not null && model["provider"]?.GetValue<string>() != provider) continue;
+                return (JsonObject)model.DeepClone();
+            }
+        }
+
+        var bare = new JsonObject { ["id"] = modelId, ["name"] = modelId };
+        if (!string.IsNullOrWhiteSpace(provider)) bare["provider"] = provider;
+        return bare;
+    }
+
     private static JsonObject BuildState(Conversation conversation, bool streaming, JsonArray? queue)
     {
         var state = new JsonObject
@@ -1521,7 +1608,7 @@ public sealed class CenterHub
             var name = record["type"]?.GetValue<string>();
             if (name == "agent_start")
             {
-                live.Streaming = true;
+                SetStreaming(live, true);
                 // 新一轮从零开始记，判重集合不用一直长。
                 lock (live.Persisted)
                 {
@@ -1532,11 +1619,11 @@ public sealed class CenterHub
             {
                 // 一次运行结束。只借它把「忙」标识放掉，排队交给下面的 agent_settled，
                 // 两个事件都会来，都触发会把整队一次送完。
-                live.Streaming = false;
+                SetStreaming(live, false);
             }
             else if (name == "agent_settled")
             {
-                live.Streaming = false;
+                SetStreaming(live, false);
                 _ = PersistTurnAsync(live);
 
                 // 用户按下停止时不替他继续干活：排队的留在面板里，由他自己决定发还是删。
@@ -1773,7 +1860,7 @@ public sealed class CenterHub
 
         // 从这里开始算「正在干活」：Pi 的 agent_start 不一定每次都到，
         // 用自己发出去的这条 prompt 来判断，排队才不会漏。
-        live.Streaming = true;
+        SetStreaming(live, true);
         var response = await live.Session.SendAsync(command, TimeSpan.FromSeconds(60));
         sender.Send(new JsonObject
         {
@@ -1898,7 +1985,7 @@ public sealed class CenterHub
 
         try
         {
-            live.Streaming = true;
+            SetStreaming(live, true);
             await live.Session.SendAsync(command, TimeSpan.FromSeconds(60));
         }
         catch (Exception error)
@@ -1945,21 +2032,25 @@ public sealed class CenterHub
         _store.SaveTurn(live.Conversation.Id, null, null, Data(state));
     }
 
-    private async Task SendModelsAsync(string id, CenterConnection sender)
+    private async Task SendModelsAsync(string id, CenterConnection sender, bool force = false)
     {
         RequireConversation(id);
 
         // 模型列表跟对话无关，缓存起来：只为看一眼历史不该起 Pi 进程。
+        // 缓存要能过期：Pi 那边删掉或改名一个模型，这里不刷新就会一直显示老清单。
         var cachedModels = Parse(_store.GetSetting("models"));
         var cachedLevels = Parse(_store.GetSetting("thinkingLevels"));
-        if (cachedModels is not null && cachedLevels is not null)
+        var cachedAt = long.TryParse(_store.GetSetting("modelsAt"), out var stamp) ? stamp : 0;
+        var age = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - cachedAt;
+        var fresh = cachedModels is not null && cachedLevels is not null && !force && age < ModelsTtlMs;
+        if (fresh)
         {
             sender.Send(new JsonObject
             {
                 ["type"] = "models",
                 ["key"] = id,
-                ["data"] = cachedModels.DeepClone(),
-                ["thinkingLevels"] = cachedLevels.DeepClone(),
+                ["data"] = cachedModels!.DeepClone(),
+                ["thinkingLevels"] = cachedLevels!.DeepClone(),
             });
             return;
         }
@@ -1974,6 +2065,7 @@ public sealed class CenterHub
         {
             _store.SetSetting("models", modelData.ToJsonString());
             _store.SetSetting("thinkingLevels", levelData.ToJsonString());
+            _store.SetSetting("modelsAt", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString());
         }
 
         sender.Send(new JsonObject
