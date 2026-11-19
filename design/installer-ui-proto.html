@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>安装程序画面原型</title>
+<style>
+  :root {
+    --ink: #1a1a1d;
+    --paper: #ffffff;
+    --page: #f7f7f9;
+    --hair: #e8e8ed;
+    --mute: #8a8a92;
+    --soft: #4c4c54;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 28px 40px;
+    background: #e9e9ec;
+    font-family: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
+  .lead { color: #6b6b73; font-size: 12.5px; margin: 0 0 18px; }
+  h2 { font-size: 12.5px; font-weight: 600; margin: 22px 0 8px; color: #4c4c54; }
+
+  .row { display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap; }
+  .unit { width: 493px; }
+
+  /* ---------- 安装程序对话框：真尺寸 493×312 ---------- */
+  .dlg {
+    position: relative;
+    width: 493px; height: 312px;
+    background: var(--paper);
+    border: 1px solid #c9c9d0;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .10);
+    overflow: hidden;
+  }
+  .dlg .banner {
+    position: absolute; left: 0; top: 0;
+    width: 493px; height: 58px;
+    background: var(--paper);
+    border-bottom: 1px solid var(--hair);
+  }
+  .dlg .banner .mark {
+    position: absolute; right: 18px; top: 19px;
+    width: 20px; height: 20px; opacity: .35;
+  }
+  .dlg .banner .title {
+    position: absolute; left: 14px; top: 19px;
+    font-size: 13.5px; font-weight: 600;
+  }
+  .dlg .art {
+    position: absolute; left: 0; top: 58px;
+    width: 164px; height: 254px;
+    background: var(--ink);
+  }
+  .dlg .art img {
+    position: absolute; left: 40px; top: 56px;
+    width: 84px; height: 84px;
+  }
+  .dlg .body {
+    position: absolute; left: 178px; top: 74px; right: 16px;
+    font-size: 12px; line-height: 1.75; color: var(--soft);
+  }
+  .dlg .body b { color: var(--ink); font-size: 12.5px; }
+  .dlg .body p { margin: 0 0 8px; }
+  .dlg .body .path {
+    font-family: Consolas, monospace; font-size: 11.5px;
+    background: var(--page); border: 1px solid var(--hair);
+    padding: 4px 7px; border-radius: 4px; display: inline-block;
+  }
+  .dlg .buttons {
+    position: absolute; right: 16px; bottom: 14px;
+    display: flex; gap: 8px;
+  }
+  .dlg .buttons span {
+    min-width: 72px; height: 25px; padding: 0 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: var(--ink);
+    background: #fbfbfc; border: 1px solid #c9c9d0; border-radius: 3px;
+  }
+  .dlg .buttons span.primary { border-color: #8f8f98; }
+  .dlg .buttons span.off { color: #b6b6bd; border-color: #e2e2e8; }
+
+  .dlg .progress {
+    position: absolute; left: 178px; top: 150px; right: 20px;
+    height: 12px; border: 1px solid #c9c9d0; background: #fff;
+  }
+  .dlg .progress i { display: block; width: 62%; height: 100%; background: var(--ink); }
+  .dlg .tip { position: absolute; left: 178px; top: 172px; right: 20px; font-size: 11.5px; color: var(--mute); }
+
+  .cap { margin: 6px 0 0; font-size: 11.5px; color: #6b6b73; }
+
+  /* ---------- 应用和功能里那一项 ---------- */
+  .arp {
+    display: flex; align-items: center; gap: 10px;
+    width: 493px; padding: 9px 12px;
+    background: #fff; border: 1px solid #dcdce2;
+    font-size: 12px;
+  }
+  .arp img { width: 24px; height: 24px; }
+  .arp .name { font-weight: 600; }
+  .arp .meta { color: var(--mute); }
+</style>
+</head>
+<body>
+
+<h1>安装程序画面 · 原型（B 步）</h1>
+<p class="lead">两张位图按 WiX 约定做：顶栏 493×58、对话框底图 493×312。所有图形都取自已经定稿的那枚 π 图标，这里不重画。下面是按真尺寸拼的向导页面，用来看构图和留白。</p>
+
+<div class="row">
+
+  <div class="unit">
+    <div class="dlg">
+      <div class="banner">
+        <img class="mark" src="../src/SevenStation.Control/icons/tray.png" alt="" />
+        <div class="title">欢迎使用 Seven Station 中心 安装向导</div>
+      </div>
+      <div class="art"><img src="../src/SevenStation.Control/icons/tray.png" alt="" /></div>
+      <div class="body">
+        <p>安装程序会把 <b>Seven Station 中心</b> 装到这台机器上，作为后台服务运行，负责对话库、模型配置和任务下发。</p>
+        <p>安装完还会一起装上 <b>控制台</b>：开服务、看日志、改监听地址都在这一个窗口里。</p>
+        <p>要继续，请点「下一步」。</p>
+      </div>
+      <div class="buttons"><span class="off">上一步</span><span>下一步</span><span>取消</span></div>
+    </div>
+    <p class="cap">欢迎页</p>
+  </div>
+
+  <div class="unit">
+    <div class="dlg">
+      <div class="banner">
+        <img class="mark" src="../src/SevenStation.Control/icons/tray.png" alt="" />
+        <div class="title">正在安装 Seven Station 中心</div>
+      </div>
+      <div class="art"><img src="../src/SevenStation.Control/icons/tray.png" alt="" /></div>
+      <div class="body">
+        <p>正在复制文件并注册服务。</p>
+        <p class="path">C:\Program Files\SevenStation Core</p>
+      </div>
+      <div class="progress"><i></i></div>
+      <div class="tip">正在注册服务 SevenStationCore…</div>
+      <div class="buttons"><span class="off">上一步</span><span class="off">下一步</span><span>取消</span></div>
+    </div>
+    <p class="cap">安装中</p>
+  </div>
+
+</div>
+
+<h2>完成页</h2>
+<div class="unit">
+  <div class="dlg">
+    <div class="banner">
+      <img class="mark" src="../src/SevenStation.Control/icons/tray.png" alt="" />
+      <div class="title">完成 Seven Station 中心 安装向导</div>
+    </div>
+    <div class="art"><img src="../src/SevenStation.Control/icons/tray.png" alt="" /></div>
+    <div class="body">
+      <p>中心已经作为服务装好并在后台运行，控制台也在开始菜单里。</p>
+      <p>点「完成」后会打开控制台，那里能拿到访问地址和令牌，用来配别的设备。</p>
+    </div>
+    <div class="buttons"><span class="off">上一步</span><span>完成</span><span>取消</span></div>
+  </div>
+  <p class="cap">完成页（「完成」直接拉控制台起来）</p>
+</div>
+
+<h2>顶栏两个方向（真尺寸 493×58）</h2>
+<div class="row">
+  <div class="unit" style="width:493px">
+    <div style="width:493px;height:58px;background:#fff;border:1px solid #c9c9d0;position:relative">
+      <img src="../src/SevenStation.Control/icons/tray.png" style="position:absolute;right:18px;top:19px;width:20px;opacity:.35" alt="" />
+      <div style="position:absolute;left:14px;top:19px;font-size:13.5px;font-weight:600">欢迎使用 Seven Station 中心 安装向导</div>
+    </div>
+    <p class="cap">A · 白底（推荐）：安静，和系统向导一致</p>
+  </div>
+  <div class="unit" style="width:493px">
+    <div style="width:493px;height:58px;background:#1a1a1d;border:1px solid #c9c9d0;position:relative">
+      <img src="../src/SevenStation.Control/icons/tray.png" style="position:absolute;right:18px;top:19px;width:20px;opacity:.45" alt="" />
+      <div style="position:absolute;left:14px;top:19px;font-size:13.5px;font-weight:600;color:#fff">欢迎使用 Seven Station 中心 安装向导</div>
+    </div>
+    <p class="cap">B · 深底：品牌感更强，但 Wizard 的标题是向导自己画的，改色要动 WiX 主题字体</p>
+  </div>
+</div>
+
+<h2>「应用和功能」里的那一项</h2>
+<div class="arp">
+  <img src="../src/SevenStation.Control/icons/tray.png" alt="" />
+  <span class="name">Seven Station 中心</span>
+  <span class="meta">0.4.0 · 42 MB</span>
+</div>
+
+<h2>还没定、需要你拍板的点</h2>
+<div class="unit" style="width:660px;font-size:12.5px;line-height:1.9;color:#4c4c54">
+  <div><b>1 · 顶栏要不要品牌色</b>：现在是白底 + 右下角一个 20% 淡的 π，安静；也可以把顶栏整体做成深色（`#1a1a1d`），标题反白。</div>
+  <div><b>2 · 左侧色块的宽度</b>：现在是 164px 深色 + 右侧白，和 MSI 默认版式一致。想更宽就把底图里的色块加宽，右侧文案区相应变窄。</div>
+  <div><b>3 · 完成页要不要代勾「打开控制台」</b>：WiX 默认完成页有个复选框，可以做成默认勾上。</div>
+</div>
+
+</body>
+</html>
