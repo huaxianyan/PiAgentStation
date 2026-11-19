@@ -181,14 +181,10 @@ fn main() {
             let handle = window.clone();
             window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    // 关窗口只是收进托盘，中心照常跑；真退出走托盘右键。
+                    // 收到就立刻收，不加延迟也不弹提示。
                     api.prevent_close();
-                    // 窗口一消失就没处交代了，先说一句再收，不然用户不知道去哪了。
-                    let _ = handle.emit("toast", "已收进托盘，右键托盘图标可以退出。".to_string());
-                    let window = handle.clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_millis(1400));
-                        let _ = window.hide();
-                    });
+                    let _ = handle.hide();
                 }
             });
 
