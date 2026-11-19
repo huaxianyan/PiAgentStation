@@ -1207,6 +1207,8 @@ const ICON_CHECK =
 const ICON_CANCEL =
   '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.6 4.6l6.8 6.8M11.4 4.6l-6.8 6.8"/></svg>';
 
+let queueEditId = null;
+
 function renderQueue() {
   const session = current();
   const entries = (session && session.queue) || [];
@@ -1217,23 +1219,36 @@ function renderQueue() {
     return;
   }
 
-  el.queueTitle.textContent = '已追加 ' + entries.length + ' 条 · 送出前可以改';
+  if (queueEditId && !entries.some((entry) => entry.id === queueEditId)) {
+    queueEditId = null;
+    el.input.value = '';
+    autoGrow();
+    updateSendReady();
+  }
+
+  const editing = queueEditId ? entries.findIndex((entry) => entry.id === queueEditId) : -1;
+  el.queueTitle.textContent = editing >= 0
+    ? '正在编辑第 ' + (editing + 1) + ' 条 · Enter 保存，Esc 取消'
+    : '已追加 ' + entries.length + ' 条 · 送出前可以改';
 
   // 条目集合没变就只改文字：编辑到一半被整段重建会掉焦点。
   const shown = [...el.queueList.children].map((node) => node.dataset.id);
   const wanted = entries.map((entry) => entry.id);
   if (shown.join('\u0000') !== wanted.join('\u0000')) {
     el.queueList.innerHTML = '';
-    for (const entry of entries) el.queueList.appendChild(queueRow(entry));
+    for (const entry of entries) {
+      const row = queueRow(entry);
+      row.classList.toggle('is-editing', entry.id === queueEditId);
+      el.queueList.appendChild(row);
+    }
   } else {
     entries.forEach((entry, index) => {
       const node = el.queueList.children[index];
       const label = node.querySelector('.queue-index');
       if (label) label.textContent = String(index + 1);
-      if (!node.classList.contains('is-editing')) {
-        const text = node.querySelector('.queue-text');
-        if (text) text.textContent = entry.text;
-      }
+      node.classList.toggle('is-editing', entry.id === queueEditId);
+      const text = node.querySelector('.queue-text');
+      if (text) text.textContent = entry.text;
     });
   }
 }
@@ -1255,67 +1270,40 @@ function queueRow(entry) {
     const action = event.target.closest('[data-act]');
     if (!action) return;
     if (action.dataset.act === 'edit') startQueueEdit(row, entry);
-    if (action.dataset.act === 'save' && row.commit) row.commit();
     if (action.dataset.act === 'remove') send({ type: 'queue_remove', key: app.currentKey, id: entry.id });
   });
 
   return row;
 }
 
+/**
+ * 编辑 = 取回输入框：内容落到下面那条输入框里改，回车保存回原来的位置。
+ * 面板里不再内联一个 textarea——那儿本来就只有一行高，改长句子看不到前文。
+ */
 function startQueueEdit(row, entry) {
-  if (row.classList.contains('is-editing')) return;
-  row.classList.add('is-editing');
+  if (queueEditId === entry.id) {
+    el.input.focus();
+    return;
+  }
 
-  const field = document.createElement('textarea');
-  field.className = 'queue-edit';
-  field.rows = Math.min(4, Math.max(2, Math.ceil(entry.text.length / 32)));
-  field.value = entry.text;
-  row.querySelector('.queue-text').replaceWith(field);
+  queueEditId = entry.id;
+  el.input.value = entry.text;
+  autoGrow();
+  updateSendReady();
+  el.input.focus();
+  el.input.setSelectionRange(entry.text.length, entry.text.length);
+  renderQueue();
+}
 
-  const button = row.querySelector('[data-act="edit"]');
-  button.dataset.act = 'save';
-  button.title = '保存';
-  button.innerHTML = ICON_CHECK;
-
-  field.focus();
-  field.setSelectionRange(field.value.length, field.value.length);
-
-  let done = false;
-  const finish = (text) => {
-    if (done) return;
-    done = true;
-    row.classList.remove('is-editing');
-    const span = document.createElement('span');
-    span.className = 'queue-text';
-    span.textContent = text;
-    field.replaceWith(span);
-    button.dataset.act = 'edit';
-    button.title = '编辑';
-    button.innerHTML = ICON_EDIT;
-    row.commit = null;
-  };
-
-  row.commit = () => {
-    const text = field.value.trim();
-    if (!text) {
-      finish(entry.text);
-      send({ type: 'queue_remove', key: app.currentKey, id: entry.id });
-      return;
-    }
-    finish(text);
-    send({ type: 'queue_edit', key: app.currentKey, id: entry.id, message: text });
-  };
-
-  field.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
-      event.preventDefault();
-      row.commit();
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      finish(entry.text);
-    }
-  });
+/** 退出编辑态。silent 用于「条目已经不在队列里」这种被动退出。 */
+function finishQueueEdit(silent) {
+  queueEditId = null;
+  if (!silent) {
+    el.input.value = '';
+    autoGrow();
+    updateSendReady();
+  }
+  renderQueue();
 }
 
 el.queueClear.addEventListener('click', () => {
@@ -3663,6 +3651,12 @@ el.input.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') { event.preventDefault(); closeCompletion(); return; }
   }
 
+  if (event.key === 'Escape' && queueEditId) {
+    event.preventDefault();
+    finishQueueEdit();
+    return;
+  }
+
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault();
     submitPrompt();
@@ -4125,6 +4119,19 @@ el.terminalInput.addEventListener('keydown', (event) => {
 
 function submitPrompt() {
   const text = el.input.value.trim();
+
+  // 正在编辑队列里的某一条：回车是「存回去」，不是发新消息。
+  if (queueEditId) {
+    const id = queueEditId;
+    if (!text) {
+      finishQueueEdit();
+      return;
+    }
+    send({ type: 'queue_edit', key: app.currentKey, id, message: text });
+    finishQueueEdit();
+    return;
+  }
+
   if (!text) return;
 
   const session = current();
@@ -4575,6 +4582,13 @@ function dispatch(message) {
       onEvent(message.key, message.event);
       break;
 
+    case 'queue_state': {
+      const session = app.byKey.get(message.key);
+      if (session) session.queue = Array.isArray(message.entries) ? message.entries : [];
+      if (message.key === app.currentKey) renderQueue();
+      break;
+    }
+
     case 'prompt_accepted':
       break;
 
@@ -4812,14 +4826,6 @@ function onEvent(key, event) {
       // 排队由 Seven Station Core 管（queue_state），Pi 那边应当一直是空的；
       // 真出现内容说明有别的路径往里塞了东西，照实刷新一次输入区状态。
       if (key === app.currentKey) renderComposerState();
-      break;
-
-    case 'queue_state':
-      if (key === app.currentKey) {
-        const session = app.byKey.get(key);
-        if (session) session.queue = Array.isArray(event.entries) ? event.entries : [];
-        renderQueue();
-      }
       break;
 
     case 'thinking_level_changed':

@@ -1538,7 +1538,10 @@ public sealed class CenterHub
             {
                 live.Streaming = false;
                 _ = PersistTurnAsync(live);
-                _ = DeliverQueuedAsync(live);
+
+                // 用户按下停止时不替他继续干活：排队的留在面板里，由他自己决定发还是删。
+                var aborted = record["aborted"]?.GetValue<bool>() == true;
+                if (!aborted) _ = DeliverQueuedAsync(live);
             }
             else if (name == "message_end")
             {

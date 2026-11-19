@@ -2695,19 +2695,13 @@ body.dragging .composer-box {
 .queue-btn:hover svg { stroke: var(--text-dim); }
 .queue-btn.danger:hover svg { stroke: var(--danger); }
 
-.queue-edit {
-  flex: 1;
-  min-width: 0;
-  padding: 4px 8px;
-  border: 1px solid var(--border-strong);
+/* 正在编辑的那一条：高亮整行，内容已经搬到下面的输入框里改。 */
+.queue-item.is-editing {
   border-radius: 8px;
-  background: var(--card);
-  font-size: 13px;
-  line-height: 1.5;
-  resize: none;
+  background: var(--active);
 }
 
-.queue-edit:focus { outline: none; border-color: var(--focus); }
+.queue-item.is-editing .queue-text { color: var(--text-mute); }
 
 /* 设置卡里三组选项各带一行小标签，免得主题、配色、气泡色混成一片。 */
 .appearance-group { display: flex; flex-direction: column; gap: 6px; }

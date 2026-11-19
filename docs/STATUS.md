@@ -36,7 +36,10 @@
     这一轮结束后依次送出（`agent_settled` 触发）。Pi 那边的队列命令只有 `clear_queue`，单条改不了。
 - 验证：`dotnet build SevenStation.slnx` 0 错误；临时 home + 8899 起核心，脚本走 WebSocket 实测
   「排队两条 → 编辑一条 → 删一条 → 清空」，并确认「本轮结束送出一条、下一轮送出下一条」，
-  `session_state` 里带回队列。界面部分没有截图核对（本会话以 SYSTEM 身份跑，Edge 无头起不来）。
+  `session_state` 里带回队列。用户在测试客户端上验过气泡、间距、阴影、步骤收纳、面板与编辑流程。
+- 测试中修掉两处：`queue_state` 被错放进 `onEvent()` 导致面板不出现；按停止时未判断
+  `agent_settled.aborted`，把排队内容当成下一轮送了出去。编辑改为「取回输入框」。
+- 未验证：编辑到一半该条被送出/删除时的自动退出路径（用户跳过）。界面截图仍无（SYSTEM 身份起不了无头浏览器）。
 - 未做：左侧栏指示器（`SendConversationList` 只在 list/new/rename/delete 时推，流式开始结束不推）、
   新对话模型的假显示（兜到列表第一条 GLM-5.2）、模型缓存永不过期、新对话继承上次的模型与思考等级。
 
