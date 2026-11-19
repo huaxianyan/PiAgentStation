@@ -22,14 +22,30 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
-## STATUS-028：0.4.1 升级踩到「文件被占用」的坑（2026-11-19）
+## STATUS-029：安装包的版本倒退已修（2026-11-19，未发版）
+
+- `scripts/build-installer-center.ps1`：FileVersion 改成 `0.<年>.<月日>.<时分>`（如 `0.26.1119.2211`）——
+  四段各 ≤ 65535、随构建单调递增，且一定大于历史上的 `0.4.39632.0`。不再取模，不会回绕。
+- 两个 wxs 都加了 `util:CloseApplication`（挂在 `<Package>` 下，父元素只能是 Package/Module/Fragment）：
+  升级前先关掉在跑的 `SevenStation.Core.exe` / `SevenStation.exe`。两个构建脚本都加了
+  `-ext WixToolset.Util.wixext`，该扩展已装到 wix 的全局扩展目录。
+- 已核对（由脚本重建的两个 0.4.1 MSI）：`Wix4CloseApplication` 表里分别有
+  `CloseCore → SevenStation.Core.exe`、`CloseClient → SevenStation.exe`；Core 的 exe 版本
+  `0.26.1119.2211`、客户端 `0.4.1.0`。服务那侧本来就有 `Stop="both" Wait="yes"`，占用这条路是通的。
+- **没发版**：`<Version>` 仍是 0.4.1，没打新标签。`dist/` 里的 0.4.1 安装包已经是打了补丁的版本，
+  与线上已发布的 0.4.1 资产字节不同，下次发版直接用。
+- 未验证：拿 0.4.0 真装一次再升级到现在这个包（要重装旧版本，没做）。
+
+## STATUS-028：0.4.1 升级把 Core.exe 装丢了（2026-11-19）
 
 - 现象：用户在自己机器上装 0.4.1 的 Core MSI，安装报成功、ARP 显示 0.4.1，但
   `C:\Program Files\SevenStation Core\SevenStation.Core.exe` 不存在、`SevenStationCore` 服务也没注册；
   Seven Station Control 起成便携模式，弹「没找到 SevenStation.Core.exe」。
-- 根因：安装时 0.4.0 的 `SevenStation.Core.exe` 还在跑（服务默认开机自启）。major upgrade 先卸旧版本再装新版本，
-  Windows Installer 把被占用的文件推迟处理，但组件 `CoreExecutable` 被记成「已安装」——
-  `/fa` 修复日志里能看到 `Component: CoreExecutable; Installed: Local` 而文件并不存在。
+- 根因（用户先停了服务，排除占用）：**FileVersion 倒退了**。构建脚本用「UTC 秒数 % 60000」当第三段，
+  0.4.0 出过 `0.4.39632.0`，0.4.1 回绕成 `0.4.11411.0`。两个 MSI 里 `CoreExecutable` 组件 GUID 相同
+  （`{86036D2D-…}`），Windows Installer 见到目标位置是「更高版本」就跳过替换，组件却记成已安装，
+  旧的卸载再把文件删掉 —— 最后 exe 与服务注册（挂在同一组件上）一起没了。
+  其余文件没事：DLL 的 AssemblyVersion 是 0.4.1（更新），`wwwroot`/`json` 无版本号按内容比对。
 - 处理：`msiexec /fa {976887C6-70AC-4EE9-9EA4-2174D2F41D72} /qn` 修复安装，文件与服务都回来了，
   `127.0.0.1:8787` 返回 200。
 - 待修（0.4.2）：在 MSI 里用 `util:CloseApplication` 在 InstallFiles 之前关掉正在跑的

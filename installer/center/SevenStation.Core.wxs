@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!--
   Seven Station Core 的安装程序（MSI）。
 
@@ -8,7 +8,8 @@
   卸载时留在原处，重装或升级接得上。
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Package
       Name="Seven Station Core"
       Manufacturer="SevenStation"
@@ -21,6 +22,10 @@
       InstallerVersion="500">
 
     <SummaryInformation Description="Seven Station Core：为客户端提供对话与 Agent 服务。" />
+
+    <!-- 升级前先把还在跑的旧进程关掉：文件被占用时 Windows Installer 会跳过替换，装完等于没装。 -->
+    <util:CloseApplication Id="CloseCore" Target="SevenStation.Core.exe"
+                           CloseMessage="no" PromptToContinue="no" RebootPrompt="no" />
 
     <!-- 「应用和功能」里那一项的图标 -->
     <Icon Id="AppIcon" SourceFile="$(var.IconFile)" />

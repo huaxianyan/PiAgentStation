@@ -37,13 +37,13 @@ if (-not $match.Success) { throw "找不到版本号：$project" }
 $version = $match.Groups[1].Value.Trim()
 Write-Host "版本 $version"
 
-# MSI 判断"要不要替换文件"看的是文件版本号。程序集版本每次发布都写同一个数，
-# 同版本重装时 Windows Installer 就会跳过替换，装上的是上一份旧文件。
-# 这里给每个构建一个递增的 FileVersion，保证覆盖装真的换到新代码。
-$stamp = [int]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() % 60000)
-# FileVersion 取版本号前两段 + 一个滚动数，升级时才会真的换文件（见上面这段说明）。
-$filePrefix = ($version -split '\.')[0..1] -join '.'
-$fileVersion = "$filePrefix.$stamp.0"
+# MSI 判断"要不要替换文件"看的是文件版本号：目标位置已有更高版本时它会直接跳过。
+# 所以这个号必须随构建单调递增。以前用「秒数 % 60000」当第三段，会回绕——
+# 0.4.0 出过 0.4.39632.0，0.4.1 回绕成 0.4.11411.0，升级时 exe 被判定为"更旧"而没替换，
+# 组件却记成已安装，最后父目录里根本没有 SevenStation.Core.exe。
+# 现在用「年 + 月日 + 时分」四段，各段都 ≤ 65535，时间越晚值越大，且大于历史上任何一个滚动数。
+$now = Get-Date
+$fileVersion = '0.{0}.{1}.{2}' -f ($now.Year % 100), $now.ToString('MMdd'), $now.ToString('HHmm')
 
 if (-not $SkipPublish) {
     dotnet publish $project -c Release -r win-x64 --self-contained -o $publish -v q --nologo `
@@ -78,6 +78,7 @@ Push-Location (Split-Path -Parent $installer)
 try {
     & $wix build (Split-Path -Leaf $installer) -arch x64 -o $msi `
         -ext WixToolset.UI.wixext `
+        -ext WixToolset.Util.wixext `
         -d "Version=$version" -d "PublishDir=$publish" -d "LicenseRtf=$license" `
         -d "AssetsDir=$assets" -d "IconFile=$iconFile" -d "ControlExe=$controlExe"
     if ($LASTEXITCODE -ne 0) { throw "打包失败" }

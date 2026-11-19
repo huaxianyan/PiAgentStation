@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!--
   SevenStation 客户端的安装程序（MSI）。
 
@@ -7,7 +7,8 @@
   「设置 → 这台设备连的 Seven Station Core」里随时改，填错不用重装。
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Package
       Name="Seven Station"
       Manufacturer="SevenStation"
@@ -20,6 +21,10 @@
       InstallerVersion="500">
 
     <SummaryInformation Description="SevenStation 客户端：连上 Seven Station Core 看任务、下指令。" />
+
+    <!-- 升级前先关掉开着的客户端，否则 exe 被占用会跳过替换。 -->
+    <util:CloseApplication Id="CloseClient" Target="SevenStation.exe"
+                           CloseMessage="no" PromptToContinue="no" RebootPrompt="no" />
 
     <Icon Id="AppIcon" SourceFile="$(var.IconFile)" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
