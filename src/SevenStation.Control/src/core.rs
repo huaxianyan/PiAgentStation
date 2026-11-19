@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
 
@@ -68,6 +68,10 @@ pub struct Snapshot {
     pub local_address: Option<String>,
     pub logs: Vec<String>,
     pub since: String,
+    /// 配置里记下的 Pi 安装目录（空串表示还没配，Core 每次启动会自己探测）。
+    pub pi_directory: String,
+    /// 这个目录下真的有 bin/pi-launcher.js，也就是 Core 能跑起来。
+    pub pi_ready: bool,
 }
 
 // ------------------------------ 目录 ------------------------------
@@ -107,6 +111,9 @@ pub fn snapshot() -> Snapshot {
     let running = if installed { service_running() } else { portable_running() };
     let listen = read_listen();
 
+    let pi_directory = read_pi_directory();
+    let pi_ready = !pi_directory.is_empty() && launcher_of(&pi_directory).exists();
+
     Snapshot {
         service_installed: installed,
         running,
@@ -126,7 +133,112 @@ pub fn snapshot() -> Snapshot {
         local_address: local_address(),
         logs: tail_log(6),
         since: since_text(),
+        pi_directory,
+        pi_ready,
     }
+}
+
+// ------------------------------ Pi 安装目录 ------------------------------
+
+fn launcher_of(directory: &str) -> PathBuf {
+    Path::new(directory).join("bin").join("pi-launcher.js")
+}
+
+/// 配置里记下的 Pi 目录。没配过就是空串，交给 Core 启动时自己探测。
+pub fn read_pi_directory() -> String {
+    fs::read_to_string(settings_file())
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|value| {
+            value
+                .get("Agents")
+                .and_then(|agents| agents.get("pi"))
+                .and_then(|pi| pi.get("Directory"))
+                .and_then(|directory| directory.as_str())
+                .map(|text| text.to_string())
+        })
+        .unwrap_or_default()
+}
+
+/// 改 Pi 安装目录。空串表示清掉，让 Core 下次启动重新探测。
+pub fn set_pi_dir(path: &str) -> Result<(), String> {
+    let trimmed = path.trim().trim_matches('"');
+
+    if !trimmed.is_empty() && !launcher_of(trimmed).exists() {
+        return Err(
+            "这个目录下没有 bin\\pi-launcher.js。选 Pi 的安装目录，一般是 用户名\\.pi\\agent。"
+                .into(),
+        );
+    }
+
+    // ProgramData 下的配置要管理员才能写，没提权就交给提权进程做。
+    if !is_elevated() {
+        return elevate(&["pi", trimmed]);
+    }
+
+    write_pi_dir(trimmed)
+}
+
+fn write_pi_dir(path: &str) -> Result<(), String> {
+    // 提权入口也是这条路，校验放在这里，别的地方绕不过去。
+    if !path.is_empty() && !launcher_of(path).exists() {
+        return Err("这个目录下没有 bin/pi-launcher.js，不是 Pi 的安装目录。".into());
+    }
+
+    let file = settings_file();
+    fs::create_dir_all(home()).map_err(|error| format!("写不进配置：{error}"))?;
+
+    let mut settings = fs::read_to_string(&file)
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+
+    let agents = settings
+        .entry("Agents")
+        .or_insert_with(|| serde_json::json!({}));
+    if let Some(map) = agents.as_object_mut() {
+        let entry = map.entry("pi").or_insert_with(|| serde_json::json!({}));
+        if let Some(pi) = entry.as_object_mut() {
+            pi.insert("Directory".into(), serde_json::Value::String(path.into()));
+            let home_dir = derive_home(path);
+            if !home_dir.is_empty() {
+                pi.insert("Home".into(), serde_json::Value::String(home_dir));
+            }
+        }
+    }
+
+    let text = serde_json::to_string_pretty(&settings).map_err(|error| error.to_string())?;
+    fs::write(&file, text).map_err(|error| format!("写不进配置：{error}"))?;
+
+    if service_exists() {
+        restart()?;
+    }
+    Ok(())
+}
+
+/// `<用户>\.pi\agent` 这种标准位置顺手推出家目录；别的位置留空，交给 Core 兜底。
+fn derive_home(path: &str) -> String {
+    let directory = Path::new(path);
+    let is_standard = directory
+        .file_name()
+        .map(|name| name.eq_ignore_ascii_case("agent"))
+        .unwrap_or(false)
+        && directory
+            .parent()
+            .and_then(|parent| parent.file_name())
+            .map(|name| name.eq_ignore_ascii_case(".pi"))
+            .unwrap_or(false);
+
+    if !is_standard {
+        return String::new();
+    }
+
+    directory
+        .parent()
+        .and_then(|parent| parent.parent())
+        .map(|home| home.display().to_string())
+        .unwrap_or_default()
 }
 
 // ------------------------------ 服务与进程 ------------------------------
@@ -554,6 +666,13 @@ pub fn run_elevated(args: &[String]) -> i32 {
             },
             _ => 3,
         },
+        "pi" => {
+            let path = args.get(1).cloned().unwrap_or_default();
+            match write_pi_dir(&path) {
+                Ok(()) => 0,
+                Err(_) => 4,
+            }
+        }
         "firewall" => match args.get(1).and_then(|port| port.parse::<u16>().ok()) {
             Some(port) => match add_firewall_rule(port) {
                 Ok(()) => 0,

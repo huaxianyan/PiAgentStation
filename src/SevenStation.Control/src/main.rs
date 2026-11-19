@@ -14,6 +14,11 @@ struct TrayMenu {
 }
 
 #[tauri::command]
+fn set_pi_dir(path: String) -> Result<(), String> {
+    core::set_pi_dir(&path)
+}
+
+#[tauri::command]
 fn read_state() -> core::Snapshot {
     core::snapshot()
 }
@@ -200,6 +205,7 @@ fn main() {
 
     builder
         .invoke_handler(tauri::generate_handler![
+            set_pi_dir,
             read_state,
             control,
             set_autostart,

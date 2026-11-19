@@ -147,6 +147,18 @@
   .row .label { flex: none; width: 80px; color: var(--text-mute); font-size: 12.5px; }
   .row .value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
   .row .value.mono { font-family: var(--mono); font-size: 12px; }
+  .hint { margin: -2px 0 10px; font-size: 12px; color: var(--text-mute); }
+  .hint code { font-family: var(--mono); font-size: 11.5px; }
+  .row .value input {
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid var(--border, #d8d8dd);
+    border-radius: 7px;
+    background: transparent;
+    color: inherit;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
   .row .actions { flex: none; display: flex; align-items: center; }
   .row .note { color: var(--text-mute); font-size: 12.5px; }
 
@@ -270,6 +282,15 @@
       <span class="actions"><button class="link" id="openData">打开</button></span>
     </div>
     <div class="row">
+      <span class="label">Pi 安装目录</span>
+      <span class="value mono" id="piDir"></span>
+      <span class="actions">
+        <button class="link" id="editPi">更改</button>
+        <button class="link" id="probePi">重新探测</button>
+      </span>
+    </div>
+    <p class="hint" id="piHint" hidden>没找到 Pi，点「更改」填它的安装目录（一般是 <code>用户名\.pi\agent</code>）。</p>
+    <div class="row">
       <span class="label">版本</span>
       <span class="value" id="version"></span>
     </div>
@@ -331,6 +352,11 @@
         case 'regenerate': await invoke('regenerate_token'); break;
         case 'copy': await invoke('copy_text', { text: extra.text }); toast('已复制'); break;
         case 'open': await invoke('open_target', { target: extra.target }); break;
+        case 'pi':
+          await invoke('set_pi_dir', { path: extra.path });
+          toast(extra.path ? '已保存，正在重启 Seven Station Core' : '已清空，下次启动重新探测');
+          render(await invoke('read_state'));
+          break;
       }
     } catch (error) {
       toast(typeof error === 'string' ? error : '这一步没做成。');
@@ -370,6 +396,9 @@
     el('openAddress').disabled = !next.running;
     el('token').textContent = shortToken(next.token);
     el('dataDir').textContent = next.dataDirectory;
+    el('piDir').textContent = next.piDirectory || '还没配，Core 会自己探测';
+    el('piDir').style.color = next.piReady ? '' : 'var(--text-mute)';
+    el('piHint').hidden = Boolean(next.piReady);
     el('version').textContent = next.version;
 
     el('autostartSwitch').classList.toggle('on', next.autostart);
@@ -394,6 +423,34 @@
 
     el('footNote').textContent = '数据在 ' + next.dataDirectory;
   }
+
+  // 改 Pi 目录：就地换成输入框，Enter 存、Esc 取消，别为一行字弹个对话框。
+  el('editPi').addEventListener('click', () => {
+    const cell = el('piDir');
+    const input = document.createElement('input');
+    input.value = (state && state.piDirectory) || '';
+    input.placeholder = 'C:\\Users\\你\\.pi\\agent';
+
+    let settled = false;
+    const stop = (save) => {
+      if (settled) return;
+      settled = true;
+      if (save) send('pi', { path: input.value });
+      else render(state);
+    };
+
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') { event.preventDefault(); stop(true); }
+      if (event.key === 'Escape') { event.preventDefault(); stop(false); }
+    });
+    input.addEventListener('blur', () => stop(false));
+
+    cell.replaceChildren(input);
+    input.focus();
+    input.select();
+  });
+
+  el('probePi').addEventListener('click', () => send('pi', { path: '' }));
 
   function escapeHtml(text) {
     return String(text).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
