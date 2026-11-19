@@ -393,9 +393,12 @@
     el('openAddress').disabled = !next.running;
     el('token').textContent = shortToken(next.token);
     el('dataDir').textContent = next.dataDirectory;
-    el('piDir').textContent = next.piDirectory || '还没配，Core 会自己探测';
-    el('piDir').style.color = next.piReady ? '' : 'var(--text-mute)';
-    el('piHint').hidden = Boolean(next.piReady);
+    // 正在改 Pi 目录的时候别碰这一行：壳每 3 秒推一次状态，一 render 就把输入框连同打了一半的字一起抹了。
+    if (!el('piInput') && !piBusy) {
+      el('piDir').textContent = next.piDirectory || '还没配，Core 会自己探测';
+      el('piDir').style.color = next.piReady ? '' : 'var(--text-mute)';
+      el('piHint').hidden = Boolean(next.piReady);
+    }
     el('version').textContent = next.version;
 
     el('autostartSwitch').classList.toggle('on', next.autostart);
@@ -424,6 +427,7 @@
   // 改 Pi 目录：就地换成输入框，Enter 存、Esc 取消，别为一行字弹个对话框。
   // Pi 安装目录：改的时候按钮变成「保存 / 取消」，不用靠敲回车——以前一失焦就取消，粘贴后回车常常落空。
   let previousPi = '';
+  let piBusy = false;
 
   function setPiEditing(value) {
     el('editPi').hidden = value;
@@ -472,6 +476,8 @@
 
   // 保存或重新探测：等服务真重启完再读状态。读早了就会显示成「还没配」，人会以为探测失败。
   async function applyPiDir(path) {
+    // 等待期间自己管这一行，别让 3 秒一次的推送把「正在重启」刷掉。
+    piBusy = true;
     el('piDir').textContent = path || '正在重新探测…';
     el('piDir').style.color = 'var(--text-mute)';
     el('piHint').hidden = false;
@@ -480,6 +486,7 @@
     try {
       await invoke('set_pi_dir', { path });
     } catch (error) {
+      piBusy = false;
       toast(typeof error === 'string' ? error : '这一步没做成。');
       render(await invoke('read_state'));
       return;
@@ -491,6 +498,7 @@
       await new Promise((resolve) => setTimeout(resolve, 900));
       next = await invoke('read_state');
     }
+    piBusy = false;
     render(next);
 
     if (next.piReady) {
@@ -501,6 +509,7 @@
     if (!path && previousPi) {
       // 探测不出来就把原来的路径填回去，别把人家的配置弄丢。
       await invoke('set_pi_dir', { path: previousPi }).catch(() => {});
+      piBusy = false;
       render(await invoke('read_state'));
       toast('没探测到 Pi，已经填回原来的路径。');
       return;
