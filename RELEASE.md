@@ -44,28 +44,33 @@ Seven Station Core 要靠服务起来、要有开机自启和升级路径，双�
 
 ## 流程
 
-1. 改两个版本号，写两份发布说明，跑门禁，提交。
+1. 改三处版本号，写一份发布说明 `docs/release-notes/v<版本>.md`，跑门禁，提交。
 2. 推 `main`。
-3. 出包：两个安装程序脚本各跑一遍，在一台干净环境里真装、真跑、再卸载。
-4. 建两个 Release，各打一个标签：
+3. 出包：两个安装程序脚本各跑一遍，再在一台干净环境里真装、真跑、再卸载。
+4. 打标签并推，标签就是版本号：
 
    ```bash
-   gh release create SevenStationCore-win-x64-<版本> \
-     dist/SevenStationCore-win-x64-<版本>.msi \
-     dist/SevenStationCore-win-x64-<版本>.msi.sha256 \
-     --title SevenStationCore-win-x64-<版本> \
-     --notes-file build/release/core.md
-
-   gh release create SevenStation-win-x64-<版本> \
-     dist/SevenStation-win-x64-<版本>.msi \
-     dist/SevenStation-win-x64-<版本>.msi.sha256 \
-     --title SevenStation-win-x64-<版本> \
-     --notes-file build/release/client.md
+   git tag -a v<版本> -m "Seven Station <版本>"
+   git push origin v<版本>
    ```
 
-   正文 = 发布说明 + `## 构建信息` 表（版本、平台、架构、源码提交、产物 SHA-256），删掉 `.wixpdb` 之类的调试符号。
-5. 复核线上产物名、大小、校验和，确认没有显示标签。
-6. 已发布的标签不改写，修复走递增版本。
+5. 建**一个** Release，把这一版的两个包放进同一个发布。标签、标题都是 `v<版本>`：
+
+   ```bash
+   gh release create v<版本>      dist/SevenStationCore-win-x64-<版本>.msi      dist/SevenStationCore-win-x64-<版本>.msi.sha256      dist/SevenStation-win-x64-<版本>.msi      dist/SevenStation-win-x64-<版本>.msi.sha256      --verify-tag --title "v<版本>" --notes-file build/release/v<版本>.md
+   ```
+
+   正文 = 发布说明 + `## 构建信息` 表（版本、平台、架构、运行时、安装形态、源码提交、每个产物的 SHA-256），
+   不传 `.wixpdb` 之类的调试符号。两个包同号、同一次发布，读者在一个页面里就能看到配套关系。
+6. 复核线上产物名、大小、校验和，确认没有显示标签，`--latest` 落在新版本上。
+7. 已发布的标签不改写，修复走递增版本。
+
+## 发布面约定
+
+- **标签只有版本号**（`v0.4.0`），不带产品名。一个版本两个包，就一个 Release。
+- **Release 标题就是标签本身**，不加前缀。
+- **产物名**是 `<产品>-win-x64-<版本>.msi` 加同名 `.sha256`，只有 ASCII 字母、数字、`-`、`.`。
+- 发布说明按规范分「新功能」与「问题修复」两节，不超过 40 行，链接指向 `/blob/v<版本>/`。
 
 ## 回滚
 
