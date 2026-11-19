@@ -1,5 +1,6 @@
 using System.IO;
 using Microsoft.Win32;
+using SevenStation.Core.Rpc;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SevenStation.Shared;
@@ -335,7 +336,7 @@ public sealed class CoreSettings
     /// <summary>系统账户下按用户目录找一遍 Pi，最近写过的排前面。</summary>
     private static IEnumerable<(string Directory, string Home)> ProfileCandidates()
     {
-        // 服务账户的家目录在 C:\Windows\system32\config 下，真正的用户目录要从 Windows 目录往上找。
+        // 服务账户的家目录在 C:\Windows\system32\config 下，真正的用户目录要从注册表与 C:\Users 里找。
         var users = UserHomes().ToList();
         if (users.Count == 0)
         {
@@ -345,12 +346,18 @@ public sealed class CoreSettings
         var found = new List<(string Directory, string Home, DateTime Stamp)>();
         foreach (var user in users)
         {
-            var candidate = Path.Combine(user, ".pi", "agent", "bin", "pi-launcher.js");
+            // 两种装法都找：官方安装包在 .pi\agent，npm 装在 AppData\Local\pi-node\current。
             try
             {
-                if (File.Exists(candidate))
+                foreach (var directory in new[]
+                         {
+                             Path.Combine(user, ".pi", "agent"),
+                             Path.Combine(user, "AppData", "Local", "pi-node", "current"),
+                         })
                 {
-                    found.Add((Path.Combine(user, ".pi", "agent"), user, File.GetLastWriteTimeUtc(candidate)));
+                    var script = PiLocator.ResolveLaunchScript(directory);
+                    if (script is null) continue;
+                    found.Add((directory, user, File.GetLastWriteTimeUtc(script)));
                 }
             }
             catch (Exception)
@@ -359,9 +366,9 @@ public sealed class CoreSettings
             }
         }
 
-        foreach (var item in found.OrderByDescending(entry => entry.Stamp))
+        foreach (var entry in found.OrderByDescending(item => item.Stamp))
         {
-            yield return (item.Directory, item.Home);
+            yield return (entry.Directory, entry.Home);
         }
     }
 
@@ -393,6 +400,19 @@ public sealed class CoreSettings
     /// <summary>从 &lt;用户目录&gt;\.pi\agent 反推用户目录；不是这个形状就返回 null。</summary>
     private static string? HomeOf(string agentDirectory)
     {
+        // npm 装法：<家目录>\AppData\Local\pi-node\current
+        var segments = agentDirectory.Replace('/', '\\').TrimEnd('\\').Split('\\');
+        if (segments.Length >= 4
+            && string.Equals(segments[^1], "current", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(segments[^2], "pi-node", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(segments[^3], "Local", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(segments[^4], "AppData", StringComparison.OrdinalIgnoreCase))
+        {
+            return segments.Length >= 5
+                ? string.Join('\\', segments[..^4])
+                : null;
+        }
+
         var pi = Path.GetDirectoryName(agentDirectory);
         if (pi is null || !string.Equals(Path.GetFileName(pi), ".pi", StringComparison.OrdinalIgnoreCase))
         {
@@ -445,7 +465,7 @@ public sealed class CoreSettings
 
         foreach (var candidate in candidates)
         {
-            if (File.Exists(Path.Combine(candidate, "bin", "pi-launcher.js")))
+            if (PiLocator.IsPiDirectory(candidate))
             {
                 return new AgentSettings
                 {
@@ -459,7 +479,7 @@ public sealed class CoreSettings
         // 这时候挨个用户目录找一遍，挑最近动过的那个——安装完成第一次启动就是靠这一步认出 Pi。
         foreach (var (directory, home) in ProfileCandidates())
         {
-            if (File.Exists(Path.Combine(directory, "bin", "pi-launcher.js")))
+            if (PiLocator.IsPiDirectory(directory))
             {
                 return new AgentSettings { Directory = directory, Home = home };
             }

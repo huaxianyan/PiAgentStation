@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using SevenStation.Core.Agents;
+using SevenStation.Core.Rpc;
 
 namespace SevenStation.Core.Sessions;
 
@@ -28,8 +29,7 @@ public static class PiSessionLibrary
 
     private sealed record CacheEntry(long Ticks, long Length, RestoreCandidate? Summary);
 
-    public static string Root =>
-        Path.Combine(CoreSettings.Current.PiHome, ".pi", "agent", "sessions");
+    public static string Root => PiLocator.SessionsDirectory();
 
     /// <summary>扫一遍会话目录。按开始时间倒序，最近聊过的在最上面。</summary>
     public static IReadOnlyList<RestoreCandidate> Scan()

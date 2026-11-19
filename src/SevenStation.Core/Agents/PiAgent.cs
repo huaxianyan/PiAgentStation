@@ -15,9 +15,9 @@ public static class PiAgent
 
         var agentDirectory = PiLocator.AgentDirectory;
         var launcher = PiLocator.LauncherPath;
-        // Pi 1.5 的会话落在 <agent 目录>\sessions，不是 ~/.pi\sessions。
+        // 会话目录两种装法落点不同，交给 PiLocator 挑（环境变量仍然最高优先）。
         var sessions = Environment.GetEnvironmentVariable("PI_CODING_AGENT_SESSION_DIR")
-            ?? Path.Combine(agentDirectory, "sessions");
+            ?? PiLocator.SessionsDirectory();
 
         return new AgentDescriptor(
             AgentRegistry.PiId,

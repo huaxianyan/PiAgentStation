@@ -112,7 +112,7 @@ pub fn snapshot() -> Snapshot {
     let listen = read_listen();
 
     let pi_directory = read_pi_directory();
-    let pi_ready = !pi_directory.is_empty() && launcher_of(&pi_directory).exists();
+    let pi_ready = !pi_directory.is_empty() && pi_entry(&pi_directory).is_some();
 
     Snapshot {
         service_installed: installed,
@@ -140,8 +140,26 @@ pub fn snapshot() -> Snapshot {
 
 // ------------------------------ Pi 安装目录 ------------------------------
 
-fn launcher_of(directory: &str) -> PathBuf {
-    Path::new(directory).join("bin").join("pi-launcher.js")
+/// 这个目录里 Pi 的入口。两种装法都认：
+/// 官方安装包是 `bin/pi-launcher.js`，npm 装法是 `node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js`。
+fn pi_entry(directory: &str) -> Option<PathBuf> {
+    let launcher = Path::new(directory).join("bin").join("pi-launcher.js");
+    if launcher.exists() {
+        return Some(launcher);
+    }
+
+    let package = Path::new(directory)
+        .join("node_modules")
+        .join("@earendil-works")
+        .join("pi-coding-agent");
+    for relative in ["dist/bundle/cli.js", "dist/cli.js"] {
+        let candidate = package.join(relative);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+
+    None
 }
 
 /// 配置里记下的 Pi 目录。没配过就是空串，交给 Core 启动时自己探测。
@@ -164,9 +182,9 @@ pub fn read_pi_directory() -> String {
 pub fn set_pi_dir(path: &str) -> Result<(), String> {
     let trimmed = path.trim().trim_matches('"');
 
-    if !trimmed.is_empty() && !launcher_of(trimmed).exists() {
+    if !trimmed.is_empty() && pi_entry(trimmed).is_none() {
         return Err(
-            "这个目录下没有 bin\\pi-launcher.js。选 Pi 的安装目录，一般是 用户名\\.pi\\agent。"
+            "这个目录里没找到 Pi：既没有 bin\\pi-launcher.js，也没有 npm 包里的 dist\\bundle\\cli.js。选 Pi 的安装目录，一般是 用户名\\.pi\\agent 或 用户名\\AppData\\Local\\pi-node\\current。"
                 .into(),
         );
     }
@@ -181,7 +199,7 @@ pub fn set_pi_dir(path: &str) -> Result<(), String> {
 
 fn write_pi_dir(path: &str) -> Result<(), String> {
     // 提权入口也是这条路，校验放在这里，别的地方绕不过去。
-    if !path.is_empty() && !launcher_of(path).exists() {
+    if !path.is_empty() && pi_entry(path).is_none() {
         return Err("这个目录下没有 bin/pi-launcher.js，不是 Pi 的安装目录。".into());
     }
 
@@ -224,7 +242,8 @@ fn write_pi_dir(path: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// `<用户>\.pi\agent` 这种标准位置顺手推出家目录；别的位置留空，交给 Core 兜底。
+/// 标准位置顺手推出家目录（`<用户>\.pi\agent` 与 `<用户>\AppData\Local\pi-node\current`）；
+/// 别的位置留空，交给 Core 兜底。
 fn derive_home(path: &str) -> String {
     let directory = Path::new(path);
     let is_standard = directory
@@ -238,6 +257,18 @@ fn derive_home(path: &str) -> String {
             .unwrap_or(false);
 
     if !is_standard {
+        // npm 装法：<家目录>\AppData\Local\pi-node\current
+        let normalized = path.replace('/', "\\");
+        let parts: Vec<&str> = normalized.trim_end_matches('\\').split('\\').collect();
+        let tail = parts.len();
+        if tail >= 4
+            && parts[tail - 1].eq_ignore_ascii_case("current")
+            && parts[tail - 2].eq_ignore_ascii_case("pi-node")
+            && parts[tail - 3].eq_ignore_ascii_case("Local")
+            && parts[tail - 4].eq_ignore_ascii_case("AppData")
+        {
+            return if tail >= 5 { parts[..tail - 4].join("\\") } else { String::new() };
+        }
         return String::new();
     }
 

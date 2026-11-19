@@ -22,6 +22,29 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-039：只认了一种 Pi 装法——npm 装法现在也认（2026-11-20，未发版）
+
+- 用户贴的截图摊牌了：他那台 Pi 是 **npm 版**，目录是
+  `C:\Users\wakab\AppData\Local\pi-node\current`（`pi` / `pi.cmd` / `pi.ps1` +
+  `node_modules\@earendil-works\pi-coding-agent\dist\bundle\cli.js`），数据在 `C:\Users\wakab\.pi`。
+  而 Seven Station Core 只认官方安装包那种布局（`<家>\.pi\agent\bin\pi-launcher.js`），于是判定成「没有 Pi」。
+  `pi-launcher.js` 确实是 Pi 自己的一部分（本机 `<家>\.pi\agent\bin\` 里就有），只是 npm 装法没有它。
+- Core 改法：
+  - `PiLocator.ResolveLaunchScript()`：先找 `bin\pi-launcher.js`，没有再读
+    `node_modules\@earendil-works\pi-coding-agent\package.json` 的 `bin.pi`（回退 `dist/bundle/cli.js`、`dist/cli.js`）。
+    `LauncherPath`、`EnsureInstalled`、`--help` 探测、`PiSession` 起子进程全都走它。
+  - `IsPiDirectory()` 取代原来写死的 `File.Exists(bin/pi-launcher.js)`，探测与校验都用它。
+  - 探测位置补 `<家>\AppData\Local\pi-node\current`（每个用户档案都看）；`ResolveNode` 补「Pi 目录旁边的 node.exe」。
+  - 会话目录：官方装法 `<家>\.pi\agent\sessions`，npm 装法 `<家>\.pi\sessions`，`PiLocator.SessionsDirectory()` 挑存在的那个；
+    `PiSessionLibrary.Root` 与 `PiAgent` 的「会话目录」统一用它。`HomeOf()` 也能从 npm 目录反推家目录。
+- Control 同步：`pi_entry()` 两种入口都认，「重新探测」「更改」不再把 npm 装法当成无效目录；
+  `derive_home()` 支持 `<家>\AppData\Local\pi-node\current`。
+- 实测：造一份 npm 布局（package.json + dist/bundle/cli.js）→ Core 用 `PI_AGENT_DIR` 指过去，
+  `settings.json` 里 `Agents.pi.Directory` 就写成了那个目录；Control `--do pi <npm 目录>` 退出码 0，
+  随便指个 `E:/tmp` 仍然退出码 4。
+- 出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 43.7 MB（`90bb9663c0071acc…`）。
+- 未验证：真机上 npm 版 Pi 能不能正常起会话（要用户那台才能试）。
+
 ## STATUS-038：Control 改 Pi 目录的四个毛病（2026-11-20，未发版）
 
 用户报「点了重新探测反而把已有的路径弄没了，明明就是常规的 `C:\Users\7inaBranford\.pi\agent`」。
