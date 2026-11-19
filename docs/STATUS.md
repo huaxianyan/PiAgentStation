@@ -22,6 +22,20 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-027：0.4.1 发布（2026-11-19）
+
+- 版本号三处改到 `0.4.1`（Core csproj、两个 Cargo.toml、两个 tauri.conf.json），
+  发布说明 `docs/release-notes/v0.4.1.md` 过门禁（40 行、分类、链接到 `v0.4.1` 下的 STATUS）。
+- 出包：`SevenStationCore-win-x64-0.4.1.msi`（43.3 MB，SHA-256 `54f96072…df7736`）与
+  `SevenStation-win-x64-0.4.1.msi`（3.2 MB，SHA-256 `b6d07af3…65e53e9a`），MSI 里 ProductVersion 都是 0.4.1。
+  构建信息表在 `build/release/v0.4.1.md`，源码提交 `e77e04e`。
+- `main` 与标签 `v0.4.1` 已用 SSH 推上去。**GitHub Release 还没建**：本机 `gh` 的 token 失效
+  （`gh auth status` 报 invalid），创建 Release 与上传资产只能走 API，等用户重新登录或手动创建。
+- 构建环境的两个坑：`dotnet publish` 卡在还原是 MSBuild server 的问题，设
+  `DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1` 后 48 秒过；WiX 的 UI 扩展按系统账户档案找，
+  `%USERPROFILE%` 覆盖无效，扩展要复制到 `C:\Windows\system32\config\systemprofile\.wix\extensions`。
+- 没做真机安装/升级测试（生产环境隔离：不许覆盖用户正在用的 0.4.0）。
+
 ## STATUS-026：进度类操作一条通知到底（2026-11-19）
 
 - 用户定的规则：一秒钟内完不成的操作，用**同一条**通知从「进行中（转圈）」翻成结果，
