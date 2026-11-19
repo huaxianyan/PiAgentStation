@@ -83,6 +83,11 @@ def main():
     client.save(r"E:\Dev\SevenStation\src\SevenStation.Desktop\icons\icon.ico",
                 sizes=[(16, 16), (20, 20), (24, 24), (32, 32), (40, 40), (48, 48), (64, 64), (128, 128), (256, 256)])
 
+    # 中心网页界面里的空状态那枚 mark：亮色主题用深底、暗色主题用浅底，一张图一个主题
+    webroot = r"E:\Dev\SevenStation\src\SevenStation.Core\wwwroot"
+    client.resize((128, 128), Image.LANCZOS).save(webroot + r"\mark-light.png")
+    console.resize((128, 128), Image.LANCZOS).save(webroot + r"\mark-dark.png")
+
     # 预览：几个尺寸拼一张，改完顺手看一眼
     sizes = (128, 64, 48, 32, 24, 16)
     row_height = 150

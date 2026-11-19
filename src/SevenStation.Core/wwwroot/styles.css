@@ -910,18 +910,16 @@ button { cursor: pointer; }
   gap: 10px;
 }
 
+/* 空状态这枚就是应用图标本身，别用字体拼。
+   亮色主题给深底那张，暗色主题给浅底那张（浅底那张带描边，暗背景上才看得见）。 */
 .app-mark {
   width: 46px;
   height: 46px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   margin-bottom: 4px;
-  background: var(--text);
-  color: var(--card);
-  border-radius: 12px;
-  font-size: 22px;
-  font-weight: 600;
+  background: url("mark-light.png") center / contain no-repeat;
+}
+:root[data-theme="dark"] .app-mark {
+  background-image: url("mark-dark.png");
 }
 
 .empty h2 {
