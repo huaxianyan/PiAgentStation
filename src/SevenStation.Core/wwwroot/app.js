@@ -316,11 +316,65 @@ function baseName(path) {
 }
 
 function toast(message, kind) {
+  const node = buildToast(message, kind, false);
+  setTimeout(() => dismissToast(node), kind === 'error' ? 9000 : 4500);
+}
+
+/** 通知卡片统一长这样：可选的转圈 + 一段文字，方便换字时只动文字。 */
+function buildToast(text, kind, busy) {
   const node = document.createElement('div');
-  node.className = 'toast' + (kind ? ' ' + kind : '');
-  node.textContent = message;
+  node.className = 'toast' + (busy ? ' is-busy' : '') + (kind ? ' ' + kind : '');
+
+  if (busy) {
+    const spin = document.createElement('span');
+    spin.className = 'toast-spin';
+    node.appendChild(spin);
+  }
+
+  const label = document.createElement('span');
+  label.className = 'toast-text';
+  label.textContent = text;
+  node.appendChild(label);
+
   el.toasts.appendChild(node);
-  setTimeout(() => node.remove(), kind === 'error' ? 9000 : 4500);
+  return node;
+}
+
+/** 进场是往上冒，退场就得往下收：高度同时收成 0，后面的卡片跟着合上来。 */
+function dismissToast(node) {
+  if (!node.isConnected || node.dataset.leaving) return;
+  node.dataset.leaving = '1';
+
+  const animation = node.animate(
+    [
+      { opacity: 1, transform: 'none', height: node.getBoundingClientRect().height + 'px' },
+      { opacity: 0, transform: 'translateY(6px)', height: '0px' },
+    ],
+    { duration: 180, easing: 'ease-in' },
+  );
+  animation.onfinish = () => node.remove();
+}
+
+/** 换文案：新字淡入，卡片高度按新旧差值过渡，变长变短都不跳。 */
+function setToastText(node, text) {
+  const label = node.querySelector('.toast-text') || node;
+  if (label.textContent === text) return;
+
+  const before = node.getBoundingClientRect().height;
+  label.textContent = text;
+  const after = node.getBoundingClientRect().height;
+
+  label.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
+
+  if (Math.abs(after - before) < 1) return;
+  node.style.overflow = 'hidden';
+  const animation = node.animate(
+    [{ height: before + 'px' }, { height: after + 'px' }],
+    { duration: 200, easing: 'ease-out' },
+  );
+  animation.onfinish = () => {
+    node.style.overflow = '';
+  };
 }
 
 /**
@@ -328,27 +382,21 @@ function toast(message, kind) {
  * 同一张卡片从「进行中 + 转圈」翻成结果，不要开始一条、结束再来一条。
  */
 function statusToast(text) {
-  const node = document.createElement('div');
-  node.className = 'toast is-busy';
-
-  const spin = document.createElement('span');
-  spin.className = 'toast-spin';
-  const label = document.createElement('span');
-  label.textContent = text;
-  node.append(spin, label);
-  el.toasts.appendChild(node);
-
+  const node = buildToast(text, '', true);
   let timer = 0;
+
   return {
     update(next, kind) {
       window.clearTimeout(timer);
       node.className = 'toast' + (kind ? ' ' + kind : '');
-      node.textContent = next;
-      timer = window.setTimeout(() => node.remove(), kind === 'error' ? 9000 : 3200);
+      const spin = node.querySelector('.toast-spin');
+      if (spin) spin.remove();
+      setToastText(node, next);
+      timer = window.setTimeout(() => dismissToast(node), kind === 'error' ? 9000 : 3200);
     },
     remove() {
       window.clearTimeout(timer);
-      node.remove();
+      dismissToast(node);
     },
   };
 }
