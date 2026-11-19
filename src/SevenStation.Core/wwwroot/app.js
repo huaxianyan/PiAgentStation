@@ -364,7 +364,73 @@ function renderInline(text) {
   return out;
 }
 
+/** 正文里出现的地址和绝对路径要能点：地址开浏览器，路径开资源管理器。 */
+const LINKABLE = /https?:\/\/[^\s<>"'`]+|\b[A-Za-z]:\\[^\s<>"'`|?*]+|\\\\[^\s<>"'`|?*]+/g;
+
+/** 句末的标点和右括号不算地址的一部分。 */
+function trimLinkTail(value) {
+  return value.replace(/[.,;:!?，。；：！？、）)】\]》」』"'”’]+$/, '');
+}
+
+function decorateLinks(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const targets = [];
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (!node.nodeValue || !node.nodeValue.trim()) continue;
+    // 代码和已有的链接里不再二次处理。
+    const parent = node.parentElement;
+    if (!parent || parent.closest('a, code, pre')) continue;
+    LINKABLE.lastIndex = 0;
+    if (LINKABLE.test(node.nodeValue)) targets.push(node);
+  }
+
+  for (const node of targets) {
+    const text = node.nodeValue;
+    const fragment = document.createDocumentFragment();
+    let last = 0;
+    LINKABLE.lastIndex = 0;
+
+    for (const match of text.matchAll(LINKABLE)) {
+      const raw = match[0];
+      const url = trimLinkTail(raw);
+      if (!url) continue;
+
+      const start = match.index;
+      if (start > last) fragment.appendChild(document.createTextNode(text.slice(last, start)));
+
+      const link = document.createElement('a');
+      link.textContent = url;
+      if (/^https?:\/\//i.test(url)) {
+        link.className = 'link-out';
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noreferrer noopener';
+      } else {
+        link.className = 'link-path';
+        link.href = '#';
+        link.dataset.path = url;
+        link.title = '在资源管理器里打开';
+      }
+      fragment.appendChild(link);
+
+      last = start + url.length;
+    }
+
+    if (last === 0) continue;
+    if (last < text.length) fragment.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode.replaceChild(fragment, node);
+  }
+}
+
 function renderMarkdown(text) {
+  const holder = document.createElement('div');
+  holder.innerHTML = renderMarkdownInner(text);
+  decorateLinks(holder);
+  return holder.innerHTML;
+}
+
+function renderMarkdownInner(text) {
   const source = String(text == null ? '' : text).replace(/\r\n/g, '\n');
   const chunks = [];
   const fence = /```([\w+-]*)\n([\s\S]*?)(?:```|$)/g;
@@ -826,6 +892,8 @@ function userNode(item) {
   md.innerHTML = renderMarkdown(item.text);
   bubble.appendChild(md);
 
+  if (item.echo) bubble.appendChild(sendStateNode(item));
+
   if (item.images && item.images.length) {
     const wrap = document.createElement('div');
     wrap.className = 'images';
@@ -1179,12 +1247,22 @@ function renderThread(keepAnchor) {
 
   if (session.hasMore) el.threadInner.appendChild(olderRow(session));
 
+  // 还没被 Core 确认的回显不在 raw 里，重建时要自己带上，否则气泡会凭空消失。
+  const echoes = session.items.filter((item) => item.echo && item.state !== 'sent');
+
   const turns = turnsOf(session);
   turns.forEach((turn, index) => {
     const node = turnNode(turn, session, index === turns.length - 1);
     app.turnNodes.push({ items: turn.items, node });
     el.threadInner.appendChild(node);
   });
+
+  if (echoes.length) {
+    const extra = document.createElement('div');
+    extra.className = 'turn';
+    for (const item of echoes) extra.appendChild(userNode(item));
+    el.threadInner.appendChild(extra);
+  }
 
   if (keepAnchor) {
     el.thread.scrollTop = el.thread.scrollHeight - anchor;
@@ -4139,7 +4217,7 @@ el.terminalInput.addEventListener('keydown', (event) => {
  * 等 Pi 把话收下再显示（实测 3~4 秒）会让人以为卡住了；实际投递的细节不必暴露。
  * Core 那边收到真正的用户消息后，把这条回显换成正牌。
  */
-function echoPrompt(session, text, images) {
+function echoPrompt(session, text, images, payloadImages) {
   if (!session) return;
   app.echoSeq = (app.echoSeq || 0) + 1;
   const item = {
@@ -4147,8 +4225,10 @@ function echoPrompt(session, text, images) {
     kind: 'user',
     text,
     images: images || [],
+    payloadImages: payloadImages || [],
     ts: Date.now(),
     echo: true,
+    state: 'sending',
   };
 
   session.items.push(item);
@@ -4161,15 +4241,111 @@ function echoPrompt(session, text, images) {
   }
 }
 
-/** 提示失败时把还没被确认的回显撤掉，别留一条其实没发出去的话。 */
-function dropEchoes(key) {
+/** 气泡左边那个小圈：转着 = 还没确认，淡出 = 确认了，红圈 = 没发出去。 */
+function sendStateNode(item) {
+  if (item.state === 'failed') {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'send-state is-failed';
+    button.title = '没有发出去';
+    button.setAttribute('aria-label', '没有发出去，点一下处理');
+    button.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">'
+      + '<circle cx="8" cy="8" r="7" fill="currentColor"/>'
+      + '<path d="M8 4.3v4.8" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>'
+      + '<circle cx="8" cy="11.4" r="1" fill="#fff"/></svg>';
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      askResend(item);
+    });
+    return button;
+  }
+
+  const dot = document.createElement('span');
+  dot.className = 'send-state ' + (item.state === 'sent' ? 'is-sent' : 'is-sending');
+  return dot;
+}
+
+/** 没发出去时点那个红圈：重新发送、删除这条，还是先放着。 */
+function askResend(item) {
+  closeModal();
+
+  const card = document.createElement('div');
+  card.className = 'modal';
+
+  const title = document.createElement('h3');
+  title.textContent = '这条没发出去';
+  card.appendChild(title);
+
+  const preview = document.createElement('p');
+  preview.className = 'modal-hint';
+  preview.textContent = item.text.length > 90 ? item.text.slice(0, 90) + '…' : item.text;
+  card.appendChild(preview);
+
+  const actions = document.createElement('div');
+  actions.className = 'modal-actions';
+
+  const cancel = document.createElement('button');
+  cancel.className = 'ghost-btn';
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', closeModal);
+
+  const remove = document.createElement('button');
+  remove.className = 'ghost-btn danger';
+  remove.textContent = '删除这条';
+  remove.addEventListener('click', () => {
+    closeModal();
+    const session = current();
+    if (!session) return;
+    session.items = session.items.filter((entry) => entry !== item);
+    renderThread(true);
+  });
+
+  const again = document.createElement('button');
+  again.className = 'primary-btn';
+  again.textContent = '重新发送';
+  again.addEventListener('click', () => {
+    closeModal();
+    retryEcho(item);
+  });
+
+  actions.append(cancel, remove, again);
+  card.appendChild(actions);
+
+  el.modal.innerHTML = '';
+  el.modal.appendChild(card);
+  el.modal.hidden = false;
+  again.focus();
+}
+
+/** 重发一条失败的：圈先转回去，再按原来的内容发一次。 */
+function retryEcho(item) {
+  const session = current();
+  if (!session) return;
+
+  item.state = 'sending';
+  patchItem(item);
+
+  const message = { type: 'prompt', key: session.key, message: item.text };
+  if (item.payloadImages && item.payloadImages.length) {
+    message.images = item.payloadImages;
+  }
+  send(message);
+}
+
+/** 提示失败：还没被确认的那条改成红圈留着，让人自己决定重发还是删掉。 */
+function markEchoesFailed(key) {
   const session = key ? app.byKey.get(key) : current();
   if (!session) return;
-  const before = session.items.length;
-  session.items = session.items.filter((item) => !item.echo);
-  if (session.items.length === before) return;
 
-  if (session === current()) renderThread(true);
+  let touched = false;
+  for (const item of session.items) {
+    if (!item.echo || item.state !== 'sending') continue;
+    item.state = 'failed';
+    touched = true;
+    if (session === current()) patchItem(item);
+  }
+
+  if (!touched) return;
   if (!session.liveId) {
     session.streaming = false;
     renderComposerState();
@@ -4225,7 +4401,12 @@ function submitPrompt() {
 
   // 排队中的话不进对话，只看得到待发送面板；空闲时立刻把这句话画出来。
   if (!session.streaming) {
-    echoPrompt(session, text, app.attachments.map((attachment) => attachment.dataUrl));
+    echoPrompt(
+      session,
+      text,
+      app.attachments.map((attachment) => attachment.dataUrl),
+      message.images || [],
+    );
   }
 
   send(message);
@@ -4245,6 +4426,13 @@ el.fileInput.addEventListener('change', async () => {
 
 /* 图片可以直接粘、也可以拖进窗口 */
 document.addEventListener('click', (event) => {
+  const pathLink = event.target.closest('.link-path');
+  if (pathLink) {
+    event.preventDefault();
+    send({ type: 'reveal_path', path: pathLink.dataset.path });
+    return;
+  }
+
   if (event.target.matches('.msg .md img, .attachment img')) {
     const overlay = document.createElement('div');
     overlay.className = 'image-zoom';
@@ -4660,9 +4848,13 @@ function dispatch(message) {
       onProcessExit(message);
       break;
 
+    case 'notice':
+      toast(message.text || '', message.kind || '');
+      break;
+
     case 'error':
       setOverlay(null);
-      dropEchoes(message.key);
+      markEchoesFailed(message.key);
       toast(message.message || '这条操作没成功，可以再试一次', 'error');
       break;
 
@@ -4813,9 +5005,26 @@ function onEvent(key, event) {
           if (key === app.currentKey) schedule(item.id);
         }
       } else if (message.role === 'user') {
-        // 回显的那条换成 Core 确认过的这条，不然会重复两条。
-        const echoAt = session.items.findIndex((entry) => entry.echo);
-        if (echoAt >= 0) session.items.splice(echoAt, 1);
+        session.raw.push(message);
+
+        // 回显那条就地换成正牌：同一个气泡，只把左边那个圈淡掉，不闪一下。
+        const echoAt = session.items.findIndex((entry) => entry.echo && entry.state === 'sending');
+        if (echoAt >= 0) {
+          const echo = session.items[echoAt];
+          echo.id = 'i' + session.seq++;
+          echo.text = contentText(message.content);
+          echo.images = contentImages(message.content);
+          echo.ts = messageTimestamp(message);
+          echo.payloadImages = [];
+          echo.state = 'sent';
+          if (key === app.currentKey) {
+            patchItem(echo);
+            scrollToBottom(false);
+          }
+          // 淡出播完就摘掉标记，之后整段重绘不再画那个圈。
+          window.setTimeout(() => { echo.echo = false; }, 260);
+          break;
+        }
 
         const item = {
           id: 'i' + session.seq++,
@@ -4825,10 +5034,8 @@ function onEvent(key, event) {
           ts: messageTimestamp(message),
         };
         session.items.push(item);
-        session.raw.push(message);
         if (key === app.currentKey) {
-          if (echoAt >= 0) renderThread(true);
-          else patchItem(item);
+          patchItem(item);
           scrollToBottom(false);
         }
       }

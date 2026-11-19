@@ -854,6 +854,18 @@ button { cursor: pointer; }
 .md pre code { padding: 0; background: none; border: 0; font-size: 12.5px; line-height: 1.6; }
 .md a { color: #2f54c9; text-decoration: none; }
 .md a:hover { text-decoration: underline; }
+
+/* 路径不像网址那样有彩色跳转的意味，用虚线下划线说明「可以点」。 */
+.md .link-path {
+  color: inherit;
+  border-bottom: 1px dashed color-mix(in oklab, currentColor 45%, transparent);
+  cursor: pointer;
+}
+
+.md .link-path:hover {
+  text-decoration: none;
+  border-bottom-color: currentColor;
+}
 .md blockquote {
   margin: 0 0 10px;
   padding: 2px 0 2px 12px;
@@ -2385,6 +2397,7 @@ body.dragging .composer-box {
 
 .primary-btn:hover { background: #2b2b33; }
 .primary-btn.danger { background: #a5342a; border-color: #a5342a; }
+.ghost-btn.danger { color: var(--danger); }
 .primary-btn.danger:hover { background: #bd3c31; }
 
 .options {
@@ -2723,3 +2736,50 @@ body.dragging .composer-box {
   font-size: 12px;
   color: var(--text-mute);
 }
+
+
+/* ---------- 发送状态：气泡左边一个小圈 ---------- */
+
+/* 挂在这个气泡上做定位，圈贴到气泡的左外侧，不占布局。 */
+.msg.user .bubble { position: relative; }
+
+.send-state {
+  position: absolute;
+  left: -21px;
+  bottom: 8px;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.send-state.is-sending::after {
+  content: "";
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  border-top-color: var(--text-mute);
+  animation: spin .8s linear infinite;
+}
+
+/* 送达：圈淡掉，不留痕迹。 */
+.send-state.is-sent { animation: send-fade .22s ease-out forwards; }
+
+@keyframes send-fade {
+  to { opacity: 0; transform: scale(.72); }
+}
+
+/* 没发出去：红色圆底加挖空的感叹号，点一下问你要重发还是删掉。 */
+.send-state.is-failed {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.send-state.is-failed svg { width: 14px; height: 14px; }
+
+.send-state.is-failed:hover svg { transform: scale(1.08); }

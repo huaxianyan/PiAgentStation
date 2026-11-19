@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -173,6 +174,10 @@ public sealed class CenterHub
 
                 case "set_thinking":
                     await SetThinkingAsync(Require(key, "对话标识"), message, sender);
+                    break;
+
+                case "reveal_path":
+                    RevealPath(sender, message);
                     break;
 
                 case "list_models":
@@ -453,6 +458,40 @@ public sealed class CenterHub
         if (live.Streaming == value) return;
         live.Streaming = value;
         BroadcastConversations();
+    }
+
+    /// <summary>
+    /// 在资源管理器里定位一个路径。界面里出现的绝对路径点一下就能过去，省掉复制粘贴。
+    /// 只认本机存在且是绝对路径的，别的一律不动手。
+    /// </summary>
+    private void RevealPath(CenterConnection sender, JsonObject message)
+    {
+        var path = message["path"]?.GetValue<string>()?.Trim();
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path))
+        {
+            sender.Send(new JsonObject { ["type"] = "notice", ["text"] = "这个路径打不开：" + path, ["kind"] = "warning" });
+            return;
+        }
+
+        var isDirectory = Directory.Exists(path);
+        if (!isDirectory && !File.Exists(path))
+        {
+            sender.Send(new JsonObject { ["type"] = "notice", ["text"] = "找不到这个路径：" + path, ["kind"] = "warning" });
+            return;
+        }
+
+        try
+        {
+            var start = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
+            // 文件用 /select, 选中它；目录直接打开。
+            start.ArgumentList.Add(isDirectory ? path : "/select," + path);
+            Process.Start(start);
+        }
+        catch (Exception ex)
+        {
+            Log.Write("打开路径失败 " + path + "：" + ex.Message, ex);
+            sender.Send(new JsonObject { ["type"] = "notice", ["text"] = "打不开这个路径，可能被系统挡住了", ["kind"] = "error" });
+        }
     }
 
     private void SendConversationList(CenterConnection sender)
@@ -1842,6 +1881,19 @@ public sealed class CenterHub
         if (message["images"] is JsonArray images)
         {
             command["images"] = images.DeepClone();
+        }
+
+        // 演示用：起实例时带上 SEVENSTATION_DEBUG_FAIL_PROMPT=1，每句话都当场失败，
+        // 方便看「没发出去」那个红圈长什么样。正式运行时不必设置。
+        if (Environment.GetEnvironmentVariable("SEVENSTATION_DEBUG_FAIL_PROMPT") == "1")
+        {
+            sender.Send(new JsonObject
+            {
+                ["type"] = "error",
+                ["key"] = id,
+                ["message"] = "（演示）这条没有发出去",
+            });
+            return;
         }
 
         // 第一次说话就用这句话当标题，省一次模型调用。
