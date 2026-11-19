@@ -25,6 +25,7 @@
   <ItemGroup>
     <!-- 从 bin 目录直接启动时 content root 就是 exe 所在目录，页面要跟着复制过去。 -->
     <Content Update="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Agents\pi-guidance.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

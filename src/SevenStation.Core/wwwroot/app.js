@@ -457,7 +457,9 @@ function renderInline(text) {
 }
 
 /** 正文里出现的地址和绝对路径要能点：地址开浏览器，路径开资源管理器。 */
-const LINKABLE = /https?:\/\/[^\s<>"'`]+|\b[A-Za-z]:\\[^\s<>"'`|?*]+|\\\\[^\s<>"'`|?*]+/g;
+// 带引号的路径整段吃下来（Windows 路径里常有空格），所以排在裸路径前面。
+// 裸路径不能把中文标点吃进去，否则“E:\a\b，然后”整句都成了链接。
+const LINKABLE = /https?:\/\/[^\s<>"'`？，。；！、（）【】《》]+|"[A-Za-z]:\\[^"]*"|\b[A-Za-z]:\\[^\s<>"'`|?*，。；：！？、（）【】《》「」『』]+|\\\\[^\s<>"'`|?*，。；：！？、（）【】《》「」『』]+/g;
 
 /** 句末的标点和右括号不算地址的一部分。 */
 function trimLinkTail(value) {
@@ -470,9 +472,9 @@ function decorateLinks(root) {
   while (walker.nextNode()) {
     const node = walker.currentNode;
     if (!node.nodeValue || !node.nodeValue.trim()) continue;
-    // 代码和已有的链接里不再二次处理。
+    // 已有的链接和代码块里不再二次处理；行内代码要处理，路径常被反引号包着。
     const parent = node.parentElement;
-    if (!parent || parent.closest('a, code, pre')) continue;
+    if (!parent || parent.closest('a, pre')) continue;
     LINKABLE.lastIndex = 0;
     if (LINKABLE.test(node.nodeValue)) targets.push(node);
   }
@@ -485,7 +487,9 @@ function decorateLinks(root) {
 
     for (const match of text.matchAll(LINKABLE)) {
       const raw = match[0];
-      const url = trimLinkTail(raw);
+      const quoted = raw.length > 2 && raw.startsWith('"');
+      // 引号只是分隔符，不进链接；引号里的内容也别再按句末标点裁。
+      const url = quoted ? raw.slice(1, -1) : trimLinkTail(raw);
       if (!url) continue;
 
       const start = match.index;

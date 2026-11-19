@@ -22,6 +22,23 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-032：可点位置双管齐下——渲染器兼容 + 给 Pi 的写法约定（2026-11-19，未发版）
+
+- 渲染器（`wwwroot/app.js` 的 `decorateLinks`）：
+  - 行内代码（反引号）里的路径也做成链接；只跳过 `a` 与代码块 `pre`。模型爱把路径包进反引号，这条解决了一大半。
+  - 新增引号包裹的路径：`"E:\My Files\notes.md"` 整段识别，引号本身不进链接，也不会被句末标点裁剪。
+  - 裸路径不再吞中文标点（`，。；：！？、（）【】《》「」『』`），否则「E:\a\b，然后」整句都成了链接。
+  - 验证（node 逐条跑）：裸路径、带空格引号路径、反引号路径、UNC、网址带句号、中文逗号结尾、无路径的普通文字，七种输入结果都对。
+- 给 Pi 的写法约定：新增 `src/SevenStation.Core/Agents/pi-guidance.md`（随程序集输出），
+  `PiSession.Start` 用 `--append-system-prompt <内容>` 注入。Pi 的这个参数只吃文本，所以 Core 自己读文件再传。
+- 兼容兜底：`PiLocator.SupportsAppendSystemPrompt` 先跑一次 `node <agent>\bin\pi-launcher.js --help`
+  看有没有这个参数（老版本遇到不认识的参数会直接退出，不能让聊天整个挂掉），结果按进程缓存。
+- 实测：
+  - 子进程命令行里出现 `--append-system-prompt`（父进程是测试实例）→ `injected=YES`。
+  - 问「把这两个文件的完整路径发给我」，回复就是裸绝对路径 + 裸网址，没有反引号也没有相对路径。
+- 出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 43.7 MB，SHA-256 `a103b25e6d5d4f26679926011a17ae1730a7dbea84dd8b020fca251b8febdeac`。
+- 界面观感（链接在反引号里的样子）还没人眼确认过。
+
 ## STATUS-031：服务的 Pi 探测补上用户变量与任意盘用户档案（2026-11-19，未发版）
 
 - 用户反馈：他们机器上 `pi` 直接能跑（Pi 装在 PATH 上），Core 却报「还没有配置 Pi」。

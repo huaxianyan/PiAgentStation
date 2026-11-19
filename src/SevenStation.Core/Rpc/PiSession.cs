@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json.Nodes;
 using SevenStation.Core.Agents;
+using SevenStation.Shared;
 
 namespace SevenStation.Core.Rpc;
 
@@ -69,6 +70,22 @@ public sealed class PiSession : IAsyncDisposable
 
         psi.ArgumentList.Add("--mode");
         psi.ArgumentList.Add("rpc");
+
+        // 界面把回复里的路径和网址做成可点的，怎么写才能被认出来由这份说明约定。
+        // Pi 的 --append-system-prompt 只吃文本，所以这里自己读文件再传内容。
+        var guidance = Path.Combine(AppContext.BaseDirectory, "Agents", "pi-guidance.md");
+        try
+        {
+            if (File.Exists(guidance) && PiLocator.SupportsAppendSystemPrompt)
+            {
+                psi.ArgumentList.Add("--append-system-prompt");
+                psi.ArgumentList.Add(File.ReadAllText(guidance).Trim());
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write("读不到给 Pi 的界面说明：" + ex.Message, ex);
+        }
         if (!string.IsNullOrEmpty(sessionPath))
         {
             psi.ArgumentList.Add("--session");

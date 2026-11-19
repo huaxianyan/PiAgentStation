@@ -18,6 +18,37 @@ public static class PiLocator
         ? string.Empty
         : Path.Combine(AgentDirectory, "bin", "pi-launcher.js");
 
+
+    /// <summary>
+    /// 这份 Pi 认不认 <c>--append-system-prompt</c>。老版本遇到不认识的参数会直接报错退出，
+    /// 所以先问一次 <c>--help</c>；结果缓存，一个进程只问一次。
+    /// </summary>
+    public static bool SupportsAppendSystemPrompt { get; } = ProbeAppendSystemPrompt();
+
+    private static bool ProbeAppendSystemPrompt()
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo(ResolveNode())
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                ArgumentList = { LauncherPath, "--help" },
+            });
+            if (process is null) return false;
+
+            var text = process.StandardOutput.ReadToEndAsync();
+            process.StandardError.ReadToEnd();
+            return process.WaitForExit(4000) && text.Result.Contains("--append-system-prompt", StringComparison.Ordinal);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Node 解释器。优先环境变量覆盖，其次 PATH 上的 node，最后是 Pi 自带的 node 副本。</summary>
     public static string ResolveNode()
     {
