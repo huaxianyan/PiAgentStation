@@ -21,6 +21,9 @@
 
     <SummaryInformation Description="SevenStation 客户端：连上中心看任务、下指令。" />
 
+    <Icon Id="AppIcon" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+
     <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="已经装了更新的版本，请先卸载再装旧版。" Schedule="afterInstallValidate" />
     <MediaTemplate EmbedCab="yes" />
 
@@ -59,6 +62,8 @@
 
     <!-- WixUI 的欢迎页自带一段 lorem ipsum 假许可，必须换成真的，否则装的时候满屏假文字。 -->
     <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+    <WixVariable Id="WixUIBannerBmp" Value="$(var.AssetsDir)\banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="$(var.AssetsDir)\dialog.bmp" />
 
     <!-- 向导走 WixUI 默认的三页（欢迎/许可 → 进度 → 完成）。中心地址与令牌不在这里问：
          客户端设置页里有「这台设备连的中心」那一块，装完随时能填能改，装的时候填错还得重装。 -->

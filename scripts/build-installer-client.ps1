@@ -54,7 +54,7 @@ Push-Location (Split-Path -Parent $installer)
 try {
     & $wix build (Split-Path -Leaf $installer) -arch x64 -o $msi `
         -ext WixToolset.UI.wixext `
-        -d "Version=$version" -d "BuildDir=$buildDir" -d "LicenseRtf=$license"
+        -d "Version=$version" -d "AssetsDir=$root/installer/assets" -d "IconFile=$root/src/SevenStation.Desktop/icons/icon.ico" -d "BuildDir=$buildDir" -d "LicenseRtf=$license"
     if ($LASTEXITCODE -ne 0) { throw "打包失败" }
 } finally {
     Pop-Location

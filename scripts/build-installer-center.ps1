@@ -15,6 +15,15 @@ $dist = Join-Path $root "dist"
 $project = Join-Path $root "src/SevenStation.Core/SevenStation.Core.csproj"
 $installer = Join-Path $root "installer/center/SevenStation.Core.wxs"
 $publish = Join-Path $root "src/SevenStation.Core/bin/Release/net10.0/win-x64/publish"
+$controlProject = Join-Path $root "src/SevenStation.Control"
+$controlExe = Join-Path $controlProject "target/release/sevenstation-control.exe"
+$assets = Join-Path $root "installer/assets"
+# 中心的 ARP 图标用控制台那枚（浅底），客户端的用深底，两个放一起才分得开
+$iconFile = Join-Path $controlProject "icons/icon.ico"
+
+# rustup 装的 cargo 不一定在当前会话的 PATH 里。
+$cargoBin = Join-Path $env:USERPROFILE ".cargo/bin"
+if (Test-Path $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
 
 # wix 是 dotnet 全局工具，别假设它在 PATH 里。
 $wix = Join-Path $env:USERPROFILE ".dotnet/tools/wix.exe"
@@ -42,6 +51,20 @@ if (-not $SkipPublish) {
 
 if (-not (Test-Path $publish)) { throw "没有发布输出：$publish" }
 
+# 控制台跟中心装在一个包里（DECISIONS D9），这里顺手构建它。
+Push-Location $controlProject
+try {
+    cargo build --release
+    if ($LASTEXITCODE -ne 0) { throw "控制台构建失败" }
+} finally {
+    Pop-Location
+}
+
+if (-not (Test-Path $controlExe)) { throw "没有控制台产物：$controlExe" }
+if (-not (Test-Path (Join-Path $assets "banner.bmp"))) {
+    throw "没有安装画面位图，先跑 python design/make-installer-art.py"
+}
+
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 $license = Join-Path $root "installer/license.rtf"
 $name = "SevenStationCore-win-x64-$version"
@@ -53,7 +76,8 @@ Push-Location (Split-Path -Parent $installer)
 try {
     & $wix build (Split-Path -Leaf $installer) -arch x64 -o $msi `
         -ext WixToolset.UI.wixext `
-        -d "Version=$version" -d "PublishDir=$publish" -d "LicenseRtf=$license"
+        -d "Version=$version" -d "PublishDir=$publish" -d "LicenseRtf=$license" `
+        -d "AssetsDir=$assets" -d "IconFile=$iconFile" -d "ControlExe=$controlExe"
     if ($LASTEXITCODE -ne 0) { throw "打包失败" }
 } finally {
     Pop-Location

@@ -22,6 +22,10 @@
 
     <SummaryInformation Description="SevenStation 中心：为客户端提供对话与 Agent 服务。" />
 
+    <!-- 「应用和功能」里那一项的图标 -->
+    <Icon Id="AppIcon" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+
     <!-- 升级时先停服务再换文件；旧版本自动卸掉。 -->
     <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="已经装了更新的版本，请先卸载再装旧版。" Schedule="afterInstallValidate" />
     <MediaTemplate EmbedCab="yes" />
@@ -57,23 +61,41 @@
       <Files Include="$(var.PublishDir)\wwwroot\**" Subdirectory="wwwroot" />
     </ComponentGroup>
 
-    <!-- 开始菜单：打开中心页面（带令牌）、打开配置。 -->
+    <!-- 控制台：跟中心装在一起，用来开停服务、看日志、改监听地址（DECISIONS D9）。 -->
+    <Component Id="ControlExecutable" Directory="INSTALLFOLDER" Guid="*">
+      <File Id="ControlExe" Source="$(var.ControlExe)" KeyPath="yes" />
+    </Component>
+
+    <!-- 开始菜单：打开中心页面（带令牌）、打开配置、控制台。 -->
     <Component Id="StartMenuShortcuts" Directory="ProgramMenuFolder" Guid="892982fe-e529-4982-82cb-454e868408ea">
       <File Id="OpenCenterCmd" Source="payload\打开中心.cmd" />
       <File Id="OpenSettingsCmd" Source="payload\打开设置.cmd" />
       <Shortcut Id="ShortcutOpenCenter" Name="打开中心页面" Target="[#OpenCenterCmd]" WorkingDirectory="INSTALLFOLDER" />
       <Shortcut Id="ShortcutOpenSettings" Name="打开中心配置" Target="[#OpenSettingsCmd]" WorkingDirectory="INSTALLFOLDER" />
+      <Shortcut Id="ShortcutControl" Name="Seven Station 控制台" Target="[#ControlExe]" WorkingDirectory="INSTALLFOLDER" />
       <RemoveFolder Id="RemoveShortcuts" On="uninstall" />
     </Component>
 
     <!-- 双击 MSI 要有个向导：说明、进度、完成。没有 UI 时 Windows Installer 一个窗都不留。 -->
     <!-- 许可页：WixUI 自带的是一段假文字，换成仓库里的 GPL 说明。 -->
     <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+    <!-- 向导画面：顶栏和对话框底图都是自己生成的（design/make-installer-art.py） -->
+    <WixVariable Id="WixUIBannerBmp" Value="$(var.AssetsDir)\banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="$(var.AssetsDir)\dialog.bmp" />
 
     <ui:WixUI Id="WixUI_Minimal" />
 
+    <!-- 完成页勾上就叫控制台起来：装完就能拿到地址和令牌去配别的设备。 -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="打开控制台" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <CustomAction Id="LaunchControl" FileRef="ControlExe" ExeCommand="" Execute="immediate" Impersonate="yes" Return="asyncNoWait" />
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchControl" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
+
     <Feature Id="Main" Title="SevenStation 中心" Level="1" AllowAbsent="no">
       <ComponentRef Id="CoreExecutable" />
+      <ComponentRef Id="ControlExecutable" />
       <ComponentRef Id="StartMenuShortcuts" />
       <ComponentGroupRef Id="CorePayload" />
     </Feature>
