@@ -27,6 +27,10 @@
     <util:CloseApplication Id="CloseCore" Target="SevenStation.Core.exe"
                            CloseMessage="no" PromptToContinue="no" RebootPrompt="no" />
 
+    <!-- Control 平时就待在托盘里，同样会占着 exe；不先关掉，升级会卡在「需要重启」。 -->
+    <util:CloseApplication Id="CloseControl" Target="SevenStation.Control.exe"
+                           CloseMessage="no" PromptToContinue="no" RebootPrompt="no" />
+
     <!-- 「应用和功能」里那一项的图标 -->
     <Icon Id="AppIcon" SourceFile="$(var.IconFile)" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />

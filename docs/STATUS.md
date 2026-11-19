@@ -22,6 +22,16 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-033：升级时 Control 也会被自动关掉（2026-11-19，未发版）
+
+- 服务那边一直是 `ServiceControl Stop="both" Wait="yes" Start="install"`，装前停、装后起，不用手动关。
+- 但 Control 常驻托盘，`SevenStation.Control.exe` 一直被占用；之前只有 `CloseCore`（`SevenStation.Core.exe`），
+  Control 没被覆盖就会走到「需要重启」，装完还是旧程序。
+- 新增 `util:CloseApplication Id="CloseControl" Target="SevenStation.Control.exe"`（与 Core 同样 `PromptToContinue="no"`）。
+  核对 MSI：`Wix4CloseApplication` 两行（CloseCore / CloseControl），`ServiceControl` 事件位 163（装时起、装与卸时停、卸时摘）。
+- 出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 43.7 MB，SHA-256 `33164b2ff20da71d8bedf91492d33fc1a34228f1069d8da4aad72d40ab18f4f1`。
+- 仍未真机验证：在跑着服务的机器上直接双击安装的表现（这次不比 0.4.0→0.4.1 那次，得等用户自己在别的机器上装）。
+
 ## STATUS-032：可点位置双管齐下——渲染器兼容 + 给 Pi 的写法约定（2026-11-19，未发版）
 
 - 渲染器（`wwwroot/app.js` 的 `decorateLinks`）：
