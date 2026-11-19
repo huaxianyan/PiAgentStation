@@ -22,6 +22,20 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-037：点路径没反应——服务开不出用户桌面的窗口（2026-11-20，未发版）
+
+- 现象：装了服务版之后，正文里点可点路径，资源管理器不弹。
+- 原因：`reveal_path` 由 Seven Station Core 执行，而 Core 是 Windows 服务，`Process.Start("explorer.exe")`
+  落在**会话 0**，用户桌面永远不会出现窗口；`Process.Start` 不报错，所以界面既没提示也没动作。
+  生产日志里没有「打开路径失败」，本机 `Get-Process explorer` 也只有会话 1 的那一个——都对得上。
+- 改法：让壳去开。桌面客户端新增 `reveal_path` 命令（`src/SevenStation.Desktop/src/main.rs`），
+  `build.rs` 的 `AppManifest` 与 `capabilities/center.json` 同步登记（`allow-reveal-path`，
+  已确认生成在 `gen/schemas/acl-manifests.json`）。页面里 `revealPath()` 优先调壳，
+  壳不认账（浏览器、手机）才退回 Core——那条路至少会回一句「找不到这个路径」。
+- 连带：**这次两个包都得装**。核心逻辑在 Core 的 wwwroot，新命令在客户端壳里，缺一个都点不开。
+- 出包：Core `34e3fee99838b52e…`（43.7 MB）、客户端 `afcae29c390bf0c6…`（3660 KB）。
+- 未验证：真实点击是否弹出资源管理器（这台机器的会话 0 无法验证，只能由用户在桌面点一次）。
+
 ## STATUS-036：工作过程只留最新一条但能翻出来，细节改成看得懂的写法（2026-11-20，未发版）
 
 - **翻不出已完成步骤**：`workGroup` 里 `work.slice(-1)` 是「只画最新一条」，画完就没了——展开/收起只能操作整组，

@@ -290,6 +290,30 @@ async fn pick_folder(app: tauri::AppHandle, initial: Option<String>) -> Option<S
         .map(|picked| picked.to_string())
 }
 
+
+/// 在资源管理器里定位文件或目录。
+///
+/// 这件事必须由壳来做：Seven Station Core 是 Windows 服务，它 `Process.Start` 出来的
+/// explorer 活在会话 0，用户屏幕上什么都不会出现（点了就像没反应）。
+#[tauri::command]
+fn reveal_path(path: String) -> Result<(), String> {
+    let target = path.trim();
+    if target.is_empty() {
+        return Err("没有路径".into());
+    }
+
+    let meta = fs::metadata(target).map_err(|_| format!("找不到这个路径：{target}"))?;
+    let mut command = std::process::Command::new("explorer.exe");
+    if meta.is_dir() {
+        command.arg(target);
+    } else {
+        // 文件要选中它自己，而不是把所在目录打开。
+        command.arg(format!("/select,{target}"));
+    }
+    command.spawn().map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 /// 页面问壳：Seven Station Core 在本机吗。
 #[tauri::command]
 fn center_local(app: tauri::AppHandle) -> bool {
@@ -314,6 +338,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             pick_folder,
+            reveal_path,
             center_local,
             client_config_get,
             client_config_save

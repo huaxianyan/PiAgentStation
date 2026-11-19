@@ -519,6 +519,20 @@ function decorateLinks(root) {
   }
 }
 
+/**
+ * 打开一个路径。
+ * 桌面客户端让壳自己开（壳跑在用户会话里，窗口才看得见）；
+ * 在浏览器里或者壳那边不认账时退回 Core，Core 至少会回一句「找不到这个路径」。
+ */
+function revealPath(path) {
+  const shell = window.__TAURI__ && window.__TAURI__.core;
+  if (shell && typeof shell.invoke === 'function') {
+    shell.invoke('reveal_path', { path }).catch(() => send({ type: 'reveal_path', path }));
+    return;
+  }
+  send({ type: 'reveal_path', path });
+}
+
 function renderMarkdown(text) {
   const holder = document.createElement('div');
   holder.innerHTML = renderMarkdownInner(text);
@@ -4693,7 +4707,7 @@ document.addEventListener('click', (event) => {
   const pathLink = event.target.closest('.link-path');
   if (pathLink) {
     event.preventDefault();
-    send({ type: 'reveal_path', path: pathLink.dataset.path });
+    revealPath(pathLink.dataset.path);
     return;
   }
 
