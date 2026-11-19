@@ -22,6 +22,22 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-041：深色模式下一堆写死的浅色底（2026-11-20，未发版）
+
+- 现象：深色模式下正文里的表格、代码块、行内代码亮得刺眼，表头和白底行里的浅灰字几乎看不见。
+- 原因：这些样式写死了浅色值，没走主题变量——
+  `.md code` `#f3f3f5`/`#e8e8ee`、`.md pre` `#f7f7f9`、`.md tbody tr:nth-child(even)` `#fbfbfc`、
+  `.think` `#fbfbfc`、`.tool-body` `#fafafb`、`.table-wrap thead th` `#f7f7f9`、`.log-tail`、
+  `.step-detail pre`、`.dir-where`、`.option`、`.badge-soft`、`.dir-row:hover`、`.files-row:hover`、
+  `.completion-item.is-active`、`.new-thread:hover`、`.pill-select:hover`、加载转圈的边框色。
+  文字色也有两处硬编码：`.md a` 的 `#2f54c9`（深色下深蓝几乎看不见）、`.conn.ok` 的 `#1f7a4d`。
+- 改法：全部换成主题变量（`var(--panel)` / `var(--active)` / `var(--border-strong)` / `var(--green)` /
+  `color-mix(in oklab, var(--text) 4%, transparent)` 这类）。新增 `--link` 令牌：浅色 `#2f54c9`，深色 `#7ea6ff`。
+- 顺手修掉一个一直没生效的东西：`toolCard` 里状态点是按 `state ok/err/running` 这类 **class** 设的，
+  样式表里却只写了 `[data-state="ok"]` 选择器，所以那个点一直是透明的。补上 `.state.ok/.err/.running`。
+- 出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 43.7 MB（`293df8289abe421a…`）。
+- 未验证：深色主题的实际观感（截不了 WebView2 的图），需要用户看一眼。
+
 ## STATUS-040：Control 里改 Pi 目录，打一半字被清掉（2026-11-20，未发版）
 
 - 现象：点「更改」进入输入态，输到一半输入框就不能输了，而「保存 / 取消」还杵在原地。

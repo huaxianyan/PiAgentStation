@@ -21,6 +21,7 @@
   --accent-soft: #ececef;
   --on-accent: #ffffff;
   --focus: #c9c5f6;
+  --link: #2f54c9;
   --green: #189a4a;
   --danger: #cf3b3b;
 
@@ -92,6 +93,7 @@
   --bubble-user-line: rgba(0, 0, 0, .35);
   --on-accent: #14161a;
   --focus: #6a63c8;
+  --link: #7ea6ff;
   --green: #4ec27a;
   --danger: #e87272;
 }
@@ -366,7 +368,7 @@ button { cursor: pointer; }
   transition: background .12s, border-color .12s;
 }
 
-.new-thread:hover { background: #fcfcfd; border-color: #c9c9d2; }
+.new-thread:hover { background: var(--panel); border-color: var(--border-strong); }
 
 .new-thread .plus { font-size: 15px; line-height: 1; color: var(--text-dim); }
 
@@ -606,7 +608,7 @@ button { cursor: pointer; }
 .ext-status { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 .conn { color: var(--text-mute); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.conn.ok { color: #1f7a4d; }
+.conn.ok { color: var(--green); }
 .conn.off { color: var(--danger); }
 
 /* ---------------------------------------------------------------- *
@@ -663,7 +665,7 @@ button { cursor: pointer; }
   text-overflow: ellipsis;
 }
 
-.crumb-sep { color: #c4c4cb; font-size: 13px; }
+.crumb-sep { color: var(--text-faint); font-size: 13px; }
 
 .controls {
   display: flex;
@@ -839,20 +841,20 @@ button { cursor: pointer; }
   font-family: var(--mono);
   font-size: 12.5px;
   padding: 1px 5px;
-  background: #f3f3f5;
-  border: 1px solid #e8e8ee;
+  background: var(--panel);
+  border: 1px solid var(--border);
   border-radius: 5px;
 }
 .md pre {
   margin: 0 0 10px;
   padding: 11px 13px;
-  background: #f7f7f9;
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow-x: auto;
 }
 .md pre code { padding: 0; background: none; border: 0; font-size: 12.5px; line-height: 1.6; }
-.md a { color: #2f54c9; text-decoration: none; }
+.md a { color: var(--link); text-decoration: none; }
 .md a:hover { text-decoration: underline; }
 
 /* 路径不像网址那样有彩色跳转的意味，用虚线下划线说明「可以点」。 */
@@ -869,20 +871,20 @@ button { cursor: pointer; }
 .md blockquote {
   margin: 0 0 10px;
   padding: 2px 0 2px 12px;
-  border-left: 3px solid #e3e3e9;
+  border-left: 3px solid var(--border-strong);
   color: var(--text-dim);
 }
 .md table { border-collapse: collapse; margin: 0 0 12px; font-size: 13.5px; width: 100%; display: table; }
 .md th, .md td { border: 1px solid var(--border); padding: 7px 11px; text-align: left; vertical-align: top; }
 .md th { background: var(--panel); font-weight: 600; }
-.md tbody tr:nth-child(even) { background: #fbfbfc; }
+.md tbody tr:nth-child(even) { background: color-mix(in oklab, var(--text) 4%, transparent); }
 .md hr { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
 
 .think {
   margin: 0;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fbfbfc;
+  background: var(--panel);
 }
 
 .think summary {
@@ -945,14 +947,21 @@ button { cursor: pointer; }
   border-radius: 50%;
 }
 
-.state[data-state="ok"] { background: #e6f6ee; color: #1f7a4d; }
-.state[data-state="error"] { background: #fdecea; color: var(--danger); }
-.state[data-state="run"] { background: #eef0ff; color: #3f45b5; }
+.state.ok { background: color-mix(in oklab, var(--green) 18%, transparent); }
+.state.ok::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.state.err { background: color-mix(in oklab, var(--danger) 18%, transparent); }
+.state.err::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }
+.state.running {
+  background: transparent;
+  border: 2px solid color-mix(in oklab, var(--green) 22%, transparent);
+  border-top-color: var(--green);
+  animation: spin .9s linear infinite;
+}
 
 .tool-body {
   padding: 9px 11px;
   border-top: 1px solid var(--border);
-  background: #fafafb;
+  background: var(--panel);
   font-family: var(--mono);
   font-size: 12px;
   color: var(--text-dim);
@@ -1119,7 +1128,7 @@ button { cursor: pointer; }
   margin: 2px 0 8px;
   padding: 7px 10px;
   border-radius: 8px;
-  background: #f5f5f7;
+  background: var(--panel);
   font-family: var(--mono);
   font-size: 12px;
   color: var(--text-soft);
@@ -1152,7 +1161,7 @@ button { cursor: pointer; }
   text-overflow: ellipsis;
 }
 
-.dir-row:hover { background: #f1f1f4; }
+.dir-row:hover { background: var(--active); }
 
 .dir-up { color: var(--text-mute); }
 
@@ -1232,7 +1241,7 @@ button { cursor: pointer; }
   color: var(--text-mute);
 }
 
-.page-note.warn { color: #a4562a; }
+.page-note.warn { color: color-mix(in oklab, #c8891a 80%, var(--text)); }
 
 .page-card {
   padding: 14px 16px;
@@ -1351,9 +1360,9 @@ button { cursor: pointer; }
   color: var(--text-dim);
 }
 
-.badge-soft { background: #f2f3f6; color: var(--text-mute); }
+.badge-soft { background: var(--active); color: var(--text-mute); }
 .badge-plain { background: transparent; border: 1px solid var(--border); color: var(--text-mute); }
-.badge-warn { background: #fdf0e6; color: #a4562a; }
+.badge-warn { background: color-mix(in oklab, #c8891a 14%, transparent); color: color-mix(in oklab, #c8891a 78%, var(--text)); }
 
 /* 页面模式下顶栏只留标题和展开边栏的按钮。 */
 .main.is-page .controls > *:not(#sidebarToggle) { display: none !important; }
@@ -1366,7 +1375,7 @@ button { cursor: pointer; }
   padding: 9px 10px;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
-  background: #fbfbfc;
+  background: var(--panel);
   font-family: var(--mono);
   font-size: 11.5px;
   line-height: 1.6;
@@ -1407,7 +1416,7 @@ button { cursor: pointer; }
 }
 
 .table-wrap thead th {
-  background: #f7f7f9;
+  background: var(--panel);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1559,7 +1568,7 @@ button { cursor: pointer; }
   padding: 8px 10px;
   max-height: 320px;
   overflow: auto;
-  background: #f2f2f5;
+  background: var(--panel);
   border-radius: 8px;
   font-size: 11.5px;
   line-height: 1.6;
@@ -1594,7 +1603,7 @@ button { cursor: pointer; }
 }
 
 .completion-item:hover,
-.completion-item.is-active { background: #f2f2f5; }
+.completion-item.is-active { background: var(--active); }
 
 .completion-item .path {
   font-family: var(--mono);
@@ -1676,7 +1685,7 @@ body.dragging .composer-box {
   padding: 10px 12px;
   max-height: 46vh;
   overflow: auto;
-  background: #f7f7f9;
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
   font-family: var(--mono);
@@ -1775,7 +1784,7 @@ body.dragging .composer-box {
   color: var(--text);
 }
 
-.files-row:hover { background: #f4f4f7; }
+.files-row:hover { background: var(--active); }
 
 .files-row .name {
   flex: 1;
@@ -1823,7 +1832,7 @@ body.dragging .composer-box {
   margin: 0 18px 6px;
   border: 1px solid var(--border-strong);
   border-radius: 12px;
-  background: #fbfbfc;
+  background: var(--panel);
   overflow: hidden;
 }
 
@@ -2008,7 +2017,7 @@ body.dragging .composer-box {
   text-overflow: ellipsis;
 }
 
-.pill-select:hover { background-color: #e9e9ec; color: var(--text); }
+.pill-select:hover { background-color: var(--active); color: var(--text); }
 
 .composer-actions {
   display: flex;
@@ -2154,8 +2163,8 @@ body.dragging .composer-box {
 .spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid #e0e0e6;
-  border-top-color: #6b6b78;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--text-mute);
   border-radius: 50%;
   animation: spin .7s linear infinite;
 }
@@ -2531,14 +2540,14 @@ body.dragging .composer-box {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 9px;
-  background: #fafafb;
+  background: var(--panel);
   text-align: left;
   font-size: 12.5px;
   color: var(--text-dim);
   font-family: var(--mono);
 }
 
-.option:hover { background: #f2f2f5; color: var(--text); border-color: var(--border-strong); }
+.option:hover { background: var(--active); color: var(--text); border-color: var(--border-strong); }
 
 .label { color: var(--text-mute); font-size: 12px; }
 
