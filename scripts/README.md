@@ -19,7 +19,7 @@ pwsh -File scripts/dev-run.ps1 -SessionDir E:\tmp\pigui-sessions
 平时用这两个，不走 `dev-run.ps1`（那个会构建并开调试端口）。
 
 ```powershell
-pwsh -File scripts/start-center.ps1                    # 后台起来，不弹窗口
+pwsh -File scripts/start-center.ps1 # 后台起来，不弹窗口
 pwsh -File scripts/start-center.ps1 -Listen http://0.0.0.0:8787
 pwsh -File scripts/stop-center.ps1
 ```
@@ -28,12 +28,12 @@ pwsh -File scripts/stop-center.ps1
 
 ## `install-autostart.ps1`
 
-登录后自动把中心拉起来（Windows 计划任务）。
+登录后自动把 Seven Station Core 拉起来（Windows 计划任务）。
 
 ```powershell
-pwsh -File scripts/install-autostart.ps1            # 装上
-pwsh -File scripts/install-autostart.ps1 -Status     # 看现在什么状态
-pwsh -File scripts/install-autostart.ps1 -Remove     # 卸掉
+pwsh -File scripts/install-autostart.ps1 # 装上
+pwsh -File scripts/install-autostart.ps1 -Status # 看现在什么状态
+pwsh -File scripts/install-autostart.ps1 -Remove # 卸掉
 ```
 
 ## `ui-smoke.mjs`

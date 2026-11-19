@@ -3,7 +3,7 @@ using System.IO;
 namespace SevenStation.Shared;
 
 /// <summary>
-/// 极简运行日志。两个进程都没有控制台，出问题时只能靠文件留证据。
+/// 极简运行日志。两个进程都没有 Seven Station Control，出问题时只能靠文件留证据。
 /// 每个进程启动时调一次 <see cref="Initialize"/>，各写各的目录，超过 1 MB 时截断重来。
 /// </summary>
 public static class Log

@@ -20,25 +20,25 @@ Seven Station 是一个本机单用户的 agent 工作口。Host 是唯一的管
 | --- | --- |
 | 产品 SevenStation | 产品 Seven Station |
 | 仓库 `SevenStation` | 仓库 `SevenStation` |
-| `src/SevenStation.Core`（中心） | `src/SevenStation.Host` |
+| `src/SevenStation.Core`（Seven Station Core） | `src/SevenStation.Host` |
 | `src/SevenStation.Desktop`（WPF 壳） | `src/SevenStation.Desktop`（Tauri 壳，重写） |
-| `%LOCALAPPDATA%\SevenStation\`（已改，中心和客户端同一个目录） | `%LOCALAPPDATA%\SevenStation\` |
+| `%LOCALAPPDATA%\SevenStation\`（已改，Seven Station Core 和客户端同一个目录） | `%LOCALAPPDATA%\SevenStation\` |
 | `SEVENSTATION_LISTEN` / `SEVENSTATION_TOKEN` | `SEVENSTATION_LISTEN` / `SEVENSTATION_TOKEN` |
 
-中心这个词在文档里换成 Host，界面文案里仍只说「中心」或「服务」，不出现工程词。
+Seven Station Core 这个词在文档里换成 Host，界面文案里仍只说「Seven Station Core」或「服务」，不出现工程词。
 
 ## 部署形态
 
 两个产品、两个安装程序，可以装在不同机器上（见 `DECISIONS.md` D7）。
 
-| | 中心 SevenStation.Core | 客户端 SevenStation |
+| | Seven Station Core SevenStation.Core | 客户端 SevenStation |
 | --- | --- | --- |
 | 形态 | Windows 服务（首版 Windows；以后 Linux 上换个宿主） | 桌面窗口（WebView2） |
 | 装到哪 | `%ProgramFiles%\SevenStation Core\` | `%ProgramFiles%\SevenStation\` |
 | 数据 | `%ProgramData%\SevenStation.Core\`：token、`data\sevenstation.db`、`logs\` | 用户目录：WebView2 缓存、界面偏好；`%ProgramData%\SevenStation\` 放配对信息（将来的节点服务也要读） |
-| 谁连谁 | 监听，等客户端来连 | 主动连中心（出站），同一台机器也是走这条路 |
+| 谁连谁 | 监听，等客户端来连 | 主动连 Seven Station Core（出站），同一台机器也是走这条路 |
 
-客户端将来还要承担「节点」角色：中心的活派下来，在客户端自己的设备上执行。节点也走同一条出站连接，
+客户端将来还要承担「节点」角色：Seven Station Core 的活派下来，在客户端自己的设备上执行。节点也走同一条出站连接，
 不额外装 agent、不开入站端口。
 
 ## 分层
@@ -78,7 +78,7 @@ Host 里给 Agent 留的边界：
    协议 `hello` 里改成 `agent` + `agents` 名片（id、名称、版本、是否就绪、能力表、信息行），
    设置页按名片渲染，思考等级与模型面板按能力表决定显不显示。
    还没做：把 `CenterHub` 里 Pi 的会话生命周期收进 `IAgentRuntime` 实现，现在仍是 Host 直接起 `PiSession`。
-3. ~~桌面壳换 Tauri~~ **已完成**：`src/SevenStation.Desktop` 是 Tauri 2（Rust），负责加载中心页面、
+3. ~~桌面壳换 Tauri~~ **已完成**：`src/SevenStation.Desktop` 是 Tauri 2（Rust），负责加载 Seven Station Core 页面、
    记忆窗口位置、离线提示、日志、系统选目录；窗口用系统标题栏，页面上的三个自绘按钮已去掉。
 4. **之后的活**（不在本轮）：客户端配对、手机端窄屏适配、多机器 Host。
 

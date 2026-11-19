@@ -2,17 +2,17 @@
 
 ## 当前主线
 
-- 现在在做什么：0.3.0 的首次公开发布。功能面已经齐（中心 + 桌面客户端、对话库、流式、工具卡片、
+- 现在在做什么：0.3.0 的首次公开发布。功能面已经齐（Seven Station Core + 桌面客户端、对话库、流式、工具卡片、
   模型与思考等级、`@` 补全、终端、文件浏览、导出、搜索、自启），剩下的是打包与文档收口。
-- 发布物是**两个 Windows x64 包**：`SevenStation-center-<版本>-win-x64.zip`（自包含中心）与
+- 发布物是**两个 Windows x64 包**：`SevenStation-center-<版本>-win-x64.zip`（自包含 Seven Station Core）与
   `SevenStation-client-<版本>-win-x64.zip`（单个 Tauri exe）。手机端不在这一版范围内。
-- 交付形态改成安装程序：中心 MSI（装服务、自动启动）已装上并验证服务里 Pi 能跑；
-  客户端 MSI（整机安装、装时填中心地址与令牌、写 HKLM 供所有用户共用）已产出，待实装验证。
-- 客户端连接信息改为装完之后在「设置 → 这台设备连的中心」里填，写在 `%LOCALAPPDATA%\SevenStation\center.json`（带 userSet 标记，优先级高于安装时写进注册表的值）。
+- 交付形态改成安装程序：Seven Station Core MSI（装服务、自动启动）已装上并验证服务里 Pi 能跑；
+  客户端 MSI（整机安装、装时填 Seven Station Core 地址与令牌、写 HKLM 供所有用户共用）已产出，待实装验证。
+- 客户端连接信息改为装完之后在「设置 → 这台设备连的 Seven Station Core」里填，写在 `%LOCALAPPDATA%\SevenStation\center.json`（带 userSet 标记，优先级高于安装时写进注册表的值）。
 - 下一步：两个 MSI 在干净环境各跑一遍 → 建两个 Release（`SevenStationCore-win-x64-0.3.0`、
   `SevenStation-win-x64-0.3.0`），各自的包与校验和。
 - 已知阻塞：无。
-- 已知限制（写进发布说明）：中心目前只放 Windows 包，之后会出 Linux 版；局域网与 TLS 未做；
+- 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网与 TLS 未做；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
 ## 待办：图标与安装程序画面
@@ -47,14 +47,14 @@
 - 记录：那次 `gdi32full.dll` 崩溃（`0xc0000409`）由用户指认为本机 MacType 注入所致，
   不是代码问题，已写进 `AGENTS.md` 的已知坑。
 
-## STATUS-003：拆成中心 + 客户端，多端共用一份会话
+## STATUS-003：拆成 Seven Station Core + 客户端，多端共用一份会话
 
-- 用户 2026-11-17 定下目标形态：一套中心负责跟 Pi 打交道，PC 与手机都连这套中心；日后客户端再加
-  host 能力，用中心的 Pi 操作别的设备。原「只做 PC 端」的约束作废，见 `docs/DECISIONS.md`。
+- 用户 2026-11-17 定下目标形态：一套 Seven Station Core 负责跟 Pi 打交道，PC 与手机都连这套 Seven Station Core；日后客户端再加
+  host 能力，用 Seven Station Core 的 Pi 操作别的设备。原「只做 PC 端」的约束作废，见 `docs/DECISIONS.md`。
 - 改了什么：新增 `src/SevenStation.Core`（ASP.NET Core，管 pi 子进程、会话扫描、`/ws`、
-  托管前端）；桌面端退化成 WebView2 壳，加载中心地址；`AppBridge` 变成 `CenterHub`，
+  托管前端）；桌面端退化成 WebView2 壳，加载 Seven Station Core 地址；`AppBridge` 变成 `CenterHub`，
   命令应答回发起连接、会话事件广播给所有连接。前端从 `chrome.webview` 桥换成 WebSocket。
-- 安全：中心默认只监听 `127.0.0.1:8787`；`/ws` 要令牌，令牌文件在 `%LOCALAPPDATA%\SevenStation.Core\token.txt`。
+- 安全：Seven Station Core 默认只监听 `127.0.0.1:8787`；`/ws` 要令牌，令牌文件在 `%LOCALAPPDATA%\SevenStation.Core\token.txt`。
 - 验证（2026-11-17，真窗口 + CDP + 第二个 WebSocket 客户端）：
   - `scripts/ui-smoke.mjs` 通过：连接状态「已连接」、新会话、流式、收尾、侧栏刷新。
   - 第二个客户端 `list_sessions` 拿到同一份会话（1 条），`open_session` 拿到 3 条历史。
@@ -62,15 +62,15 @@
   - 同一会话打开两次只产生 1 个 key，即一个子进程，满足单写者。
 - 边界：局域网与 TLS 没做；手机端只验证了同一页面能被打开（未做窄屏适配）。
 
-## STATUS-004：中心定名 SevenStation.Core，与客户端分家
+## STATUS-004：Seven Station Core 定名 SevenStation.Core，与客户端分家
 
-- 用户 2026-11-17 定名：中心叫 SevenStation.Core（MA 既是 Main 也是 Main Agent），客户端仍是 SevenStation。
+- 用户 2026-11-17 定名：Seven Station Core 叫 SevenStation.Core（MA 既是 Main 也是 Main Agent），客户端仍是 SevenStation。
 - 改了什么：`src/SevenStation.Server` → `src/SevenStation.Core`，程序集与 exe 变成 `SevenStation.Core`；
-  中心日志写 `%LOCALAPPDATA%\SevenStation.Core\logs\center.log`，令牌文件 `%LOCALAPPDATA%\SevenStation.Core	oken.txt`；
-  环境变量改为 `SEVENSTATION_LISTEN` / `SEVENSTATION_TOKEN`；客户端从中心的令牌文件自动读取。
-- 界面：连接状态显示成「已连接 · SevenStation.Core」；新建会话语义改为「填中心机器上的目录」；
+  Seven Station Core 日志写 `%LOCALAPPDATA%\SevenStation.Core\logs\center.log`，令牌文件 `%LOCALAPPDATA%\SevenStation.Core	oken.txt`；
+  环境变量改为 `SEVENSTATION_LISTEN` / `SEVENSTATION_TOKEN`；客户端从 Seven Station Core 的令牌文件自动读取。
+- 界面：连接状态显示成「已连接 · SevenStation.Core」；新建会话语义改为「填 Seven Station Core 机器上的目录」；
   空状态文案不再说「本机」。
-- 验证：`dotnet build SevenStation.slnx` 0 警告 0 错误；`dev-run.ps1` 起中心与客户端，
+- 验证：`dotnet build SevenStation.slnx` 0 警告 0 错误；`dev-run.ps1` 起 Seven Station Core 与客户端，
   health 返回真实会话根目录，界面连上后列出 170 个会话。
 
 ## STATUS-005：对话归 SevenStation.Core，客户端只读 MA 的数据
@@ -87,7 +87,7 @@
 - 验证（2026-11-17，真窗口 + CDP + SQLite 直查）：
   - 新建对话 → 发消息 → 流式 → 收尾，库里落地 5 条消息（含 1 条 system）、标题取首句、
     `pi_session_file` 已写入。
-  - 关掉中心（子进程一起没）再开，点开同一对话：109 ms 出历史，**没有**起任何 Pi 子进程。
+  - 关掉 Seven Station Core（子进程一起没）再开，点开同一对话：109 ms 出历史，**没有**起任何 Pi 子进程。
   - 模型列表改为读缓存后，看历史的路径完全不碰 Pi。
   - 删除对话：侧栏 2 → 1，库里对应行与消息一起消失，Pi 那边文件保留。
   - `scripts/ui-smoke.mjs` 通过（用量 `1.1% · 11k/1000k`）。
@@ -128,7 +128,7 @@
 - 主区：面包屑「工作区 / 标题」+ 重命名铅笔；空态是品牌方块 + 小标签 + 大标题 + 工作区选择。
 - 输入区：卡片 + 胶囊行（工作区、模型、思考等级）+ 圆形发送键；提示行只在有队列时出现。
   空态直接输入也会建对话再发出去。
-- 其他：设置面板显示中心地址、版本、对话库路径、连接状态；侧栏可收起（状态存本地）。
+- 其他：设置面板显示 Seven Station Core 地址、版本、对话库路径、连接状态；侧栏可收起（状态存本地）。
 - 验证：真窗口截图（空态、对话、折叠、设置）；新建 → 选 auto 模型 → 发一句话 → 收到「收到」；
   标题在发送后即时更新到面包屑与侧栏。
 - 与参考的差异：参考里的 Scheduled / Skills / Extensions 三个入口我们没有对应功能，没有摆空壳。
@@ -137,12 +137,12 @@
 
 这轮补的都是"用起来缺的那几块"，UI 细化留到后面。
 
-- `@` 文件补全：中心自己扫工作区（不经过 Pi），选了目录会接着往下钻；只允许在工作区里找。
+- `@` 文件补全：Seven Station Core 自己扫工作区（不经过 Pi），选了目录会接着往下钻；只允许在工作区里找。
 - `/` 命令列表：走 Pi 的 `get_commands`（扩展命令、提示词模板、技能），按工作区缓存。
 - 图片可以粘贴、也能直接拖进窗口；拖的时候编辑区给个高亮。
 - 代码块右上角「复制」，悬停才出现。
 - 头部「导出为 Markdown」：标题、工作区、时间，用户与助手正文，工具调用一行一条。
-- 中心常驻：`scripts/start-center.ps1`（隐藏窗口、等端口真起来）、`stop-center.ps1`、
+- Seven Station Core 常驻：`scripts/start-center.ps1`（隐藏窗口、等端口真起来）、`stop-center.ps1`、
   `install-autostart.ps1`（登录自启的计划任务，支持 `-Status` / `-Remove`）。
 - 内容根固定到 exe 目录：从任何位置启动都能找到 `wwwroot`，打包后双击也不会白屏。
 
@@ -168,12 +168,12 @@
 
 - 搜索：标题与正文一起搜，结果里带命中的那一小段。正文存在 `messages.text` 列
   （`payload` 里的中文是 `\uXXXX` 转义的，直接 LIKE 搜不到），老库启动时补列并回填。
-- 工作区记忆：用过的目录记在中心（最多 8 条），新建对话时直接挑；输入框会实时检查目录在不在，
+- 工作区记忆：用过的目录记在 Seven Station Core（最多 8 条），新建对话时直接挑；输入框会实时检查目录在不在，
   不存在就不让点「开始」。
 - 快捷键：Ctrl+K 新建、Ctrl+B 侧栏、Ctrl+J 终端、Ctrl+E 文件、Ctrl+F 搜索、Esc 关弹层。
 - 设置面板：Pi 装没装、会话目录、最近工作区、快捷键清单，外加「看最近日志」——
   手机上出问题先看这一屏。
-- 断线兜底：中心没起来时，客户端不再是一页白屏，而是说明连的哪个地址、配置在哪、5 秒自动重试。
+- 断线兜底：Seven Station Core 没起来时，客户端不再是一页白屏，而是说明连的哪个地址、配置在哪、5 秒自动重试。
 - 工具卡片里的文件路径点一下就打开文件面板；聊天里的图片点开可放大。
 - 切回窗口时自动对一次会话列表与当前状态（别的设备可能改过）。
 
@@ -186,14 +186,14 @@
 
 ## STATUS-014：小收尾
 
-- 设置里显示中心对外地址，并标出「只本机能连」还是「局域网可连」。
+- 设置里显示 Seven Station Core 对外地址，并标出「只本机能连」还是「局域网可连」。
 - 对话滚动往上翻时出现「回到最新」，新内容不会把位置顶走。
 
 ## STATUS-015：冒烟脚本跟上界面
 
 - `scripts/ui-smoke.mjs` 之前靠按钮文案判断「正在跑」，改成看 `stop` 类；
   新建会话后也不再等「线程出现」，而是等「换成新会话」——旧会话开着时线程本来就可见。
-- 工作区输入框不再禁用「开始」：目录检查只给提示，真正把关的是中心建对话时的校验。
+- 工作区输入框不再禁用「开始」：目录检查只给提示，真正把关的是 Seven Station Core 建对话时的校验。
   禁用来禁去会跟人抢跑道，也让自动化脚本点不动。
 
 ## STATUS-016：按原型做掉六处细节
@@ -222,7 +222,7 @@
 
 ## STATUS-018：发布口径收口（命名、许可证、死配置）
 
-- 产物改名成 `<项目名>-<平台>-<架构>-<版本>.msi`：中心 `SevenStationCore-win-x64-<版本>.msi`，
+- 产物改名成 `<项目名>-<平台>-<架构>-<版本>.msi`：Seven Station Core `SevenStationCore-win-x64-<版本>.msi`，
   客户端 `SevenStation-win-x64-<版本>.msi`。两个 Release 分开建，名字与包名一致。
 - 仓库加 `LICENSE`（GPLv3 全文），README 增「装起来用」「许可证」两节，「发布」一节按 MSI 重写；
   `RELEASE.md` 按两个产品的命名、门禁、`gh release create` 两条命令重写。
@@ -236,7 +236,7 @@
 - 发布说明拆成 `docs/release-notes/v0.3.0-core.md` 与 `v0.3.0-client.md`，两份都过门禁
   （`--link-pattern '/blob/[^/\s]+/'`，因为标签不带 `v` 前缀）。
 - 验证：`dotnet build SevenStation.slnx` 0 错误；两个 MSI 用 `wix msi decompile` 核过
-  （客户端无 Registry 表、中心有 `ServiceInstall`、两边许可页都是 GPL 文本）；
+  （客户端无 Registry 表、Seven Station Core 有 `ServiceInstall`、两边许可页都是 GPL 文本）；
   两个包的 `.sha256` 与文件对应。
 
 ## STATUS-019：从 Pi / magpie 恢复会话
@@ -246,7 +246,7 @@
   每行给标题、时间，已收进对话库的变灰并标「已恢复」。预览给首句、消息数、大小、时间、模型、
   工作目录和最近一条回复。
 - 两栏的来源：`Pi` 直接扫 `<agent 目录>\sessions`；`magpie 命令`粘一整条
-  `Set-Location -LiteralPath '…'; pi --session <id>`，中心解析出会话 id 再匹配，那一栏是单栏。
+  `Set-Location -LiteralPath '…'; pi --session <id>`，Seven Station Core 解析出会话 id 再匹配，那一栏是单栏。
 - 恢复的语义是**接管**不是复制：对话绑定到原来那个 Pi 会话文件（`pi_session_file`），
   消息按 `user`/`assistant`/`toolResult` 搬进对话库用于渲染，续聊时 `pi --session <文件>`
   接着原来那段跑。验证过：恢复 389 条那段，发一句「只回复两个字：继续」，原 jsonl 从 437 行涨到 438 行。

@@ -1,8 +1,8 @@
-﻿# 打发布包：中心与客户端各一个 zip，自包含 win-x64。
+﻿# 打发布包：Seven Station Core 与客户端各一个 zip，自包含 win-x64。
 #
 # 用法：
-#   pwsh -File scripts/build-release.ps1              # 按 csproj 里的版本号打
-#   pwsh -File scripts/build-release.ps1 -SkipPublish # 用已有 publish 输出直接打包
+# pwsh -File scripts/build-release.ps1 # 按 csproj 里的版本号打
+# pwsh -File scripts/build-release.ps1 -SkipPublish # 用已有 publish 输出直接打包
 #
 # 产物落在 dist/：SevenStation-center-<版本>-win-x64.zip 与 SevenStation-client-<版本>-win-x64.zip，
 # 各带一个同名 .sha256（sha256sum 能直接 -c 验证）。
@@ -30,7 +30,7 @@ $clientMatch = [regex]::Match($cargoText, '(?m)^version\s*=\s*"([^"]+)"')
 if (-not $clientMatch.Success) { throw "找不到客户端版本号" }
 $clientVersion = $clientMatch.Groups[1].Value.Trim()
 if ($centerVersion -ne $clientVersion) {
-    throw "两个项目的版本号不一致：中心 $centerVersion / 客户端 $clientVersion"
+    throw "两个项目的版本号不一致：Seven Station Core $centerVersion / 客户端 $clientVersion"
 }
 $version = $centerVersion
 
@@ -48,7 +48,7 @@ $controlOut = Join-Path $root "src/SevenStation.Control/target/release"
 if (-not $SkipPublish) {
     dotnet publish (Join-Path $root "src/SevenStation.Core/SevenStation.Core.csproj") `
         -c Release -r win-x64 --self-contained -o $centerOut -v q --nologo
-    if ($LASTEXITCODE -ne 0) { throw "中心发布失败" }
+    if ($LASTEXITCODE -ne 0) { throw "Seven Station Core 发布失败" }
 
     Push-Location (Join-Path $root "src/SevenStation.Desktop")
     try {
@@ -61,7 +61,7 @@ if (-not $SkipPublish) {
     Push-Location (Join-Path $root "src/SevenStation.Control")
     try {
         cargo build --release
-        if ($LASTEXITCODE -ne 0) { throw "控制台发布失败" }
+        if ($LASTEXITCODE -ne 0) { throw "Seven Station Control 发布失败" }
     } finally {
         Pop-Location
     }
@@ -83,13 +83,13 @@ foreach ($name in @($centerName, $clientName, $controlName)) {
     Remove-Item (Join-Path $dist "$name.zip.sha256") -Force -ErrorAction SilentlyContinue
 }
 
-# 双击就能起的入口。中心的工作目录必须是 exe 所在目录。
+# 双击就能起的入口。Seven Station Core 的工作目录必须是 exe 所在目录。
 $launcher = @(
     '@echo off',
     'cd /d "%~dp0"',
     'start "" "SevenStation.Core.exe"'
 ) -join "`r`n"
-Set-Content -Path (Join-Path $centerOut "启动中心.cmd") -Value $launcher -Encoding ascii
+Set-Content -Path (Join-Path $centerOut "启动 Seven Station Core.cmd") -Value $launcher -Encoding ascii
 
 Compress-Archive -Path (Join-Path $centerOut "*") -DestinationPath (Join-Path $dist "$centerName.zip")
 
@@ -104,12 +104,12 @@ Copy-Item $clientExe -Destination $clientStage
 Compress-Archive -Path (Join-Path $clientStage "*") -DestinationPath (Join-Path $dist "$clientName.zip")
 Remove-Item $clientStage -Recurse -Force
 
-# 控制台单独一个包，装到中心那台机器上；exe 名字和中心的 SevenStation.Core.exe 对齐。
+# Seven Station Control 单独一个包，装到 Seven Station Core 那台机器上；exe 名字和 Seven Station Core 的 SevenStation.Core.exe 对齐。
 $controlStage = Join-Path $dist ".control-stage"
 Remove-Item $controlStage -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $controlStage | Out-Null
 $controlExe = Join-Path $controlOut "sevenstation-control.exe"
-if (-not (Test-Path $controlExe)) { throw "没有控制台产物：$controlExe" }
+if (-not (Test-Path $controlExe)) { throw "没有 Seven Station Control 产物：$controlExe" }
 Copy-Item $controlExe -Destination (Join-Path $controlStage "SevenStation.Control.exe")
 Compress-Archive -Path (Join-Path $controlStage "*") -DestinationPath (Join-Path $dist "$controlName.zip")
 Remove-Item $controlStage -Recurse -Force
@@ -131,9 +131,9 @@ foreach ($name in @($centerName, $clientName, $controlName)) {
     $hash = Get-Sha256 $zip
     # 与 sha256sum 的输出同格式：哈希、两个空格、文件名。
     # 行尾必须是 LF：Set-Content 写出来是 CRLF，sha256sum -c 会把回车当成文件名的一部分读失败。
-    [System.IO.File]::WriteAllText("$zip.sha256", "$hash  $name.zip`n")
+    [System.IO.File]::WriteAllText("$zip.sha256", "$hash $name.zip`n")
     $sizeMb = [math]::Round((Get-Item $zip).Length / 1MB, 1)
-    Write-Host "$name.zip  $sizeMb MB  $($hash.Substring(0, 16))…"
+    Write-Host "$name.zip $sizeMb MB $($hash.Substring(0, 16))…"
 }
 
 # 包内容对不上就直接失败，别把半成品发出去。

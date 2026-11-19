@@ -1,8 +1,8 @@
-﻿# 打客户端的安装程序：一个 MSI，装到 Program Files，装时填中心地址与令牌。
+﻿# 打客户端的安装程序：一个 MSI，装到 Program Files，装时填 Seven Station Core 地址与令牌。
 #
 # 用法：
-#   powershell -File scripts/build-installer-client.ps1              # 编译 + 打包
-#   powershell -File scripts/build-installer-client.ps1 -SkipBuild   # 用已有 release 产物
+# powershell -File scripts/build-installer-client.ps1 # 编译 + 打包
+# powershell -File scripts/build-installer-client.ps1 -SkipBuild # 用已有 release 产物
 #
 # 产物：dist/SevenStation-win-x64-<版本>.msi 与同名 .sha256
 param(
@@ -68,8 +68,8 @@ try {
     $stream.Dispose()
     $sha.Dispose()
 }
-[System.IO.File]::WriteAllText("$msi.sha256", "$hash  $name.msi`n")
+[System.IO.File]::WriteAllText("$msi.sha256", "$hash $name.msi`n")
 
 $sizeKb = [math]::Round((Get-Item $msi).Length / 1KB, 0)
-Write-Host "$name.msi  $sizeKb KB  $($hash.Substring(0, 16))…"
+Write-Host "$name.msi $sizeKb KB $($hash.Substring(0, 16))…"
 Write-Host "产物在 $dist"

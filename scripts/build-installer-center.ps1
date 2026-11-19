@@ -1,8 +1,8 @@
-﻿# 打中心的安装程序：一个 MSI，装文件、注册服务、开机自启。
+﻿# 打 Seven Station Core 的安装程序：一个 MSI，装文件、注册服务、开机自启。
 #
 # 用法：
-#   powershell -File scripts/build-installer-center.ps1              # 发布 + 打包
-#   powershell -File scripts/build-installer-center.ps1 -SkipPublish # 用已有 publish 输出
+# powershell -File scripts/build-installer-center.ps1 # 发布 + 打包
+# powershell -File scripts/build-installer-center.ps1 -SkipPublish # 用已有 publish 输出
 #
 # 产物：dist/SevenStationCore-win-x64-<版本>.msi 与同名 .sha256
 param(
@@ -18,7 +18,7 @@ $publish = Join-Path $root "src/SevenStation.Core/bin/Release/net10.0/win-x64/pu
 $controlProject = Join-Path $root "src/SevenStation.Control"
 $controlExe = Join-Path $controlProject "target/release/sevenstation-control.exe"
 $assets = Join-Path $root "installer/assets"
-# 中心的 ARP 图标用控制台那枚（浅底），客户端的用深底，两个放一起才分得开
+# Seven Station Core 的 ARP 图标用 Seven Station Control 那枚（浅底），客户端的用深底，两个放一起才分得开
 $iconFile = Join-Path $controlProject "icons/icon.ico"
 
 # rustup 装的 cargo 不一定在当前会话的 PATH 里。
@@ -46,21 +46,21 @@ $fileVersion = "0.3.$stamp.0"
 if (-not $SkipPublish) {
     dotnet publish $project -c Release -r win-x64 --self-contained -o $publish -v q --nologo `
         -p:FileVersion=$fileVersion
-    if ($LASTEXITCODE -ne 0) { throw "中心发布失败" }
+    if ($LASTEXITCODE -ne 0) { throw "Seven Station Core 发布失败" }
 }
 
 if (-not (Test-Path $publish)) { throw "没有发布输出：$publish" }
 
-# 控制台跟中心装在一个包里（DECISIONS D9），这里顺手构建它。
+# Seven Station Control 跟 Seven Station Core 装在一个包里（DECISIONS D9），这里顺手构建它。
 Push-Location $controlProject
 try {
     cargo build --release
-    if ($LASTEXITCODE -ne 0) { throw "控制台构建失败" }
+    if ($LASTEXITCODE -ne 0) { throw "Seven Station Control 构建失败" }
 } finally {
     Pop-Location
 }
 
-if (-not (Test-Path $controlExe)) { throw "没有控制台产物：$controlExe" }
+if (-not (Test-Path $controlExe)) { throw "没有 Seven Station Control 产物：$controlExe" }
 if (-not (Test-Path (Join-Path $assets "banner.bmp"))) {
     throw "没有安装画面位图，先跑 python design/make-installer-art.py"
 }
@@ -92,8 +92,8 @@ try {
     $stream.Dispose()
     $sha.Dispose()
 }
-[System.IO.File]::WriteAllText("$msi.sha256", "$hash  $name.msi`n")
+[System.IO.File]::WriteAllText("$msi.sha256", "$hash $name.msi`n")
 
 $sizeMb = [math]::Round((Get-Item $msi).Length / 1MB, 1)
-Write-Host "$name.msi  $sizeMb MB  $($hash.Substring(0, 16))…"
+Write-Host "$name.msi $sizeMb MB $($hash.Substring(0, 16))…"
 Write-Host "产物在 $dist"

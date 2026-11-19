@@ -1,14 +1,14 @@
-﻿# 把中心拉起来（后台常驻，不弹控制台窗口）。
+﻿# 把 Seven Station Core 拉起来（后台常驻，不弹命令行窗口）。
 
 #
 
 # 用法：
 
-#   pwsh -File scripts/start-center.ps1
+# pwsh -File scripts/start-center.ps1
 
-#   pwsh -File scripts/start-center.ps1 -Listen http://0.0.0.0:8787
+# pwsh -File scripts/start-center.ps1 -Listen http://0.0.0.0:8787
 
-#   pwsh -File scripts/start-center.ps1 -Release
+# pwsh -File scripts/start-center.ps1 -Release
 
 param(
 
@@ -34,7 +34,7 @@ $running = Get-Process SevenStation.Core -ErrorAction SilentlyContinue
 
 if ($running) {
 
-    Write-Host "中心已经在跑（PID $($running[0].Id)）。"
+    Write-Host "Seven Station Core 已经在跑（PID $($running[0].Id)）。"
 
     exit 0
 
@@ -95,11 +95,11 @@ $deadline = (Get-Date).AddSeconds(30)
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 300
     if ($process.HasExited) {
-        Write-Host "中心启动后退出了，看看日志：$err"
+        Write-Host "Seven Station Core 启动后退出了，看看日志：$err"
         exit 1
     }
     if (Test-Port $port) {
-        Write-Host "中心已启动（PID $($process.Id)）：http://127.0.0.1:$port"
+        Write-Host "Seven Station Core 已启动（PID $($process.Id)）：http://127.0.0.1:$port"
         Write-Host "日志：$out"
         exit 0
     }

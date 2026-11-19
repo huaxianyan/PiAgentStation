@@ -50,7 +50,7 @@ public static class PiLocator
         if (string.IsNullOrEmpty(AgentDirectory))
         {
             throw new InvalidOperationException(
-                "还没有配置 Pi。在中心的设置里填上 Pi 的安装目录，或设置环境变量 PI_AGENT_DIR 后重启中心。");
+                "还没有配置 Pi。在 Seven Station Core 的设置里填上 Pi 的安装目录，或设置环境变量 PI_AGENT_DIR 后重启 Seven Station Core。");
         }
 
         if (!File.Exists(LauncherPath))

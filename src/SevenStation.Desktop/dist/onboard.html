@@ -95,20 +95,20 @@
 <div class="stage">
   <div class="mark">π</div>
   <div class="head">
-    <h1>先连上中心</h1>
-    <p class="sub">这台设备要连到哪台中心？填完就能开始用。</p>
+    <h1>先连上 Seven Station Core</h1>
+    <p class="sub">这台设备要连到哪台 Seven Station Core？填完就能开始用。</p>
   </div>
 
   <div class="card">
     <div class="row">
-      <span class="row-label">中心地址</span>
+      <span class="row-label">Seven Station Core 地址</span>
       <input id="url" type="text" spellcheck="false" placeholder="http://192.168.1.10:8787/">
     </div>
     <div class="row">
       <span class="row-label">访问令牌</span>
       <input id="token" type="text" spellcheck="false" placeholder="访问令牌">
     </div>
-    <p class="hint">令牌在中心那台机器的 %ProgramData%\SevenStation.Core\token.txt 里。</p>
+    <p class="hint">令牌在 Seven Station Core 那台机器的 %ProgramData%\SevenStation.Core\token.txt 里。</p>
 
     <div class="foot">
       <span class="status" id="status">填完点「测试连接」。</span>
@@ -141,7 +141,7 @@
     return value;
   }
 
-  // 用一个临时的 WebSocket 探一下：中心对错的令牌返回 401，连接直接失败。
+  // 用一个临时的 WebSocket 探一下：Seven Station Core 对错的令牌返回 401，连接直接失败。
   function probe(url, token) {
     return new Promise((resolve) => {
       const target = normalize(url) + 'ws?token=' + encodeURIComponent(token);
@@ -154,7 +154,7 @@
         try { socket && socket.close(); } catch (error) { /* 已经关了 */ }
         resolve(result);
       };
-      const timer = setTimeout(() => finish({ ok: false, error: '中心没有响应，检查地址和它是否在运行' }), 6000);
+      const timer = setTimeout(() => finish({ ok: false, error: 'Seven Station Core 没有响应，检查地址和它是否在运行' }), 6000);
 
       try {
         socket = new WebSocket(target);
@@ -170,25 +170,25 @@
     });
   }
 
-  // WebSocket 被拒时，先看看中心本身通不通：通 -> 是令牌不对；不通 -> 是地址或服务的问题。
+  // WebSocket 被拒时，先看看 Seven Station Core 本身通不通：通 -> 是令牌不对；不通 -> 是地址或服务的问题。
   async function blameTokenOrNetwork(finish, url) {
     try {
       const response = await fetch(normalize(url) + 'health', { cache: 'no-store' });
       if (response.ok) {
-        finish({ ok: false, error: '令牌不对：中心拒绝了这个令牌' });
+        finish({ ok: false, error: '令牌不对：Seven Station Core 拒绝了这个令牌' });
         return;
       }
     } catch (error) {
       // 下面的提示更贴切
     }
-    finish({ ok: false, error: '连不上，检查地址和中心是否在运行' });
+    finish({ ok: false, error: '连不上，检查地址和 Seven Station Core 是否在运行' });
   }
 
   async function runProbe() {
     const url = normalize(urlInput.value);
     const token = tokenInput.value.trim();
     if (!url) {
-      setStatus('先填中心地址。', 'bad');
+      setStatus('先填 Seven Station Core 地址。', 'bad');
       return null;
     }
 
@@ -221,7 +221,7 @@
     enterBtn.disabled = true;
     setStatus('保存中…');
     try {
-      // 保存完之后壳会自己跳到中心页面。
+      // 保存完之后壳会自己跳到 Seven Station Core 页面。
       await invoke('client_config_save', { url: ready.url, token: ready.token });
     } catch (error) {
       enterBtn.disabled = false;
@@ -235,7 +235,7 @@
     });
   }
 
-  // 以前连过就把地址带上，令牌也带（换中心时改地址即可）。
+  // 以前连过就把地址带上，令牌也带（换 Seven Station Core 时改地址即可）。
   if (invoke) {
     invoke('client_config_get')
       .then((config) => {

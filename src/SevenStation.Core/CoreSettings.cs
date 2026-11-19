@@ -6,7 +6,7 @@ using SevenStation.Shared;
 namespace SevenStation.Core;
 
 /// <summary>
-/// 中心的配置。安装时不问 Pi 装在哪：第一次启动自己找一遍，找到什么写进这里，之后都按配置走。
+/// Seven Station Core 的配置。安装时不问 Pi 装在哪：第一次启动自己找一遍，找到什么写进这里，之后都按配置走。
 /// Pi 只是目前唯一实现了的 Agent，配置按 Agent 分组存，以后接别的不用改结构。
 /// </summary>
 public sealed class CoreSettings
@@ -31,7 +31,7 @@ public sealed class CoreSettings
         Agents.TryGetValue(id, out var found) ? found : null;
 
     /// <summary>
-    /// Pi 所在的用户家目录。中心作为服务跑在系统账户下时，进程自己的家目录是
+    /// Pi 所在的用户家目录。Seven Station Core 作为服务跑在系统账户下时，进程自己的家目录是
     /// <c>C:\Windows\system32\config\systemprofile</c>，而技能、扩展、会话都在
     /// 真实用户的家目录里，所以这些地方一律从这里取，不要直接用进程的 UserProfile。
     /// </summary>
@@ -291,7 +291,7 @@ public sealed class CoreSettings
 
     /// <summary>
     /// 老配置里只记了目录没记家目录。目录在某个用户的家目录下时把家目录补上——
-    /// 中心作为服务跑，缺这一项 Pi 就会去找系统账户的 ~/.pi。
+    /// Seven Station Core 作为服务跑，缺这一项 Pi 就会去找系统账户的 ~/.pi。
     /// </summary>
     public bool FillMissingHomes()
     {
@@ -374,7 +374,7 @@ public sealed class CoreSettings
             }
         }
 
-        // 中心作为服务跑时用的是系统账户，它的家目录里没有 Pi；Pi 装在某个真实用户的家目录下。
+        // Seven Station Core 作为服务跑时用的是系统账户，它的家目录里没有 Pi；Pi 装在某个真实用户的家目录下。
         // 这时候挨个用户目录找一遍，挑最近动过的那个——安装完成第一次启动就是靠这一步认出 Pi。
         foreach (var (directory, home) in ProfileCandidates())
         {
@@ -399,7 +399,7 @@ public sealed class AgentSettings
     public string? Node { get; set; }
 
     /// <summary>
-    /// 以哪个用户的家目录跑这个 Agent。中心作为服务跑时进程属于系统账户，
+    /// 以哪个用户的家目录跑这个 Agent。Seven Station Core 作为服务跑时进程属于系统账户，
     /// 而 Pi 的配置与密钥在真实用户的家目录下，所以要显式指过去。
     /// </summary>
     public string? Home { get; set; }

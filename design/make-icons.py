@@ -1,4 +1,4 @@
-"""用 Segoe UI Semibold 的 π 生成图标：控制台浅底、客户端深底、托盘单独一张。
+"""用 Segoe UI Semibold 的 π 生成图标：Seven Station Control 浅底、客户端深底、托盘单独一张。
 
 改字体或改留白，重跑这个脚本就行，不要手改 png/ico。
 """
@@ -6,7 +6,7 @@
 from PIL import Image, ImageDraw, ImageFont
 
 GLYPH = "π"
-FONT_PATH = r"C:\Windows\Fonts\segoeuib.ttf"   # Segoe UI Semibold
+FONT_PATH = r"C:\Windows\Fonts\segoeuib.ttf" # Segoe UI Semibold
 FONT_INDEX = 0
 
 INK = (26, 26, 29)
@@ -14,9 +14,9 @@ PAPER = (247, 247, 249)
 
 CANVAS = 256
 INSET = 8
-RADIUS = 0.22          # 圆角占边长比例
-OUTLINE = 0.048        # 浅底那圈的描边粗细占边长比例
-GLYPH_RATIO = 0.60     # 字形最长边占方块内边的比例
+RADIUS = 0.22 # 圆角占边长比例
+OUTLINE = 0.048 # 浅底那圈的描边粗细占边长比例
+GLYPH_RATIO = 0.60 # 字形最长边占方块内边的比例
 
 
 def glyph_layer(size, color):
@@ -36,7 +36,7 @@ def glyph_layer(size, color):
 
 
 def build(dark):
-    """dark=True 给客户端（深底白 π），False 给控制台（浅底深 π）。"""
+    """dark=True 给客户端（深底白 π），False 给 Seven Station Control（浅底深 π）。"""
     image = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
 
@@ -83,7 +83,7 @@ def main():
     client.save(r"E:\Dev\SevenStation\src\SevenStation.Desktop\icons\icon.ico",
                 sizes=[(16, 16), (20, 20), (24, 24), (32, 32), (40, 40), (48, 48), (64, 64), (128, 128), (256, 256)])
 
-    # 中心网页界面里的空状态那枚 mark：亮色主题用深底、暗色主题用浅底，一张图一个主题
+    # Seven Station Core 网页界面里的空状态那枚 mark：亮色主题用深底、暗色主题用浅底，一张图一个主题
     webroot = r"E:\Dev\SevenStation\src\SevenStation.Core\wwwroot"
     client.resize((128, 128), Image.LANCZOS).save(webroot + r"\mark-light.png")
     console.resize((128, 128), Image.LANCZOS).save(webroot + r"\mark-dark.png")
@@ -99,7 +99,7 @@ def main():
             preview.paste(scaled, (x, 20 + row * row_height + (128 - size) // 2), scaled)
             x += size + 16
     preview.save(r"E:\Dev\SevenStation\design\shots\control-icons-final.png")
-    print("生成控制台 icon.ico / tray.png、客户端 icon.ico、预览图")
+    print("生成 Seven Station Control icon.ico / tray.png、客户端 icon.ico、预览图")
 
 
 if __name__ == "__main__":

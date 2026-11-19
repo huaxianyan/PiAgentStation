@@ -1,4 +1,4 @@
-// Windows 上不要弹控制台窗口。
+// Windows 上不要弹命令行窗口。
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs;
@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use serde_json::{json, Value};
 use tauri::{Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 
-/// 壳自己的东西都放这个目录：中心地址、令牌、窗口位置、日志。
+/// 壳自己的东西都放这个目录：Seven Station Core 地址、令牌、窗口位置、日志。
 fn data_dir() -> PathBuf {
     let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".to_string());
     PathBuf::from(base).join("SevenStation")
@@ -36,7 +36,7 @@ fn timestamp() -> String {
     now.format(&format).unwrap_or_default()
 }
 
-/// 中心地址与令牌分头找，各自取第一个有值的：
+/// Seven Station Core 地址与令牌分头找，各自取第一个有值的：
 /// 地址：`center.json`（用户填过就以它为准）→ 默认本机
 /// 令牌：`center.json` → `token.txt` → 环境变量 `SEVENSTATION_TOKEN`
 ///
@@ -70,7 +70,7 @@ fn read_center() -> Center {
         let _ = fs::create_dir_all(&dir);
         let _ = fs::write(
             &config_path,
-            "{\n  \"url\": \"http://127.0.0.1:8787/\",\n  \"token\": \"\"\n}\n",
+            "{\n \"url\": \"http://127.0.0.1:8787/\",\n \"token\": \"\"\n}\n",
         );
     }
 
@@ -147,7 +147,7 @@ fn client_config_get() -> Value {
 fn client_config_save(window: tauri::WebviewWindow, url: String, token: String) -> Result<(), String> {
     let mut base_url = url.trim().to_string();
     if base_url.is_empty() {
-        return Err("中心地址不能为空".into());
+        return Err("Seven Station Core 地址不能为空".into());
     }
     if !base_url.starts_with("http://") && !base_url.starts_with("https://") {
         return Err("地址要以 http:// 或 https:// 开头".into());
@@ -217,7 +217,7 @@ fn urlencode(value: &str) -> String {
     out
 }
 
-/// 中心跟壳是不是同一台机器：决定选目录时该给谁的路径。
+/// Seven Station Core 跟壳是不是同一台机器：决定选目录时该给谁的路径。
 fn center_is_local(center: &Center) -> bool {
     let host = center
         .base_url
@@ -279,7 +279,7 @@ async fn pick_folder(app: tauri::AppHandle, initial: Option<String>) -> Option<S
         .map(|picked| picked.to_string())
 }
 
-/// 页面问壳：中心在本机吗。
+/// 页面问壳：Seven Station Core 在本机吗。
 #[tauri::command]
 fn center_local(app: tauri::AppHandle) -> bool {
     let _ = app;
@@ -304,7 +304,7 @@ fn main() {
         ])
         .setup(|app| {
             let center = read_center();
-            log(&format!("启动，中心 {}", center.base_url));
+            log(&format!("启动，Seven Station Core {}", center.base_url));
 
             // 没配过令牌就先给引导页：填完才进主界面，不然打开就是一个连不上的空壳。
             let start_page = if center.token.is_none() {
@@ -337,7 +337,7 @@ fn main() {
             });
 
             if center.token.is_none() {
-                // 引导页自己会在填完后跳到中心页面，这里不再抢先导航。
+                // 引导页自己会在填完后跳到 Seven Station Core 页面，这里不再抢先导航。
                 return Ok(());
             }
 
@@ -349,13 +349,13 @@ fn main() {
                 match tauri::Url::parse(&target) {
                     Ok(url) => {
                         if let Err(error) = navigator.navigate(url) {
-                            log(&format!("打不开中心页面：{error}"));
+                            log(&format!("打不开 Seven Station Core 页面：{error}"));
                             let _ = navigator.eval(format!(
-                                "window.sevenStationShowState && window.sevenStationShowState('连不上中心，检查一下服务是否在跑')"
+                                "window.sevenStationShowState && window.sevenStationShowState('连不上 Seven Station Core，检查一下服务是否在跑')"
                             ));
                         }
                     }
-                    Err(error) => log(&format!("中心地址不对：{error}")),
+                    Err(error) => log(&format!("Seven Station Core 地址不对：{error}")),
                 }
             });
 

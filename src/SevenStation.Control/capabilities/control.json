@@ -1,6 +1,6 @@
 {
   "identifier": "control-page",
-  "description": "控制台页面可以调用壳的命令",
+  "description": "Seven Station Control 页面可以调用壳的命令",
   "windows": ["main"],
   "permissions": [
     "core:default",

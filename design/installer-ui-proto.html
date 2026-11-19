@@ -114,12 +114,12 @@
     <div class="dlg">
       <div class="banner">
         <img class="mark" src="../src/SevenStation.Control/icons/tray.png" alt="" />
-        <div class="title">欢迎使用 Seven Station 中心 安装向导</div>
+        <div class="title">欢迎使用 Seven Station Core 安装向导</div>
       </div>
       <div class="art"><img src="../src/SevenStation.Control/icons/tray.png" alt="" /></div>
       <div class="body">
-        <p>安装程序会把 <b>Seven Station 中心</b> 装到这台机器上，作为后台服务运行，负责对话库、模型配置和任务下发。</p>
-        <p>安装完还会一起装上 <b>控制台</b>：开服务、看日志、改监听地址都在这一个窗口里。</p>
+        <p>安装程序会把 <b>Seven Station Core</b> 装到这台机器上，作为后台服务运行，负责对话库、模型配置和任务下发。</p>
+        <p>安装完还会一起装上 <b>Seven Station Control</b>：开服务、看日志、改监听地址都在这一个窗口里。</p>
         <p>要继续，请点「下一步」。</p>
       </div>
       <div class="buttons"><span class="off">上一步</span><span>下一步</span><span>取消</span></div>
@@ -131,7 +131,7 @@
     <div class="dlg">
       <div class="banner">
         <img class="mark" src="../src/SevenStation.Control/icons/tray.png" alt="" />
-        <div class="title">正在安装 Seven Station 中心</div>
+        <div class="title">正在安装 Seven Station Core</div>
       </div>
       <div class="art"><img src="../src/SevenStation.Control/icons/tray.png" alt="" /></div>
       <div class="body">
@@ -152,16 +152,16 @@
   <div class="dlg">
     <div class="banner">
       <img class="mark" src="../src/SevenStation.Control/icons/tray.png" alt="" />
-      <div class="title">完成 Seven Station 中心 安装向导</div>
+      <div class="title">完成 Seven Station Core 安装向导</div>
     </div>
     <div class="art"><img src="../src/SevenStation.Control/icons/tray.png" alt="" /></div>
     <div class="body">
-      <p>中心已经作为服务装好并在后台运行，控制台也在开始菜单里。</p>
-      <p>点「完成」后会打开控制台，那里能拿到访问地址和令牌，用来配别的设备。</p>
+      <p>Seven Station Core 已经作为服务装好并在后台运行，Seven Station Control 也在开始菜单里。</p>
+      <p>点「完成」后会打开 Seven Station Control，那里能拿到访问地址和令牌，用来配别的设备。</p>
     </div>
     <div class="buttons"><span class="off">上一步</span><span>完成</span><span>取消</span></div>
   </div>
-  <p class="cap">完成页（「完成」直接拉控制台起来）</p>
+  <p class="cap">完成页（「完成」直接拉 Seven Station Control 起来）</p>
 </div>
 
 <h2>顶栏两个方向（真尺寸 493×58）</h2>
@@ -169,14 +169,14 @@
   <div class="unit" style="width:493px">
     <div style="width:493px;height:58px;background:#fff;border:1px solid #c9c9d0;position:relative">
       <img src="../src/SevenStation.Control/icons/tray.png" style="position:absolute;right:18px;top:19px;width:20px;opacity:.35" alt="" />
-      <div style="position:absolute;left:14px;top:19px;font-size:13.5px;font-weight:600">欢迎使用 Seven Station 中心 安装向导</div>
+      <div style="position:absolute;left:14px;top:19px;font-size:13.5px;font-weight:600">欢迎使用 Seven Station Core 安装向导</div>
     </div>
     <p class="cap">A · 白底（推荐）：安静，和系统向导一致</p>
   </div>
   <div class="unit" style="width:493px">
     <div style="width:493px;height:58px;background:#1a1a1d;border:1px solid #c9c9d0;position:relative">
       <img src="../src/SevenStation.Control/icons/tray.png" style="position:absolute;right:18px;top:19px;width:20px;opacity:.45" alt="" />
-      <div style="position:absolute;left:14px;top:19px;font-size:13.5px;font-weight:600;color:#fff">欢迎使用 Seven Station 中心 安装向导</div>
+      <div style="position:absolute;left:14px;top:19px;font-size:13.5px;font-weight:600;color:#fff">欢迎使用 Seven Station Core 安装向导</div>
     </div>
     <p class="cap">B · 深底：品牌感更强，但 Wizard 的标题是向导自己画的，改色要动 WiX 主题字体</p>
   </div>
@@ -185,7 +185,7 @@
 <h2>「应用和功能」里的那一项</h2>
 <div class="arp">
   <img src="../src/SevenStation.Control/icons/tray.png" alt="" />
-  <span class="name">Seven Station 中心</span>
+  <span class="name">Seven Station Core</span>
   <span class="meta">0.4.0 · 42 MB</span>
 </div>
 
@@ -193,7 +193,7 @@
 <div class="unit" style="width:660px;font-size:12.5px;line-height:1.9;color:#4c4c54">
   <div><b>1 · 顶栏要不要品牌色</b>：现在是白底 + 右下角一个 20% 淡的 π，安静；也可以把顶栏整体做成深色（`#1a1a1d`），标题反白。</div>
   <div><b>2 · 左侧色块的宽度</b>：现在是 164px 深色 + 右侧白，和 MSI 默认版式一致。想更宽就把底图里的色块加宽，右侧文案区相应变窄。</div>
-  <div><b>3 · 完成页要不要代勾「打开控制台」</b>：WiX 默认完成页有个复选框，可以做成默认勾上。</div>
+  <div><b>3 · 完成页要不要代勾「打开 Seven Station Control」</b>：WiX 默认完成页有个复选框，可以做成默认勾上。</div>
 </div>
 
 </body>

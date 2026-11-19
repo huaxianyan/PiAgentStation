@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<title>控制台整体界面 · 原型（用系统窗口边框）</title>
+<title>Seven Station Control 整体界面 · 原型（用系统窗口边框）</title>
 <style>
   :root {
     color-scheme: light;
@@ -147,7 +147,7 @@
 </head>
 <body>
 
-<h1>控制台整体界面 · 用系统窗口边框之后重新排一版</h1>
+<h1>Seven Station Control 整体界面 · 用系统窗口边框之后重新排一版</h1>
 <p class="lead">上一版是给「无边框圆角窗口」设计的：卡片浮在灰底上、四角圆着。换成系统边框后那套就散了 —— 现在是整窗白底、分区靠细线，像系统设置页。</p>
 
 <!-- ================= 方案 A ================= -->
@@ -155,7 +155,7 @@
 <div class="win">
   <div class="caption">
     <img src="../src/SevenStation.Control/icons/tray.png" alt="" />
-    Seven Station 中心
+    Seven Station Core
     <span class="grow"></span>
     <span class="btns"><span>—</span><span>□</span><span>✕</span></span>
   </div>
@@ -188,19 +188,19 @@
 
     <div class="a-section">
       <h3>最近日志<span style="float:right;font-weight:400;color:#8a8a92">打开目录</span></h3>
-      <div class="logbox"><span class="t">01:25:12</span> 客户端连上  c-33628b04
-<span class="t">01:25:16</span> 客户端断开  c-33628b04
-<span class="t">01:29:26</span> 客户端连上  c-e31418e0
-<span class="t">01:30:17</span> 客户端断开  c-e31418e0
-<span class="t">01:43:08</span> 客户端连上  c-008f3bf4
-<span class="t">01:43:23</span> 客户端断开  c-008f3bf4</div>
+      <div class="logbox"><span class="t">01:25:12</span> 客户端连上 c-33628b04
+<span class="t">01:25:16</span> 客户端断开 c-33628b04
+<span class="t">01:29:26</span> 客户端连上 c-e31418e0
+<span class="t">01:30:17</span> 客户端断开 c-e31418e0
+<span class="t">01:43:08</span> 客户端连上 c-008f3bf4
+<span class="t">01:43:23</span> 客户端断开 c-008f3bf4</div>
     </div>
   </div>
 
   <div class="foot">
     <span>数据在 C:\ProgramData\SevenStation.Core\data</span>
     <span class="grow"></span>
-    <span>关掉窗口不会停掉中心 · 右键托盘图标可退出</span>
+    <span>关掉窗口不会停掉 Seven Station Core · 右键托盘图标可退出</span>
   </div>
 </div>
 
@@ -209,7 +209,7 @@
 <div class="win">
   <div class="caption">
     <img src="../src/SevenStation.Control/icons/tray.png" alt="" />
-    Seven Station 中心
+    Seven Station Core
     <span class="grow"></span>
     <span class="btns"><span>—</span><span>□</span><span>✕</span></span>
   </div>
@@ -244,18 +244,18 @@
 
     <div class="b-card" style="flex:1;display:flex;flex-direction:column;min-height:0">
       <h3>最近日志<span style="float:right;font-weight:400;color:#8a8a92">打开目录</span></h3>
-      <div class="logbox" style="flex:1;margin-bottom:0"><span class="t">01:25:12</span> 客户端连上  c-33628b04
-<span class="t">01:25:16</span> 客户端断开  c-33628b04
-<span class="t">01:29:26</span> 客户端连上  c-e31418e0
-<span class="t">01:30:17</span> 客户端断开  c-e31418e0
-<span class="t">01:43:08</span> 客户端连上  c-008f3bf4</div>
+      <div class="logbox" style="flex:1;margin-bottom:0"><span class="t">01:25:12</span> 客户端连上 c-33628b04
+<span class="t">01:25:16</span> 客户端断开 c-33628b04
+<span class="t">01:29:26</span> 客户端连上 c-e31418e0
+<span class="t">01:30:17</span> 客户端断开 c-e31418e0
+<span class="t">01:43:08</span> 客户端连上 c-008f3bf4</div>
     </div>
   </div>
 
   <div class="b-foot">
     <span>数据在 C:\ProgramData\SevenStation.Core\data</span>
     <span class="grow"></span>
-    <span>关掉窗口不会停掉中心 · 右键托盘图标可退出</span>
+    <span>关掉窗口不会停掉 Seven Station Core · 右键托盘图标可退出</span>
   </div>
 </div>
 
@@ -263,9 +263,9 @@
 <div class="win" style="padding:18px 22px; box-shadow:none">
   <div style="font-size:13px;color:var(--text-soft);line-height:2">
     <div><b>1 · 关闭按钮怎么算「关闭」</b><br />
-      现在点系统 ✕ 会收进托盘（这是你最早定的：关窗口不停中心，右键托盘退出）。你说「无法关闭」，多半是收进去之后不知道从哪退。
+      现在点系统 ✕ 会收进托盘（这是你最早定的：关窗口不停 Seven Station Core，右键托盘退出）。你说「无法关闭」，多半是收进去之后不知道从哪退。
       建议：✕ 仍然收进托盘，但页脚那行字明说「右键托盘图标可退出」（上面两版都这么写了），托盘菜单里「退出」就是真退。
-      如果你更想「✕ 直接退出」，也可以，我把中心改成退出前先问一句。
+      如果你更想「✕ 直接退出」，也可以，我把 Seven Station Core 改成退出前先问一句。
     </div>
     <div style="margin-top:10px"><b>2 · 页面里不再画窗口边框</b><br />
       窗口边框、阴影、拖动交给系统（和客户端一致），页面只管内容。所以上面两版都没有自己画描边。

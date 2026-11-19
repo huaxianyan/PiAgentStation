@@ -1,9 +1,9 @@
-﻿# 登录时自动把中心拉起来（Windows 计划任务，不弹窗口）。
+﻿# 登录时自动把 Seven Station Core 拉起来（Windows 计划任务，不弹窗口）。
 #
 # 用法：
-#   pwsh -File scripts/install-autostart.ps1            # 安装
-#   pwsh -File scripts/install-autostart.ps1 -Remove    # 卸载
-#   pwsh -File scripts/install-autostart.ps1 -Status    # 看现在装没装
+# pwsh -File scripts/install-autostart.ps1 # 安装
+# pwsh -File scripts/install-autostart.ps1 -Remove # 卸载
+# pwsh -File scripts/install-autostart.ps1 -Status # 看现在装没装
 param(
     [switch]$Remove,
     [switch]$Status,
@@ -46,7 +46,7 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
     -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero)
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings `
-    -Description "登录后把 SevenStation 中心拉起来" -Force | Out-Null
+    -Description "登录后把 Seven Station Core 拉起来" -Force | Out-Null
 
-Write-Host "已安装：登录后自动启动中心（任务名：$taskName）"
+Write-Host "已安装：登录后自动启动 Seven Station Core（任务名：$taskName）"
 Write-Host "现在不用等下次登录，直接 pwsh -File scripts/start-center.ps1 就能起来。"

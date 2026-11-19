@@ -1,4 +1,4 @@
-// Windows 上不要弹控制台窗口。
+// Windows 上不要弹命令行窗口。
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod core;
@@ -96,14 +96,14 @@ fn publish(app: &tauri::AppHandle) {
         } else {
             "已停止".to_string()
         });
-        let _ = menu.toggle.set_text(if snapshot.running { "停止中心" } else { "启动中心" });
+        let _ = menu.toggle.set_text(if snapshot.running { "停止 Seven Station Core" } else { "启动 Seven Station Core" });
     }
 
     if let Some(tray) = app.tray_by_id("main") {
         let _ = tray.set_tooltip(Some(if snapshot.running {
-            "Seven Station 中心 · 正在运行"
+            "Seven Station Core · 正在运行"
         } else {
-            "Seven Station 中心 · 已停止"
+            "Seven Station Core · 已停止"
         }));
     }
 }
@@ -122,8 +122,8 @@ fn show_window(app: &tauri::AppHandle) {
 
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let headline = MenuItem::with_id(app, "headline", "正在读取状态…", false, None::<&str>)?;
-    let open = MenuItem::with_id(app, "open", "打开控制台", true, None::<&str>)?;
-    let toggle = MenuItem::with_id(app, "toggle", "启动中心", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "打开 Seven Station Control", true, None::<&str>)?;
+    let toggle = MenuItem::with_id(app, "toggle", "启动 Seven Station Core", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&headline, &open, &toggle, &quit])?;
 
@@ -133,7 +133,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     });
 
     let mut builder = TrayIconBuilder::with_id("main")
-        .tooltip("Seven Station 中心")
+        .tooltip("Seven Station Control")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -173,7 +173,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
 fn main() {
     log_line(&format!(
-        "控制台启动，exe = {:?}",
+        "Seven Station Control 启动，exe = {:?}",
         std::env::current_exe().ok()
     ));
     // 提权子进程只做一件事就退，别建窗口、别起 WebView。
@@ -202,17 +202,17 @@ fn main() {
                 "main",
                 tauri::WebviewUrl::App("index.html".into()),
             )
-            .title("Seven Station 中心")
+            .title("Seven Station Control")
             .inner_size(720.0, 626.0)
             .min_inner_size(620.0, 560.0)
             .center()
             .build()?;
 
-            // 关窗口只是收进托盘，中心照常跑；真退出走托盘右键。
+            // 关窗口只是收进托盘，Seven Station Core 照常跑；真退出走托盘右键。
             let handle = window.clone();
             window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    // 关窗口只是收进托盘，中心照常跑；真退出走托盘右键。
+                    // 关窗口只是收进托盘，Seven Station Core 照常跑；真退出走托盘右键。
                     // 收到就立刻收，不加延迟也不弹提示。
                     log_line("收到关闭请求");
                     api.prevent_close();
@@ -225,7 +225,7 @@ fn main() {
 
             build_tray(app)?;
 
-            // 每 3 秒把状态推一次；服务和中心都可能被别处改动。
+            // 每 3 秒把状态推一次；服务和监听地址都可能被别处改动。
             let poller = app.handle().clone();
             std::thread::spawn(move || loop {
                 std::thread::sleep(std::time::Duration::from_secs(3));
@@ -235,5 +235,5 @@ fn main() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("控制台启动失败");
+        .expect("Seven Station Control 启动失败");
 }

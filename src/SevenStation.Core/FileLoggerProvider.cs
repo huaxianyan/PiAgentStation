@@ -5,7 +5,7 @@ namespace SevenStation.Core;
 
 /// <summary>
 /// 把框架日志（Kestrel、中间件、异常）写进同一个文件。
-/// 这个中心是个后台服务，出问题时没人盯着控制台。
+/// 这个 Seven Station Core 是个后台服务，出问题时没人盯着 Seven Station Control。
 /// </summary>
 public sealed class FileLoggerProvider : ILoggerProvider
 {

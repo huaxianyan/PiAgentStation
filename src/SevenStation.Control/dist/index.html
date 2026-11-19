@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<title>Seven Station 中心</title>
+<title>Seven Station Core</title>
 <style>
   :root {
     color-scheme: light;
@@ -297,7 +297,7 @@
   <div class="foot">
     <span id="footNote"></span>
     <span class="spacer"></span>
-    <span>关掉窗口不会停掉中心 · 右键托盘图标可退出</span>
+    <span>关掉窗口不会停掉 Seven Station Core · 右键托盘图标可退出</span>
   </div>
 </div>
 
@@ -356,7 +356,7 @@
     el('statusSub').textContent = next.running
       ? (next.mode === 'service'
         ? [next.since, '后台服务，关掉这个窗口也照常跑'].filter(Boolean).join(' · ')
-        : '便携模式，关掉这个窗口中心就停了')
+        : '便携模式，关掉这个窗口 Seven Station Core 就停了')
       : '客户端现在连不上，点「启动」把它拉起来';
 
     el('toggleBtn').textContent = next.running ? '停止' : '启动';

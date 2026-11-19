@@ -3,13 +3,13 @@
   SevenStation 客户端的安装程序（MSI）。
 
   装给整台机器：客户端以后还要承担「节点」角色，节点是后台服务，机器级装法才立得住。
-  装的时候不问中心地址和令牌：装完第一次打开会走引导页填一次，之后在
-  「设置 → 这台设备连的中心」里随时改，填错不用重装。
+  装的时候不问 Seven Station Core 地址和令牌：装完第一次打开会走引导页填一次，之后在
+  「设置 → 这台设备连的 Seven Station Core」里随时改，填错不用重装。
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package
-      Name="SevenStation 客户端"
+      Name="Seven Station"
       Manufacturer="SevenStation"
       Version="$(var.Version)"
       UpgradeCode="dbac07cf-54b7-479c-a7ae-8029388412a7"
@@ -19,7 +19,7 @@
       Language="2052"
       InstallerVersion="500">
 
-    <SummaryInformation Description="SevenStation 客户端：连上中心看任务、下指令。" />
+    <SummaryInformation Description="SevenStation 客户端：连上 Seven Station Core 看任务、下指令。" />
 
     <Icon Id="AppIcon" SourceFile="$(var.IconFile)" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
@@ -50,7 +50,7 @@
     </Component>
 
     <Component Id="Shortcuts" Directory="ProgramMenuFolder" Guid="a7d5e2b8-3f14-4c96-8bd2-51c7f0a9e263">
-      <Shortcut Id="MenuShortcut" Name="SevenStation" Target="[#ClientExe]" WorkingDirectory="INSTALLFOLDER" />
+      <Shortcut Id="MenuShortcut" Name="Seven Station" Target="[#ClientExe]" WorkingDirectory="INSTALLFOLDER" />
       <Shortcut Id="DesktopShortcut" Name="SevenStation" Directory="DesktopFolder" Target="[#ClientExe]" WorkingDirectory="INSTALLFOLDER" />
       <RemoveFolder Id="RemoveMenuShortcut" On="uninstall" />
     </Component>
@@ -65,8 +65,8 @@
     <WixVariable Id="WixUIBannerBmp" Value="$(var.AssetsDir)\banner.bmp" />
     <WixVariable Id="WixUIDialogBmp" Value="$(var.AssetsDir)\dialog.bmp" />
 
-    <!-- 向导走 WixUI 默认的三页（欢迎/许可 → 进度 → 完成）。中心地址与令牌不在这里问：
-         客户端设置页里有「这台设备连的中心」那一块，装完随时能填能改，装的时候填错还得重装。 -->
+    <!-- 向导走 WixUI 默认的三页（欢迎/许可 → 进度 → 完成）。Seven Station Core 地址与令牌不在这里问：
+         客户端设置页里有「这台设备连的 Seven Station Core」那一块，装完随时能填能改，装的时候填错还得重装。 -->
     <ui:WixUI Id="WixUI_Minimal" />
 
   </Package>

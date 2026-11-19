@@ -1,1 +1,1 @@
-{"control-page":{"identifier":"control-page","description":"控制台页面可以调用壳的命令","local":true,"windows":["main"],"permissions":["core:default","allow-read-state","allow-control","allow-set-autostart","allow-set-lan","allow-regenerate-token","allow-copy-text","allow-open-target"]}}
+{"control-page":{"identifier":"control-page","description":"Seven Station Control 页面可以调用壳的命令","local":true,"windows":["main"],"permissions":["core:default","allow-read-state","allow-control","allow-set-autostart","allow-set-lan","allow-regenerate-token","allow-copy-text","allow-open-target"]}}

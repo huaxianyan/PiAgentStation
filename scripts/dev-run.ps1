@@ -1,9 +1,9 @@
-﻿# 起 SevenStation.Core（中心）+ Seven Station 桌面客户端。
+﻿# 起 SevenStation.Core（Seven Station Core）+ Seven Station 桌面客户端。
 #
 # 用法：
-#   pwsh -File scripts/dev-run.ps1
-#   pwsh -File scripts/dev-run.ps1 -SessionDir E:\tmp\pigui-sessions
-#   pwsh -File scripts/dev-run.ps1 -Listen http://0.0.0.0:8787   # 给局域网里的别的设备连
+# pwsh -File scripts/dev-run.ps1
+# pwsh -File scripts/dev-run.ps1 -SessionDir E:\tmp\pigui-sessions
+# pwsh -File scripts/dev-run.ps1 -Listen http://0.0.0.0:8787 # 给局域网里的别的设备连
 param(
     [string]$SessionDir = "",
     [string]$Listen = ""
@@ -49,7 +49,7 @@ if ($SessionDir) {
 if ($Listen) { $env:SEVENSTATION_LISTEN = $Listen }
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9222"
 
-# 中心的启动地址印在 center.out.log 里，里面带访问令牌。
+# Seven Station Core 的启动地址印在 center.out.log 里，里面带访问令牌。
 Start-Process -FilePath $serverExe -WorkingDirectory (Split-Path $serverExe) `
     -RedirectStandardOutput (Join-Path $logDir "center.out.log") `
     -RedirectStandardError (Join-Path $logDir "center.err.log") | Out-Null
@@ -67,9 +67,9 @@ for ($i = 0; $i -lt 60; $i++) {
 Start-Process -FilePath $desktopExe -WorkingDirectory $desktopProject `
     -RedirectStandardOutput (Join-Path $logDir "desktop.out.log") `
     -RedirectStandardError (Join-Path $logDir "desktop.err.log") | Out-Null
-Write-Host "中心：$probe"
-# 中心按 D7 搬到机器级目录，开发时也一样；下面这几行告诉你去哪看令牌和日志。
+Write-Host "Seven Station Core：$probe"
+# Seven Station Core 按 D7 搬到机器级目录，开发时也一样；下面这几行告诉你去哪看令牌和日志。
 $coreHome = Join-Path $env:ProgramData "SevenStation.Core"
 Write-Host "令牌：$(Join-Path $coreHome 'token.txt')"
-Write-Host "中心日志：$(Join-Path $coreHome 'logs/center.log')"
+Write-Host "Seven Station Core 日志：$(Join-Path $coreHome 'logs/center.log')"
 Write-Host "客户端日志：$logDir"

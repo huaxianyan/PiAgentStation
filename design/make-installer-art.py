@@ -24,7 +24,7 @@ MUTE = (201, 201, 208)
 
 
 def icon(size: int, light: bool) -> Image.Image:
-    """直接用控制台那枚图标，别在这里重画 π。"""
+    """直接用 Seven Station Control 那枚图标，别在这里重画 π。"""
     source = Image.open(ICONS / ("icon.ico" if light else "tray.png"))
     source = source.convert("RGBA")
     return source.resize((size, size), Image.LANCZOS)

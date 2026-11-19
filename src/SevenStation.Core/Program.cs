@@ -8,7 +8,7 @@ using SevenStation.Shared;
 
 var runningAsService = WindowsServiceHelpers.IsWindowsService();
 Log.Initialize(ProductPaths.CoreLogs, "center.log");
-Log.Write($"启动（{(runningAsService ? "Windows 服务" : "控制台")}），目录 {ProductPaths.CoreHome}");
+Log.Write($"启动（{(runningAsService ? "Windows 服务" : "Seven Station Control")}），目录 {ProductPaths.CoreHome}");
 
 MigrateLegacyData();
 
@@ -23,10 +23,10 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     Args = args,
     ContentRootPath = AppContext.BaseDirectory,
 });
-// 被 SCM 拉起时换成服务宿主；控制台直接跑时什么也不做。
+// 被 SCM 拉起时换成服务宿主；Seven Station Control 直接跑时什么也不做。
 builder.Host.UseWindowsService();
 builder.WebHost.UseUrls(listen);
-// 日志写自己的文件，控制台只留启动那几行，免得被 ASP.NET 默认日志淹掉。
+// 日志写自己的文件，Seven Station Control 只留启动那几行，免得被 ASP.NET 默认日志淹掉。
 builder.Logging.ClearProviders();
 builder.Logging.AddProvider(new FileLoggerProvider());
 
@@ -40,7 +40,7 @@ app.UseWebSockets();
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions
 {
-    // 前端是跟着中心一起更新的，客户端不能拿着旧缓存跑：每次都要回中心确认。
+    // 前端是跟着 Seven Station Core 一起更新的，客户端不能拿着旧缓存跑：每次都要回 Seven Station Core 确认。
     OnPrepareResponse = context =>
         context.Context.Response.Headers.CacheControl = "no-cache, must-revalidate",
 });
@@ -75,10 +75,10 @@ app.Lifetime.ApplicationStopping.Register(() =>
 {
     hub.ShutdownAsync().GetAwaiter().GetResult();
     store.Dispose();
-    Log.Write("中心停止");
+    Log.Write("Seven Station Core 停止");
 });
 
-Log.Write($"中心启动 {listen}，对话库 {store.DatabasePath}");
+Log.Write($"Seven Station Core 启动 {listen}，对话库 {store.DatabasePath}");
 if (!runningAsService)
 {
     Console.WriteLine($"SevenStation.Core 已启动：{listen}");
@@ -89,7 +89,7 @@ if (!runningAsService)
 app.Run();
 
 /// <summary>
-/// 0.3.0 之前中心和客户端共用 <c>%LOCALAPPDATA%\SevenStation</c>。按 D7 拆开后中心搬到
+/// 0.3.0 之前 Seven Station Core 和客户端共用 <c>%LOCALAPPDATA%\SevenStation</c>。按 D7 拆开后 Seven Station Core 搬到
 /// <c>%ProgramData%\SevenStation.Core</c>，老库与老令牌复制一次过去，别让用户丢历史。
 /// </summary>
 static void MigrateLegacyData()

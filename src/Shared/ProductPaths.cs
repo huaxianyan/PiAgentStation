@@ -3,13 +3,13 @@ using System.IO;
 namespace SevenStation.Shared;
 
 /// <summary>
-/// 两个产品的目录，各归各的。中心是机器级——它当服务跑的时候没有「当前用户」这回事，
+/// 两个产品的目录，各归各的。Seven Station Core 是机器级——它当服务跑的时候没有「当前用户」这回事，
 /// 数据、令牌、配置、日志都放 <c>%ProgramData%\SevenStation.Core</c>；客户端是用户级。
 /// </summary>
 public static class ProductPaths
 {
     /// <summary>
-    /// 中心根目录。<c>SEVENSTATION_CORE_HOME</c> 可整体挪走，开发和测试用它隔离，
+    /// Seven Station Core 根目录。<c>SEVENSTATION_CORE_HOME</c> 可整体挪走，开发和测试用它隔离，
     /// 免得动到真正在用的那一份。
     /// </summary>
     public static string CoreHome { get; } = Resolve(

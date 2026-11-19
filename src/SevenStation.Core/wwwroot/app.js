@@ -1,10 +1,10 @@
 'use strict';
 
 /* ------------------------------------------------------------------ *
- * 与中心通信
+ * 与 Seven Station Core 通信
  *
- * 页面由中心托管，命令与事件都走同一条 WebSocket，所以桌面壳和手机浏览器
- * 用的是同一套前端代码。令牌由中心生成，桌面壳拼在地址上，手机手动带上。
+ * 页面由 Seven Station Core 托管，命令与事件都走同一条 WebSocket，所以桌面壳和手机浏览器
+ * 用的是同一套前端代码。令牌由 Seven Station Core 生成，桌面壳拼在地址上，手机手动带上。
  * ------------------------------------------------------------------ */
 
 /* 界面偏好：放本地，换设备不跟着走。 */
@@ -48,13 +48,13 @@ function send(message) {
 
 function setConnectionState(text, ok) {
   el.connStatus.textContent = text;
-  el.connStatus.title = app.centerName ? '中心：' + app.centerName : '';
+  el.connStatus.title = app.centerName ? 'Seven Station Core：' + app.centerName : '';
   el.connStatus.className = 'conn' + (ok === true ? ' ok' : ok === false ? ' off' : '');
 }
 
 function connect() {
   if (!transport.token) {
-    setConnectionState('这个地址缺少访问令牌，用中心启动时打印的地址打开。', false);
+    setConnectionState('这个地址缺少访问令牌，用 Seven Station Core 启动时打印的地址打开。', false);
     return;
   }
 
@@ -639,7 +639,7 @@ function dateGroup(ms) {
 function renderSessionList() {
   const typed = app.filter.trim();
   const filter = typed.toLowerCase();
-  // 中心带回搜索结果时按内容命中显示，否则只在本地按标题过滤。
+  // Seven Station Core 带回搜索结果时按内容命中显示，否则只在本地按标题过滤。
   const searching = Boolean(typed) && app.searchResults?.query === typed;
   const pool = searching ? app.searchResults.items : app.sessions;
   const groups = new Map();
@@ -1179,7 +1179,7 @@ function renderThread(keepAnchor) {
   }
 }
 
-/** 顶部那行「加载更早的消息」：只在中心说上面还有的时候出现。 */
+/** 顶部那行「加载更早的消息」：只在 Seven Station Core 说上面还有的时候出现。 */
 function olderRow(session) {
   const row = document.createElement('div');
   row.className = 'older-row';
@@ -1837,7 +1837,7 @@ async function pickFolder(initial, onPick) {
 }
 
 /**
- * 选工作区用的目录选择器：目录列表由中心给（browse_dir），
+ * 选工作区用的目录选择器：目录列表由 Seven Station Core 给（browse_dir），
  * 浏览器里也能用，不依赖桌面客户端的原生对话框。
  */
 function openDirPicker(startPath, onPick) {
@@ -1956,7 +1956,7 @@ function renderDirListing(payload) {
 
 /**
  * 从 Pi 那边把旧会话收回来：左边按工作区分组，右边先看这段讲的是什么再决定恢复。
- * magpie 给的是整条 `pi --session <id>` 命令，切到那一栏粘进去，中心负责解析。
+ * magpie 给的是整条 `pi --session <id>` 命令，切到那一栏粘进去，Seven Station Core 负责解析。
  */
 function openRestoreDialog() {
   app.restore = {
@@ -2375,7 +2375,7 @@ function makeRestoreFoot(state) {
 
   const cancel = document.createElement('button');
   cancel.className = 'ghost-btn';
-  // 恢复是中心那边接着干的事，关掉窗口不会取消它，所以按钮说实话。
+  // 恢复是 Seven Station Core 那边接着干的事，关掉窗口不会取消它，所以按钮说实话。
   cancel.textContent = state.restoring ? '关掉这个窗口' : '取消';
   cancel.addEventListener('click', () => {
     if (state.restoring) endRestore(state);
@@ -2552,7 +2552,7 @@ function startSession(cwd) {
   app.lastCwd = cwd;
   if (!send({ type: 'new_conversation', cwd })) {
     setOverlay(null);
-    toast('还没连上中心，等连接恢复再试', 'warning');
+    toast('还没连上 Seven Station Core，等连接恢复再试', 'warning');
   }
 }
 
@@ -2819,7 +2819,7 @@ function renderAppearanceCard() {
 
 /**
  * 桌面客户端才有的桥：Tauri 注入的全局对象。浏览器里打开页面时它不存在，
- * 所以「这台设备连的中心」这一块在网页访问时不出现。
+ * 所以「这台设备连的 Seven Station Core」这一块在网页访问时不出现。
  */
 function clientInvoke() {
   const bridge = window.__TAURI__;
@@ -2829,19 +2829,19 @@ function clientInvoke() {
 
 /**
  * 这台设备自己的连接设置。装在别的机器上的客户端只认这一份，
- * 中心那台机器上的设置与它无关。
+ * Seven Station Core 那台机器上的设置与它无关。
  */
 function renderClientCenterCard() {
   const invoke = clientInvoke();
   if (!invoke) return null;
 
-  const card = makePageCard('这台设备连的中心');
+  const card = makePageCard('这台设备连的 Seven Station Core');
 
   const urlRow = document.createElement('div');
   urlRow.className = 'row-edit';
   const urlLabel = document.createElement('span');
   urlLabel.className = 'row-label';
-  urlLabel.textContent = '中心地址';
+  urlLabel.textContent = 'Seven Station Core 地址';
   const urlInput = document.createElement('input');
   urlInput.type = 'text';
   urlInput.placeholder = 'http://192.168.1.10:8787/';
@@ -2875,7 +2875,7 @@ function renderClientCenterCard() {
     const url = urlInput.value.trim();
     const token = tokenInput.value.trim();
     if (!url) {
-      status.textContent = '中心地址不能为空';
+      status.textContent = 'Seven Station Core 地址不能为空';
       return;
     }
 
@@ -2899,7 +2899,7 @@ function renderClientCenterCard() {
 
       status.textContent = config.token
         ? ''
-        : '还没有令牌，连不上中心';
+        : '还没有令牌，连不上 Seven Station Core';
     })
     .catch((error) => {
       status.textContent = '读不到当前设置：' + (error && error.message ? error.message : error);
@@ -2915,7 +2915,7 @@ function renderSettingsPage() {
 
   const connection = makePageCard('连接');
   addKeyValues(connection, [
-    ['中心', location.origin],
+    ['Seven Station Core', location.origin],
     ['版本', app.centerVersion || '未知'],
     ['状态', transport.connected ? '已连接' : '未连接'],
     ['数据文件', app.storePath || '未知'],
@@ -2932,7 +2932,7 @@ function renderSettingsPage() {
   const rows = agent && Array.isArray(agent.info) ? agent.info : [];
   addKeyValues(card, rows.length
     ? rows.map((row) => [row.label, row.value || '未知'])
-    : [['状态', '还没连上中心']]);
+    : [['状态', '还没连上 Seven Station Core']]);
   el.pageInner.appendChild(card);
 
   const recent = makePageCard('最近工作区');
@@ -3239,7 +3239,7 @@ function renderExtensionsPage() {
 }
 
 function requestExtensions() {
-  // 扩展命令是 Pi 报的，中心只认缓存。手上有开着的对话就顺手让它报一遍。
+  // 扩展命令是 Pi 报的，Seven Station Core 只认缓存。手上有开着的对话就顺手让它报一遍。
   const session = current();
   if (session && !session.commands) {
     send({ type: 'list_commands', key: session.key });
@@ -3687,7 +3687,7 @@ function exportMarkdown() {
 el.exportBtn.addEventListener('click', exportMarkdown);
 
 /* ------------------------------------------------------------------ *
- * 终端：每条对话一个常驻 shell，输出是中心广播过来的
+ * 终端：每条对话一个常驻 shell，输出是 Seven Station Core 广播过来的
  * ------------------------------------------------------------------ */
 
 const terminal = { history: [], cursor: -1 };
@@ -4120,12 +4120,12 @@ function dispatch(message) {
         app.recentWorkspaces = message.workspaces;
       }
       if (app.agent && app.agent.ready === false) {
-        toast(`中心那台机器上没找到 ${app.agent.name}，先把 ${app.agent.name} 装好再开始对话。`, 'warning');
+        toast(`Seven Station Core 那台机器上没找到 ${app.agent.name}，先把 ${app.agent.name} 装好再开始对话。`, 'warning');
       }
       break;
 
     case 'path_check': {
-      // 只提示，不拦人：中心那边建对话时本来就会校验目录。
+      // 只提示，不拦人：Seven Station Core 那边建对话时本来就会校验目录。
       const hint = el.modal.querySelector('.modal-hint');
       if (hint) {
         hint.textContent = message.exists ? '' : message.reason || '';

@@ -6,11 +6,15 @@ use std::process::{Command, Stdio};
 
 use serde::Serialize;
 
-/// 服务名、防火墙规则名、中心可执行文件名，都只在这里出现一次。
+/// 服务名、防火墙规则名、Seven Station Core 可执行文件名，都只在这里出现一次。
 pub const SERVICE: &str = "SevenStationCore";
-pub const FIREWALL_RULE: &str = "Seven Station 中心";
+pub const FIREWALL_RULE: &str = "Seven Station Core";
 /// 规则参数改过就把这串跟着改，老规则会被当成过期重建。
 const FIREWALL_MARK: &str = "SevenStation-LAN-V2";
+
+/// 改过名的老规则。名字一换，旧规则就再没人认领，但它还在放行端口，
+/// 所以每次动防火墙都顺手清掉。
+const LEGACY_FIREWALL_RULES: [&str; 1] = ["Seven Station 中心"];
 pub const CORE_EXE: &str = "SevenStation.Core.exe";
 
 /// 要提权才能做的事，把自己再拉起来一次，带上这个参数。
@@ -39,7 +43,7 @@ pub struct Snapshot {
 
 // ------------------------------ 目录 ------------------------------
 
-/// 中心根目录，`SEVENSTATION_CORE_HOME` 可整体挪走（开发和测试用它隔离）。
+/// Seven Station Core 根目录，`SEVENSTATION_CORE_HOME` 可整体挪走（开发和测试用它隔离）。
 pub fn home() -> PathBuf {
     match std::env::var("SEVENSTATION_CORE_HOME") {
         Ok(value) if !value.trim().is_empty() => PathBuf::from(value.trim()),
@@ -141,13 +145,13 @@ pub fn start() -> Result<(), String> {
         return match code {
             0 => wait_for(true),
             ERROR_ACCESS_DENIED => elevate(&["start"]),
-            _ => Err("中心没启动起来，可以在「事件查看器」里看服务为什么退出。".into()),
+            _ => Err("Seven Station Core 没启动起来，可以在「事件查看器」里看服务为什么退出。".into()),
         };
     }
 
     let exe = core_exe_path()?;
     if !exe.exists() {
-        return Err(format!("没找到 {CORE_EXE}，它应该和控制台放在同一个目录里。"));
+        return Err(format!("没找到 {CORE_EXE}，它应该和 Seven Station Control 放在同一个目录里。"));
     }
 
     Command::new(&exe)
@@ -164,7 +168,7 @@ pub fn stop() -> Result<(), String> {
         return match code {
             0 => wait_for(false),
             ERROR_ACCESS_DENIED => elevate(&["stop"]),
-            _ => Err("中心没停下来，稍后再试一次。".into()),
+            _ => Err("Seven Station Core 没停下来，稍后再试一次。".into()),
         };
     }
 
@@ -174,7 +178,7 @@ pub fn stop() -> Result<(), String> {
 
     run("taskkill.exe", &["/IM", CORE_EXE, "/T", "/F"]);
     if portable_running() {
-        return Err("中心没停下来，稍后再试一次。".into());
+        return Err("Seven Station Core 没停下来，稍后再试一次。".into());
     }
     Ok(())
 }
@@ -193,7 +197,7 @@ pub fn restart() -> Result<(), String> {
         return match code {
             0 => wait_for(true),
             ERROR_ACCESS_DENIED => elevate(&["restart"]),
-            _ => Err("中心没启动起来，可以在「事件查看器」里看服务为什么退出。".into()),
+            _ => Err("Seven Station Core 没启动起来，可以在「事件查看器」里看服务为什么退出。".into()),
         };
     }
 
@@ -211,9 +215,9 @@ fn wait_for(running: bool) -> Result<(), String> {
     }
 
     Err(if running {
-        "中心没启动起来，可以在「事件查看器」里看服务为什么退出。".to_string()
+        "Seven Station Core 没启动起来，可以在「事件查看器」里看服务为什么退出。".to_string()
     } else {
-        "中心没停下来，稍后再试一次。".to_string()
+        "Seven Station Core 没停下来，稍后再试一次。".to_string()
     })
 }
 
@@ -277,6 +281,10 @@ fn add_firewall_rule(port: u16) -> Result<(), String> {
 
     // 参数变了就重建：老规则可能只放行专用网络，留着等于没生效。
     let _ = run("netsh.exe", &["advfirewall", "firewall", "delete", "rule", &name]);
+    for legacy in LEGACY_FIREWALL_RULES {
+        let legacy = format!("name={legacy}");
+        let _ = run("netsh.exe", &["advfirewall", "firewall", "delete", "rule", &legacy]);
+    }
 
     let (code, _) = run(
         "netsh.exe",
@@ -325,7 +333,7 @@ pub fn regenerate_token() -> Result<(), String> {
     fs::create_dir_all(home()).map_err(|error| format!("写不进令牌文件：{error}"))?;
     fs::write(token_file(), token).map_err(|error| format!("写不进令牌文件：{error}"))?;
 
-    // 中心只在启动时读令牌，改完得让它重新起一次，否则新令牌不生效。
+    // Seven Station Core 只在启动时读令牌，改完得让它重新起一次，否则新令牌不生效。
     restart()
 }
 
@@ -414,12 +422,12 @@ fn tail_log(lines: usize) -> Vec<String> {
     all[all.len().saturating_sub(lines)..].to_vec()
 }
 
-/// 运行时长从日志里最后一条「中心启动」反推：服务跑在系统账户下，普通权限读不到它的进程时间。
+/// 运行时长从日志里最后一条「Seven Station Core 启动」反推：服务跑在系统账户下，普通权限读不到它的进程时间。
 fn since_text() -> String {
     let started = tail_log(400)
         .into_iter()
         .rev()
-        .find(|line| line.contains("中心启动"))
+        .find(|line| line.contains("Seven Station Core 启动"))
         .and_then(|line| parse_log_time(&line));
 
     let Some(started) = started else {

@@ -10,7 +10,7 @@ using SevenStation.Shared;
 namespace SevenStation.Core;
 
 /// <summary>
-/// 对话中心。对话是 SevenStation.Core 自己的概念：存在本地数据库里，客户端只跟这里打交道。
+/// 对话 Seven Station Core。对话是 SevenStation.Core 自己的概念：存在本地数据库里，客户端只跟这里打交道。
 /// 每个对话在需要时对应一个 <c>pi --mode rpc</c> 子进程，Pi 的会话文件只是一条内部绑定，
 /// 用来续聊，不暴露给客户端。每轮结束把消息取回来存进数据库，之后看历史不再经过 Pi。
 /// </summary>
@@ -44,7 +44,7 @@ public sealed class CenterHub
         ListenUrl = listenUrl;
     }
 
-    /// <summary>中心对外报的地址，界面拿去给人看，方便照着连别的设备。</summary>
+    /// <summary>Seven Station Core 对外报的地址，界面拿去给人看，方便照着连别的设备。</summary>
     public string ListenUrl { get; }
 
     public void Join(CenterConnection connection)
@@ -335,7 +335,7 @@ public sealed class CenterHub
     {
         var id = Require(message["sessionId"]?.GetValue<string>() ?? string.Empty, "会话标识");
         var candidate = PiSessionLibrary.Resolve(id)
-            ?? throw new InvalidOperationException("中心这台机器上找不到这段会话，可能已经被删掉了。");
+            ?? throw new InvalidOperationException("Seven Station Core 这台机器上找不到这段会话，可能已经被删掉了。");
 
         var existing = _store.List()
             .FirstOrDefault(conversation =>
@@ -538,7 +538,7 @@ public sealed class CenterHub
             .ToList();
     }
 
-    /// <summary>中心这台机器上的 Pi 装好了没有，界面在设置里给个准话。</summary>
+    /// <summary>Seven Station Core 这台机器上的 Pi 装好了没有，界面在设置里给个准话。</summary>
     /// <summary>把注册表里的 Agent 名片转成协议里的形状。</summary>
     private static JsonArray AgentPayload()
     {
@@ -827,7 +827,7 @@ public sealed class CenterHub
                             continue;
                         }
 
-                        if (next.StartsWith("  ", StringComparison.Ordinal) || next.StartsWith('\t'))
+                        if (next.StartsWith(" ", StringComparison.Ordinal) || next.StartsWith('\t'))
                         {
                             parts.Add(next.Trim());
                             index++;
@@ -913,7 +913,7 @@ public sealed class CenterHub
         }
 
         // 扩展命令只认缓存：不去为了列个清单悄悄起一个 Pi 会话。
-        // 用户打开对话、在输入框里打过 / 之后，中心这边就有了这个工作区的缓存。
+        // 用户打开对话、在输入框里打过 / 之后，Seven Station Core 这边就有了这个工作区的缓存。
         var commands = new JsonArray();
         if (!string.IsNullOrWhiteSpace(cwd) &&
             ParseNode(_store.GetSetting("commands:" + cwd.ToLowerInvariant())) is JsonArray cached)
@@ -1000,7 +1000,7 @@ public sealed class CenterHub
     }
 
     /// <summary>
-    /// 自定义样式存在中心，换设备打开也是同一套；改完推给所有在线客户端，立刻生效。
+    /// 自定义样式存在 Seven Station Core，换设备打开也是同一套；改完推给所有在线客户端，立刻生效。
     /// </summary>
     private void SetCustomCss(string css)
     {
@@ -1012,7 +1012,7 @@ public sealed class CenterHub
         });
     }
 
-    /// <summary>中心日志的尾巴。手机上出了问题先看这一屏，不用回电脑翻文件。</summary>
+    /// <summary>Seven Station Core 日志的尾巴。手机上出了问题先看这一屏，不用回电脑翻文件。</summary>
     private static void ReadLog(int lines, CenterConnection sender)
     {
         var tail = Math.Clamp(lines, 20, 500);
@@ -1308,7 +1308,7 @@ public sealed class CenterHub
     }
 
     /// <summary>
-    /// 输入框里打 @ 时的路径补全。这活不经过 Pi：中心自己扫工作区，
+    /// 输入框里打 @ 时的路径补全。这活不经过 Pi：Seven Station Core 自己扫工作区，
     /// 会话在哪台机器上，补的就是哪台机器上的文件。
     /// </summary>
     private void CompleteFiles(string id, JsonObject message, CenterConnection sender)
