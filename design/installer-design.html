@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>安装程序画面</title>
+  <meta name="design-schema" content="3.0">
+  <style>*,*::before,*::after{box-sizing:border-box} *{margin:0} img{display:block} svg:not([data-fill]) > :not([fill]):not([stroke]){fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round} :root{ --color-ink:#1a1a1d; --color-paper:#ffffff; --color-page:#f7f7f9; --color-hair:#e8e8ed; --color-line:#c9c9d0; --color-soft:#3f3f46; --color-mute:#6b6b73; --font-ui:"Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif; --size-body:12px; --size-title:13px }</style>
+  <style>section[data-type="page"]{ margin:0 0 28px }</style>
+</head>
+<body>
+  <section data-id="welcome" data-type="page" data-name="欢迎页" data-canvas="0,0" style="width:493px;height:312px;background-color:#ffffff;font-family:var(--font-ui)">
+    <div data-id="welcome__banner" data-type="frame" data-name="顶栏" style="position:absolute;left:0;top:0;width:493px;height:58px;background-color:#ffffff;border-width:0 0 1px 0;border-style:solid;border-color:var(--color-hair)">
+      <img data-id="welcome__mark" data-type="image" data-name="淡淡的 π" src="http://127.0.0.1:8787/mark-dark.png" alt="Seven Station 标志" style="position:absolute;left:451px;top:19px;width:20px;height:20px;opacity:0.35" />
+      <p data-id="welcome__title" data-type="text" data-name="页面标题" style="position:absolute;left:14px;top:17px;width:420px;font-size:var(--size-title);font-weight:600;color:var(--color-ink);line-height:1.4">欢迎使用 Seven Station 中心 安装向导</p>
+    </div>
+    <div data-id="welcome__art" data-type="frame" data-name="左侧图" style="position:absolute;left:0;top:58px;width:164px;height:254px;background-color:var(--color-ink)">
+      <img data-id="welcome__art-mark" data-type="image" data-name="图标" src="http://127.0.0.1:8787/mark-dark.png" alt="Seven Station 标志" style="position:absolute;left:40px;top:56px;width:84px;height:84px" />
+    </div>
+    <div data-id="welcome__body" data-type="frame" data-name="文案" style="position:absolute;left:178px;top:74px;width:299px;display:flex;flex-direction:column;gap:9px">
+      <p data-id="welcome__p1" data-type="text" style="font-size:var(--size-body);line-height:1.75;color:var(--color-soft)">安装程序会把 Seven Station 中心装到这台机器上，作为后台服务运行，负责对话库、模型配置和任务下发。</p>
+      <p data-id="welcome__p2" data-type="text" style="font-size:var(--size-body);line-height:1.75;color:var(--color-soft)">安装完还会一起装上控制台：开服务、看日志、改监听地址都在这一个窗口里。</p>
+      <p data-id="welcome__p3" data-type="text" style="font-size:var(--size-body);line-height:1.75;color:var(--color-soft)">要继续，请点「下一步」。</p>
+    </div>
+    <div data-id="welcome__actions" data-type="frame" data-name="按钮" style="position:absolute;left:245px;top:273px;display:flex;flex-direction:row;gap:8px">
+      <div data-id="welcome__back" data-type="frame" style="width:72px;height:25px;display:flex;align-items:center;justify-content:center;background-color:#fbfbfc;border:1px solid #e2e2e8;border-radius:3px"><p data-id="welcome__back-t" data-type="text" style="font-size:var(--size-body);color:#b6b6bd">上一步</p></div>
+      <div data-id="welcome__next" data-type="frame" style="width:72px;height:25px;display:flex;align-items:center;justify-content:center;background-color:#fbfbfc;border:1px solid #8f8f98;border-radius:3px"><p data-id="welcome__next-t" data-type="text" style="font-size:var(--size-body);color:var(--color-ink)">下一步</p></div>
+      <div data-id="welcome__cancel" data-type="frame" style="width:72px;height:25px;display:flex;align-items:center;justify-content:center;background-color:#fbfbfc;border:1px solid var(--color-line);border-radius:3px"><p data-id="welcome__cancel-t" data-type="text" style="font-size:var(--size-body);color:var(--color-ink)">取消</p></div>
+    </div>
+  </section>
+
+  <section data-id="install" data-type="page" data-name="安装中" data-canvas="540,0" style="width:493px;height:312px;background-color:#ffffff;font-family:var(--font-ui)">
+    <div data-id="install__banner" data-type="frame" data-name="顶栏" style="position:absolute;left:0;top:0;width:493px;height:58px;background-color:#ffffff;border-width:0 0 1px 0;border-style:solid;border-color:var(--color-hair)">
+      <img data-id="install__mark" data-type="image" src="http://127.0.0.1:8787/mark-dark.png" alt="Seven Station 标志" style="position:absolute;left:451px;top:19px;width:20px;height:20px;opacity:0.35" />
+      <p data-id="install__title" data-type="text" style="position:absolute;left:14px;top:17px;width:420px;font-size:var(--size-title);font-weight:600;color:var(--color-ink);line-height:1.4">正在安装 Seven Station 中心</p>
+    </div>
+    <div data-id="install__art" data-type="frame" style="position:absolute;left:0;top:58px;width:164px;height:254px;background-color:var(--color-ink)">
+      <img data-id="install__art-mark" data-type="image" src="http://127.0.0.1:8787/mark-dark.png" alt="Seven Station 标志" style="position:absolute;left:40px;top:56px;width:84px;height:84px" />
+    </div>
+    <div data-id="install__body" data-type="frame" style="position:absolute;left:178px;top:74px;width:299px;display:flex;flex-direction:column;gap:9px">
+      <p data-id="install__p1" data-type="text" style="font-size:var(--size-body);line-height:1.75;color:var(--color-soft)">正在复制文件并注册服务。</p>
+      <div data-id="install__path" data-type="frame" style="width:fit-content;padding:4px 7px;background-color:var(--color-page);border:1px solid var(--color-hair);border-radius:4px"><p data-id="install__path-t" data-type="text" style="font-size:11px;color:var(--color-soft)">C:\Program Files\SevenStation Core</p></div>
+    </div>
+    <div data-id="install__track" data-type="frame" style="position:absolute;left:178px;top:150px;width:295px;height:12px;background-color:#ffffff;border:1px solid var(--color-line)">
+      <div data-id="install__fill" data-type="frame" style="position:absolute;left:0;top:0;width:183px;height:10px;background-color:var(--color-ink)"></div>
+    </div>
+    <p data-id="install__tip" data-type="text" style="position:absolute;left:178px;top:172px;width:299px;font-size:11px;color:var(--color-mute)">正在注册服务 SevenStationCore…</p>
+    <div data-id="install__actions" data-type="frame" style="position:absolute;left:245px;top:273px;display:flex;flex-direction:row;gap:8px">
+      <div data-id="install__back" data-type="frame" style="width:72px;height:25px;display:flex;align-items:center;justify-content:center;background-color:#fbfbfc;border:1px solid #e2e2e8;border-radius:3px"><p data-id="install__back-t" data-type="text" style="font-size:var(--size-body);color:#b6b6bd">上一步</p></div>
+      <div data-id="install__next" data-type="frame" style="width:72px;height:25px;display:flex;align-items:center;justify-content:center;background-color:#fbfbfc;border:1px solid #e2e2e8;border-radius:3px"><p data-id="install__next-t" data-type="text" style="font-size:var(--size-body);color:#b6b6bd">下一步</p></div>
+      <div data-id="install__cancel" data-type="frame" style="width:72px;height:25px;display:flex;align-items:center;justify-content:center;background-color:#fbfbfc;border:1px solid var(--color-line);border-radius:3px"><p data-id="install__cancel-t" data-type="text" style="font-size:var(--size-body);color:var(--color-ink)">取消</p></div>
+    </div>
+  </section>
+
+  <section data-id="finish" data-type="page" data-name="完成页" data-canvas="0,360" style="width:493px;height:312px;background-color:#ffffff;font-family:var(--font-ui)">
+    <div data-id="finish__banner" data-type="frame" style="position:absolute;left:0;top:0;width:493px;height:58px;background-color:#ffffff;border-width:0 0 1px 0;border-style:solid;border-color:var(--color-hair)">
+      <img data-id="finish__mark" data-type="image" src="http://127.0.0.1:8787/mark-dark.png" alt="Seven Station 标志" style="position:absolute;left:451px;top:19px;width:20px;height:20px;opacity:0.35" />
+      <p data-id="finish__title" data-type="text" style="position:absolute;left:14px;top:17px;width:420px;font-size:var(--size-title);font-weight:600;color:var(--color-ink);line-height:1.4">完成 Seven Station 中心 安装向导</p>
+    </div>
+    <div data-id="finish__art" data-type="frame" style="position:absolute;left:0;top:58px;width:164px;height:254px;background-color:var(--color-ink)">
+      <img data-id="finish__art-mark" data-type="image" src="http://127.0.0.1:8787/mark-dark.png" alt="Seven Station 标志" style="position:absolute;left:40px;top:56px;width:84px;height:84px" />
+    </div>
+    <div data-id="finish__body" data-type="frame" style="position:absolute;left:178px;top:74px;width:299px;display:flex;flex-direction:column;gap:9px">
+      <p data-id="finish__p1" data-type="text" style="font-size:var(--size-body);line-height:1.75;color:var(--color-soft)">中心已经作为服务装好并在后台运行，控制台也在开始菜单里。</p>
+      <p data-id="finish__p2" data-type="text" style="font-size:var(--size-body);line-height:1.75;color:var(--color-soft)">点「完成」会打开控制台，那里能拿到访问地址和令牌，用来配别的设备。</p>
+    </div>
+    <div data-id="finish__actions" data-type="frame" style="position:absolute;left:269px;top:273px;display:flex;flex-direction:row;gap:8px">
+      <div data-id="finish__back" data-type="frame" style="width:72px;height:25px;display:flex;align-items:center;justify-content:center;background-color:#fbfbfc;border:1px solid #e2e2e8;border-radius:3px"><p data-id="finish__back-t" data-type="text" style="font-size:var(--size-body);color:#b6b6bd">上一步</p></div>
+      <div data-id="finish__done" data-type="frame" style="width:72px;height:25px;display:flex;align-items:center;justify-content:center;background-color:#fbfbfc;border:1px solid #8f8f98;border-radius:3px"><p data-id="finish__done-t" data-type="text" style="font-size:var(--size-body);color:var(--color-ink)">完成</p></div>
+      <div data-id="finish__cancel" data-type="frame" style="width:72px;height:25px;display:flex;align-items:center;justify-content:center;background-color:#fbfbfc;border:1px solid var(--color-line);border-radius:3px"><p data-id="finish__cancel-t" data-type="text" style="font-size:var(--size-body);color:var(--color-ink)">取消</p></div>
+    </div>
+  </section>
+
+  <section data-id="banners" data-type="page" data-name="顶栏两个方向" data-canvas="540,360" style="width:493px;height:220px;background-color:#ffffff;font-family:var(--font-ui)">
+    <p data-id="banners__label-a" data-type="text" style="position:absolute;left:0;top:4px;width:493px;font-size:11px;color:var(--color-mute)">A · 白底（推荐）：安静，和系统向导一致</p>
+    <div data-id="banners__a" data-type="frame" style="position:absolute;left:0;top:24px;width:493px;height:58px;background-color:#ffffff;border:1px solid var(--color-line)">
+      <img data-id="banners__a-mark" data-type="image" src="http://127.0.0.1:8787/mark-dark.png" alt="Seven Station 标志" style="position:absolute;left:451px;top:19px;width:20px;height:20px;opacity:0.35" />
+      <p data-id="banners__a-title" data-type="text" style="position:absolute;left:14px;top:17px;font-size:var(--size-title);font-weight:600;color:var(--color-ink)">欢迎使用 Seven Station 中心 安装向导</p>
+    </div>
+    <p data-id="banners__label-b" data-type="text" style="position:absolute;left:0;top:104px;width:493px;font-size:11px;color:var(--color-mute)">B · 深底：品牌感更强，但标题是向导自己画的，改反白要动 WiX 主题</p>
+    <div data-id="banners__b" data-type="frame" style="position:absolute;left:0;top:124px;width:493px;height:58px;background-color:var(--color-ink);border:1px solid var(--color-line)">
+      <img data-id="banners__b-mark" data-type="image" src="http://127.0.0.1:8787/mark-dark.png" alt="Seven Station 标志" style="position:absolute;left:451px;top:19px;width:20px;height:20px;opacity:0.45" />
+      <p data-id="banners__b-title" data-type="text" style="position:absolute;left:14px;top:17px;font-size:var(--size-title);font-weight:600;color:#ffffff">欢迎使用 Seven Station 中心 安装向导</p>
+    </div>
+  </section>
+
+  <section data-id="arp" data-type="page" data-name="应用和功能那一项" data-canvas="0,700" style="width:493px;height:110px;background-color:#ffffff;font-family:var(--font-ui)">
+    <p data-id="arp__label" data-type="text" style="position:absolute;left:0;top:6px;width:493px;font-size:11px;color:var(--color-mute)">「应用和功能」里那一项（ARPPRODUCTICON 用同一枚图标）</p>
+    <div data-id="arp__row" data-type="frame" style="position:absolute;left:0;top:28px;width:493px;padding:9px 12px;display:flex;flex-direction:row;align-items:center;gap:10px;background-color:#ffffff;border:1px solid #dcdce2">
+      <img data-id="arp__icon" data-type="image" src="http://127.0.0.1:8787/mark-dark.png" alt="Seven Station 标志" style="width:24px;height:24px" />
+      <p data-id="arp__name" data-type="text" style="font-size:var(--size-body);font-weight:600;color:var(--color-ink)">Seven Station 中心</p>
+      <p data-id="arp__meta" data-type="text" style="font-size:var(--size-body);color:var(--color-mute)">0.4.0 · 42 MB</p>
+    </div>
+  </section>
+</body>
+</html>
