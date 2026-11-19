@@ -44,6 +44,9 @@ public sealed class CenterHub
     private readonly Dictionary<string, Live> _live = new();
     private int _queueSeq;
 
+    /// <summary>演示开关用：记录第几次发送，单数失败、双数放行。</summary>
+    private int _demoAttempts;
+
     /// <summary>模型缓存的保鲜期：超过就从 Pi 重新取一次。</summary>
     private const long ModelsTtlMs = 24 * 60 * 60 * 1000;
     private readonly Dictionary<string, TerminalSession> _terminals = new();
@@ -1885,7 +1888,9 @@ public sealed class CenterHub
 
         // 演示用：起实例时带上 SEVENSTATION_DEBUG_FAIL_PROMPT=1，每句话都当场失败，
         // 方便看「没发出去」那个红圈长什么样。正式运行时不必设置。
-        if (Environment.GetEnvironmentVariable("SEVENSTATION_DEBUG_FAIL_PROMPT") == "1")
+        // 单数失败、双数成功：先看到红圈，点「重新发送」就能看到它转起来并送达。
+        if (Environment.GetEnvironmentVariable("SEVENSTATION_DEBUG_FAIL_PROMPT") == "1"
+            && Interlocked.Increment(ref _demoAttempts) % 2 == 1)
         {
             sender.Send(new JsonObject
             {

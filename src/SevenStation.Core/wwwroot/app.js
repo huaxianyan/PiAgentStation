@@ -1247,22 +1247,12 @@ function renderThread(keepAnchor) {
 
   if (session.hasMore) el.threadInner.appendChild(olderRow(session));
 
-  // 还没被 Core 确认的回显不在 raw 里，重建时要自己带上，否则气泡会凭空消失。
-  const echoes = session.items.filter((item) => item.echo && item.state !== 'sent');
-
   const turns = turnsOf(session);
   turns.forEach((turn, index) => {
     const node = turnNode(turn, session, index === turns.length - 1);
     app.turnNodes.push({ items: turn.items, node });
     el.threadInner.appendChild(node);
   });
-
-  if (echoes.length) {
-    const extra = document.createElement('div');
-    extra.className = 'turn';
-    for (const item of echoes) extra.appendChild(userNode(item));
-    el.threadInner.appendChild(extra);
-  }
 
   if (keepAnchor) {
     el.thread.scrollTop = el.thread.scrollHeight - anchor;
@@ -4323,7 +4313,9 @@ function retryEcho(item) {
   if (!session) return;
 
   item.state = 'sending';
+  session.streaming = true;
   patchItem(item);
+  renderComposerState();
 
   const message = { type: 'prompt', key: session.key, message: item.text };
   if (item.payloadImages && item.payloadImages.length) {
@@ -4922,7 +4914,10 @@ function onOlderMessages(message) {
     const live = session.items.find((item) => item.id === session.liveId);
     if (live) built.items.push(live);
   }
+  // 没被 Core 确认的回显不在 raw 里，重建时要接回末尾，否则气泡会凭空消失。
+  const pending = session.items.filter((item) => item.echo && item.state !== 'sent');
   session.items = built.items;
+  if (pending.length) session.items.push(...pending);
   session.toolIndex = built.toolIndex;
   session.seq = session.items.length;
   if (current() === session) renderThread(true);
