@@ -31,6 +31,12 @@ public sealed class CenterHub
 
         /// <summary>本轮已经写进库的消息指纹，同一条只落一次。</summary>
         public HashSet<string> Persisted { get; } = new();
+
+        /// <summary>
+        /// 用户按过停止。这时候别再偷偷把排队的话塞回去——他只想要现在停下来，
+        /// 不是「停完接着干下一件」。到 agent_settled 时清掉。
+        /// </summary>
+        public bool StopRequested { get; set; }
     }
 
     private sealed record QueuedPrompt(string Id, string Text, JsonArray? Images);
@@ -164,6 +170,10 @@ public sealed class CenterHub
                     break;
 
                 case "abort":
+                    if (LiveFor(Require(key, "对话标识")) is { } stopping)
+                    {
+                        stopping.StopRequested = true;
+                    }
                     await SimpleAsync(Require(key, "对话标识"), "abort");
                     break;
 
@@ -1657,6 +1667,13 @@ public sealed class CenterHub
                     live.Persisted.Clear();
                 }
             }
+            else if (name == "turn_end")
+            {
+                // 一个回合（模型这一轮回答 + 它的工具调用）结束了。排队的话就在这儿交给 Pi：
+                // 带 streamingBehavior: "steer"，Pi 会在下一次调模型前采用它。
+                // 等 agent_settled 才送的话，一整轮跑多久就要等多久，那不叫追加。
+                if (live.Streaming && !live.StopRequested) _ = DeliverQueuedAsync(live, steering: true);
+            }
             else if (name == "agent_end")
             {
                 // 一次运行结束。只借它把「忙」标识放掉，排队交给下面的 agent_settled，
@@ -1670,6 +1687,7 @@ public sealed class CenterHub
 
                 // 用户按下停止时不替他继续干活：排队的留在面板里，由他自己决定发还是删。
                 var aborted = record["aborted"]?.GetValue<bool>() == true;
+                live.StopRequested = false;
                 if (!aborted) _ = DeliverQueuedAsync(live);
             }
             else if (name == "message_end")
@@ -2021,8 +2039,12 @@ public sealed class CenterHub
         });
     }
 
-    /// <summary>这一轮结束后送下一条。一次只送一条，剩下的等下一轮，跟排队时看到的一致。</summary>
-    private async Task DeliverQueuedAsync(Live live)
+    /// <summary>
+    /// 送一条排队的话给 Pi。一次只送一条，剩下的等下一回合，跟排队时看到的一致。
+    /// <paramref name="steering"/> 为真时带 <c>streamingBehavior: "steer"</c>，
+    /// Pi 会在下一次调模型前插进去；整轮都结束了才叫（agent_settled）就不带，当作新一轮的起点。
+    /// </summary>
+    private async Task DeliverQueuedAsync(Live live, bool steering = false)
     {
         QueuedPrompt? next;
         lock (live.Queue)
@@ -2035,6 +2057,10 @@ public sealed class CenterHub
         BroadcastQueue(live);
 
         var command = new JsonObject { ["type"] = "prompt", ["message"] = next.Text };
+        if (steering)
+        {
+            command["streamingBehavior"] = "steer";
+        }
         if (next.Images is not null)
         {
             command["images"] = next.Images.DeepClone();
@@ -2042,7 +2068,7 @@ public sealed class CenterHub
 
         try
         {
-            SetStreaming(live, true);
+            if (!steering) SetStreaming(live, true);
             await live.Session.SendAsync(command, TimeSpan.FromSeconds(60));
         }
         catch (Exception error)

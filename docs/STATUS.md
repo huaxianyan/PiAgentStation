@@ -22,6 +22,22 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-035：追加输入改为「回合边界」送出，不再等整轮结束（2026-11-20，未发版）
+
+- 用户报的现象属实：`DeliverQueuedAsync` 只在 `agent_settled` 里调用，也就是整轮任务彻底结束后才把
+  排队的第一条送出去，剩下的还要再等一轮——一个跑五分钟的任务，追加的话要等五分钟才生效。
+- 改法：在 `turn_end`（模型这一轮回答 + 它的工具调用结束）就把队首那条交给 Pi，带
+  `streamingBehavior: "steer"`，Pi 会在下一次调模型前采用它。`agent_settled` 那条保留，作为兜底
+  （整轮结束后还有剩的就当新一轮起点）。一次仍然只送一条。
+- 停止保护：新增 `Live.StopRequested`（`abort` 时置位、`agent_settled` 清掉），按过停止就不再往 Pi 塞，
+  排队的留在面板里由用户自己决定。只在 `live.Streaming` 时送，避免空闲时带 steer 出错。
+- 队列仍然由 Seven Station Core 自己持有，所以「编辑」照旧可用：条目在 panel 里的时候能改，
+  被回合边界送出去之后就改不了了——和 Pi TUI 里 alt+Q 的可用窗口一致。删除/清空也照旧。
+- 实测（临时实例 8899，多步任务 + 中途追加）：
+  `6.6s` 入队（queue_state=1）→ `9.8s` 队空（已在回合边界送出）→ `10.1s` 追加的话落地 → `16.5s` 整轮结束。
+  日志里没有「送出排队消息失败」。
+- 出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 43.7 MB（`e35ea0b156b69a8c…`）。
+
 ## STATUS-034：Control 改 Pi 目录被 ACL 挡了 + 待发图片挪到空隙里（2026-11-19，未发版）
 
 - **`Command set_pi_dir not allowed by ACL`**：用户点的是「重新探测」（空路径 = 清掉后让 Core 重找），
