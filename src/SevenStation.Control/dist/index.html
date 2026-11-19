@@ -284,9 +284,11 @@
     <div class="row">
       <span class="label">Pi 安装目录</span>
       <span class="value mono" id="piDir"></span>
-      <span class="actions">
+      <span class="actions" id="piActions">
         <button class="link" id="editPi">更改</button>
         <button class="link" id="probePi">重新探测</button>
+        <button class="link" id="savePi" hidden>保存</button>
+        <button class="link" id="cancelPi" hidden>取消</button>
       </span>
     </div>
     <p class="hint" id="piHint" hidden>没找到 Pi，点「更改」填它的安装目录（一般是 <code>用户名\.pi\agent</code>）。</p>
@@ -352,11 +354,6 @@
         case 'regenerate': await invoke('regenerate_token'); break;
         case 'copy': await invoke('copy_text', { text: extra.text }); toast('已复制'); break;
         case 'open': await invoke('open_target', { target: extra.target }); break;
-        case 'pi':
-          await invoke('set_pi_dir', { path: extra.path });
-          toast(extra.path ? '已保存，正在重启 Seven Station Core' : '已清空，下次启动重新探测');
-          render(await invoke('read_state'));
-          break;
       }
     } catch (error) {
       toast(typeof error === 'string' ? error : '这一步没做成。');
@@ -425,32 +422,92 @@
   }
 
   // 改 Pi 目录：就地换成输入框，Enter 存、Esc 取消，别为一行字弹个对话框。
+  // Pi 安装目录：改的时候按钮变成「保存 / 取消」，不用靠敲回车——以前一失焦就取消，粘贴后回车常常落空。
+  let previousPi = '';
+
+  function setPiEditing(value) {
+    el('editPi').hidden = value;
+    el('probePi').hidden = value;
+    el('savePi').hidden = !value;
+    el('cancelPi').hidden = !value;
+  }
+
+  function savePi() {
+    const input = el('piInput');
+    if (!input) return;
+    setPiEditing(false);
+    applyPiDir(input.value);
+  }
+
+  function cancelPi() {
+    setPiEditing(false);
+    render(state);
+  }
+
   el('editPi').addEventListener('click', () => {
     const cell = el('piDir');
     const input = document.createElement('input');
+    input.id = 'piInput';
     input.value = (state && state.piDirectory) || '';
     input.placeholder = 'C:\\Users\\你\\.pi\\agent';
-
-    let settled = false;
-    const stop = (save) => {
-      if (settled) return;
-      settled = true;
-      if (save) send('pi', { path: input.value });
-      else render(state);
-    };
-
+    // 回车保存、Esc 取消。不再「失焦就取消」：粘贴的时候一失焦，刚贴进去的就没了。
     input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') { event.preventDefault(); stop(true); }
-      if (event.key === 'Escape') { event.preventDefault(); stop(false); }
+      if (event.key === 'Enter') { event.preventDefault(); savePi(); }
+      if (event.key === 'Escape') { event.preventDefault(); cancelPi(); }
     });
-    input.addEventListener('blur', () => stop(false));
 
     cell.replaceChildren(input);
+    setPiEditing(true);
     input.focus();
     input.select();
   });
 
-  el('probePi').addEventListener('click', () => send('pi', { path: '' }));
+  el('savePi').addEventListener('click', savePi);
+  el('cancelPi').addEventListener('click', cancelPi);
+
+  el('probePi').addEventListener('click', () => {
+    previousPi = (state && state.piDirectory) || '';
+    applyPiDir('');
+  });
+
+  // 保存或重新探测：等服务真重启完再读状态。读早了就会显示成「还没配」，人会以为探测失败。
+  async function applyPiDir(path) {
+    el('piDir').textContent = path || '正在重新探测…';
+    el('piDir').style.color = 'var(--text-mute)';
+    el('piHint').hidden = false;
+    el('piHint').textContent = '正在重启 Seven Station Core，等它起来…';
+
+    try {
+      await invoke('set_pi_dir', { path });
+    } catch (error) {
+      toast(typeof error === 'string' ? error : '这一步没做成。');
+      render(await invoke('read_state'));
+      return;
+    }
+
+    const deadline = Date.now() + 15000;
+    let next = await invoke('read_state');
+    while (Date.now() < deadline && !next.piReady) {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      next = await invoke('read_state');
+    }
+    render(next);
+
+    if (next.piReady) {
+      toast('Pi 在 ' + next.piDirectory);
+      return;
+    }
+
+    if (!path && previousPi) {
+      // 探测不出来就把原来的路径填回去，别把人家的配置弄丢。
+      await invoke('set_pi_dir', { path: previousPi }).catch(() => {});
+      render(await invoke('read_state'));
+      toast('没探测到 Pi，已经填回原来的路径。');
+      return;
+    }
+
+    toast('没找到 Pi，把它的安装目录填进来。');
+  }
 
   function escapeHtml(text) {
     return String(text).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));

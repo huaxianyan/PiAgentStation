@@ -188,11 +188,18 @@ fn write_pi_dir(path: &str) -> Result<(), String> {
     let file = settings_file();
     fs::create_dir_all(home()).map_err(|error| format!("写不进配置：{error}"))?;
 
-    let mut settings = fs::read_to_string(&file)
+    // 读不懂就别写：以前这里读失败会从空对象开始，一写就把 Listen 之类整份配置抹了。
+    let existing = fs::read_to_string(&file).unwrap_or_else(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            String::from("{}")
+        } else {
+            String::new()
+        }
+    });
+    let mut settings = serde_json::from_str::<serde_json::Value>(&existing)
         .ok()
-        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
         .and_then(|value| value.as_object().cloned())
-        .unwrap_or_default();
+        .ok_or_else(|| format!("现有配置读不懂，先不动它：{}", file.display()))?;
 
     let agents = settings
         .entry("Agents")
