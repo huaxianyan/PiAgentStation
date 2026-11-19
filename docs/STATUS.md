@@ -29,8 +29,11 @@
 - 出包：`SevenStationCore-win-x64-0.4.1.msi`（43.3 MB，SHA-256 `54f96072…df7736`）与
   `SevenStation-win-x64-0.4.1.msi`（3.2 MB，SHA-256 `b6d07af3…65e53e9a`），MSI 里 ProductVersion 都是 0.4.1。
   构建信息表在 `build/release/v0.4.1.md`，源码提交 `e77e04e`。
-- `main` 与标签 `v0.4.1` 已用 SSH 推上去。**GitHub Release 还没建**：本机 `gh` 的 token 失效
-  （`gh auth status` 报 invalid），创建 Release 与上传资产只能走 API，等用户重新登录或手动创建。
+- `main` 与标签 `v0.4.1` 用 SSH 推；Release 由用户在自己会话里执行 `gh release create` 建好。
+  核对：标题 `v0.4.1`、非草稿、四个资产（两个 MSI + 两个 .sha256）无显示标签、字节数与本地一致；
+  把两个包下载回来算 SHA-256，与本地逐字节一致；正文与 `build/release/v0.4.1.md` 完全相同（40 行，含构建信息表）。
+- `gh` 这次踩到：新版 gh 把 token 存进 Windows 凭据管理器，`hosts.yml` 里只剩用户名，
+  所以以 SYSTEM 身份（本会话）跑 `gh` 永远 invalid；发布命令要让用户在自己的会话里跑。
 - 构建环境的两个坑：`dotnet publish` 卡在还原是 MSBuild server 的问题，设
   `DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1` 后 48 秒过；WiX 的 UI 扩展按系统账户档案找，
   `%USERPROFILE%` 覆盖无效，扩展要复制到 `C:\Windows\system32\config\systemprofile\.wix\extensions`。
