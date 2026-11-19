@@ -323,6 +323,36 @@ function toast(message, kind) {
   setTimeout(() => node.remove(), kind === 'error' ? 9000 : 4500);
 }
 
+/**
+ * 常驻一条状态通知：一秒钟内完不成的操作（压缩、停止）用它。
+ * 同一张卡片从「进行中 + 转圈」翻成结果，不要开始一条、结束再来一条。
+ */
+function statusToast(text) {
+  const node = document.createElement('div');
+  node.className = 'toast is-busy';
+
+  const spin = document.createElement('span');
+  spin.className = 'toast-spin';
+  const label = document.createElement('span');
+  label.textContent = text;
+  node.append(spin, label);
+  el.toasts.appendChild(node);
+
+  let timer = 0;
+  return {
+    update(next, kind) {
+      window.clearTimeout(timer);
+      node.className = 'toast' + (kind ? ' ' + kind : '');
+      node.textContent = next;
+      timer = window.setTimeout(() => node.remove(), kind === 'error' ? 9000 : 3200);
+    },
+    remove() {
+      window.clearTimeout(timer);
+      node.remove();
+    },
+  };
+}
+
 function setOverlay(text) {
   if (!text) {
     el.overlay.hidden = true;
@@ -3706,7 +3736,15 @@ el.compactBtn.addEventListener('click', () => {
   const session = current();
   if (!session) return;
   send({ type: 'compact', key: session.key });
-  toast('正在压缩上下文');
+  if (!app.compactionToast) {
+    const handle = statusToast('正在压缩上下文');
+    app.compactionToast = handle;
+    window.setTimeout(() => {
+      if (app.compactionToast !== handle) return;
+      app.compactionToast = null;
+      handle.update('压缩好像没结束，可以再点一次', 'warning');
+    }, 120000);
+  }
 });
 
 /* ------------------------------------------------------------------ *
@@ -3765,8 +3803,7 @@ document.addEventListener('keydown', (event) => {
     const session = current();
     if (session && session.streaming) {
       event.preventDefault();
-      send({ type: 'abort', key: session.key });
-      toast('已请求停止');
+      requestStop(session);
     }
     return;
   }
@@ -3955,11 +3992,28 @@ function acceptCompletion() {
   }
 }
 
+/** 停止要跟 Core 说一声才生效，这中间给一条「正在停止」，别让人以为没点上。 */
+function requestStop(session) {
+  if (!session || !session.streaming) return;
+  send({ type: 'abort', key: session.key });
+
+  const pending = { key: session.key, handle: statusToast('正在停止') };
+  stopPending = pending;
+
+  // 万一 Core 那边没回音，别让圈一直转。
+  window.setTimeout(() => {
+    if (stopPending !== pending) return;
+    stopPending = null;
+    pending.handle.update('还没停下来，可以再点一次', 'warning');
+  }, 15000);
+}
+
+let stopPending = null;
+
 el.sendBtn.addEventListener('click', () => {
   const session = current();
   if (session && session.streaming) {
-    send({ type: 'abort', key: session.key });
-    toast('已请求停止');
+    requestStop(session);
     return;
   }
   submitPrompt();
@@ -4932,6 +4986,11 @@ function onModels(message) {
 }
 
 function onProcessExit(message) {
+  if (stopPending && stopPending.key === message.key) {
+    stopPending.handle.update('已停止');
+    stopPending = null;
+  }
+
   const session = app.byKey.get(message.key);
   app.byKey.delete(message.key);
   const detail = message.stderr ? '\n' + message.stderr.split('\n').slice(-4).join('\n') : '';
@@ -5079,6 +5138,11 @@ function onEvent(key, event) {
     }
 
     case 'agent_settled': {
+      if (stopPending && stopPending.key === key) {
+        stopPending.handle.update(event.aborted ? '已停止' : '本轮已结束');
+        stopPending = null;
+      }
+
       session.streaming = false;
       const item = liveItem(session);
       if (item) {
@@ -5111,13 +5175,18 @@ function onEvent(key, event) {
       break;
 
     case 'compaction_start':
-      toast('开始压缩上下文');
+      // 也可能是 Pi 自己触发的自动压缩，这时没有点击过按钮。
+      app.compactionToast = app.compactionToast || statusToast('正在压缩上下文');
       break;
 
-    case 'compaction_end':
-      toast('上下文已压缩');
+    case 'compaction_end': {
+      const running = app.compactionToast;
+      app.compactionToast = null;
+      if (running) running.update('上下文已压缩');
+      else toast('上下文已压缩');
       send({ type: 'refresh_stats', key });
       break;
+    }
 
     case 'extension_ui_request':
       onExtensionRequest(session, event);

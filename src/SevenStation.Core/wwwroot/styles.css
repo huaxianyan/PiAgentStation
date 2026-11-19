@@ -2115,6 +2115,23 @@ body.dragging .composer-box {
   animation: rise .16s ease-out;
 }
 
+/* 进行中的那条：左边一个小圈转着，做完就把圈换成结果文字。 */
+.toast.is-busy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast-spin {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in oklab, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  animation: spin .8s linear infinite;
+}
+
 .toast.warning {
   border-color: color-mix(in oklab, #c8891a 45%, var(--border));
   background: color-mix(in oklab, #f0b63c 12%, var(--card));
