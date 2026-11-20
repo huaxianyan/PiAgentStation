@@ -22,6 +22,26 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-046：正文里的地址点了不跳浏览器（2026-11-20，已修未发版）
+
+用户报：点地址链接也不会跳浏览器，之前以为只有本地路径不行。
+
+原因：地址是渲染成 `<a target="_blank">` 的。WebView2 里「开新窗口」要走宿主的 `NewWindowRequested`，
+Tauri 壳没接这个请求，点了就什么都不发生（指针变手、看着能点，实际是空响）。本地路径没事，是因为
+`.link-path` 有自己的点击处理，直接调壳的 `reveal_path`。
+
+改法：
+
+- 壳新增 `open_url` 命令：只认 `http://` / `https://`，用 `explorer.exe <地址>` 起系统浏览器
+  （不让页面拿壳当随便起程序的入口）。登记进 `build.rs` 的 `AppManifest` 与 `capabilities/center.json`
+  （`allow-open-url`）。
+- 前端加 `openUrl()`，并在全局点击处理里拦截 `.md a[href]` / `.msg a[href]`：
+  壳里调 `invoke('open_url')`，浏览器里退回 `window.open`，其余（`#`、锚点）不受影响。
+
+出包：`dist/SevenStationCore-win-x64-0.4.1.msi`（`5e3f416288fb5bac…`）、
+`dist/SevenStation-win-x64-0.4.1.msi`（`757101a764d1213c…`）。
+**两个都要装**：开浏览器的命令在壳里，拦截逻辑在 Core 的页面上。
+
 ## STATUS-045：Pi 压缩上下文会抹掉对话历史（2026-11-20，已修未发版）
 
 用户报：客户端里看不到在终端（TUI）里那段对话的记录。

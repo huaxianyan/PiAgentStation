@@ -538,6 +538,21 @@ function revealPath(path) {
   send({ type: 'reveal_path', path });
 }
 
+/**
+ * 打开一个地址。
+ * 桌面客户端里 `target="_blank"` 是打不开外部浏览器的：WebView2 新窗口请求交给壳，
+ * 壳不接就什么都不发生（以前就是这个毛病，指针变成手了但点了没反应）。
+ * 浏览器里照常开新标签页。
+ */
+function openUrl(url) {
+  const shell = window.__TAURI__ && window.__TAURI__.core;
+  if (shell && typeof shell.invoke === 'function') {
+    shell.invoke('open_url', { url }).catch(() => window.open(url, '_blank', 'noopener'));
+    return;
+  }
+  window.open(url, '_blank', 'noopener');
+}
+
 function renderMarkdown(text) {
   const holder = document.createElement('div');
   holder.innerHTML = renderMarkdownInner(text);
@@ -4728,6 +4743,15 @@ document.addEventListener('click', (event) => {
   if (pathLink) {
     event.preventDefault();
     revealPath(pathLink.dataset.path);
+    return;
+  }
+
+  // 正文里的地址：壳里自己开浏览器，浏览器里就走默认行为。
+  const outLink = event.target.closest('.md a[href], .msg a[href]');
+  const href = outLink && outLink.getAttribute('href');
+  if (href && /^https?:/i.test(href)) {
+    event.preventDefault();
+    openUrl(href);
     return;
   }
 

@@ -9,6 +9,7 @@
     "core:default",
     "allow-pick-folder",
     "allow-reveal-path",
+    "allow-open-url",
     "allow-center-local",
     "allow-client-config-get",
     "allow-client-config-save"

@@ -314,6 +314,21 @@ fn reveal_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// 用系统浏览器打开一个地址。只认 http/https，别让页面把壳当成随便起程序的入口。
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    let target = url.trim();
+    if !(target.starts_with("http://") || target.starts_with("https://")) {
+        return Err("只支持 http/https 地址".into());
+    }
+
+    std::process::Command::new("explorer.exe")
+        .arg(target)
+        .spawn()
+        .map_err(|error| format!("打不开浏览器：{error}"))?;
+    Ok(())
+}
+
 /// 页面问壳：Seven Station Core 在本机吗。
 #[tauri::command]
 fn center_local(app: tauri::AppHandle) -> bool {
@@ -339,6 +354,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             pick_folder,
             reveal_path,
+            open_url,
             center_local,
             client_config_get,
             client_config_save
