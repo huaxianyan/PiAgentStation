@@ -947,7 +947,7 @@ function renderSessionList() {
       open.setAttribute('role', 'button');
       open.setAttribute('tabindex', '0');
       const marker = conversation.working
-        ? '<span class="session-spin" aria-hidden="true"></span>'
+        ? '<span class="session-spin" aria-hidden="true" style="animation-delay:' + spinPhase(900) + '"></span>'
         : '<span class="session-dot' + (conversation.status === 'ready' ? ' is-ready' : '') +
           '" aria-hidden="true"></span>';
       open.innerHTML =
@@ -1299,7 +1299,10 @@ function stepStateNode(entry) {
   span.className = 'st-state';
 
   if (stepRunning(entry)) {
-    span.innerHTML = '<span class="spin"></span>';
+    const spin = document.createElement('span');
+    spin.className = 'spin';
+    spin.style.animationDelay = spinPhase(900);
+    span.appendChild(spin);
     span.title = '正在跑';
     return span;
   }
@@ -1958,6 +1961,25 @@ function updateLiveTurn(node, turn) {
   return true;
 }
 
+/** 两个状态节点长得一样吗：一样就留着老的，别把动画重置了。 */
+/**
+ * 转圈动画的相位对齐到墙上时钟。
+ * 过程区每来一条事件都可能把这一行（甚至整轮）重画，新建的节点会让 animation 从 0° 重来；
+ * 事件密的时候看着就跟卡住一样。用负的 animation-delay 把相位钉在时钟上，
+ * 重画多少次看到的都是同一个角度、接着转。
+ */
+function spinPhase(durationMs) {
+  const now = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+  return '-' + Math.round(now % durationMs) + 'ms';
+}
+
+function sameState(left, right) {
+  if (left.className !== right.className) return false;
+  if ((left.title || '') !== (right.title || '')) return false;
+  if (left.textContent !== right.textContent) return false;
+  return Boolean(left.querySelector('.spin')) === Boolean(right.querySelector('.spin'));
+}
+
 /** 就地改一行：摘要、状态、时长；详情开着的话把内容也换新。 */
 function updateLiveRow(row, entry) {
   const summary = stepSummaryText(entry);
@@ -1968,7 +1990,12 @@ function updateLiveRow(row, entry) {
   }
 
   const state = row.querySelector('.st-state');
-  if (state) state.replaceWith(stepStateNode(entry));
+  if (state) {
+    const next = stepStateNode(entry);
+    // 在跑的那一步每来一条事件都会进到这里。状态节点整个换掉 = 转圈动画回到 0°：
+    // 事件密的时候看着就像卡住不动（不是 CSS 或后端的锅）。内容一样就别动它。
+    if (!sameState(state, next)) state.replaceWith(next);
+  }
 
   const time = row.querySelector('.st-time');
   if (time) time.textContent = timeText(entry);
