@@ -76,6 +76,10 @@
 
   --accent: #ecedf0;
   --accent-soft: #2a2d33;
+  /* 深色下强调色是浅的，上面的字得反过来用深墨色（开关旋钮靠这个）。 */
+  --on-accent: #14161a;
+  /* 发送键在深色下是深底 + 一圈亮描边，主操作靠这圈线认，不靠浅色底。 */
+  --send-ring: #55595f;
 
   --bubble-user: color-mix(in oklab, var(--accent) 16%, var(--card));
   --bubble-user-line: transparent;
@@ -2053,12 +2057,24 @@ body.dragging .composer-box {
 .send-btn.stop { background: var(--accent); color: var(--on-accent); }
 .send-btn.stop:hover { filter: brightness(.92); }
 
-/* 停止：圆底里一个 9 像素的白方块。 */
+/* 深色下不靠浅底：跟随气泡底，加一圈亮描边，箭头用正文色。 */
+:root[data-theme="dark"] .send-btn.ready,
+:root[data-theme="dark"] .send-btn.stop {
+  background: var(--bubble);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--send-ring);
+}
+
+/* 深底上压暗就更看不见了，悬停改成提亮。 */
+:root[data-theme="dark"] .send-btn.ready:hover,
+:root[data-theme="dark"] .send-btn.stop:hover { filter: brightness(1.45); }
+
+/* 停止：圆底里一个 9 像素方块，颜色跟着按钮字色走，深浅主题都不用另配。 */
 .send-stop-mark {
   width: 9px;
   height: 9px;
   border-radius: 2px;
-  background: var(--on-accent);
+  background: currentColor;
 }
 
 /* 提示行常在「工作中」才出现，行高固定预留一行，否则输入卡片会被顶上去。

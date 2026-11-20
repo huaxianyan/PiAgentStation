@@ -22,6 +22,23 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-047：深色模式发送键用「深底 + 亮描边」（2026-11-20，未发版）
+
+用户报：深色下发送键的白箭头贴在浅灰底上，几乎看不见（箭头 `#ffffff`、底 `#ecedf0`，对比约 1.1:1）。
+根因：`--accent` 在深色主题里是浅色 `#ecedf0`，而 `--on-accent` 只在 `:root` 里定义过 `#ffffff`，深色没覆盖。
+
+给了三版原型（`work/proto-send-dark.html`，浅底深墨 / 深底亮描边 / 中性深灰底），用户选 **B：深底 + 亮描边**。
+
+落地：
+
+- 深色主题加 `--send-ring: #55595f`；`.send-btn.ready/.stop` 在 `[data-theme="dark"]` 下改成
+  `background: var(--bubble)`、`color: var(--text)`、`box-shadow: inset 0 0 0 1px var(--send-ring)`。
+- 深底上压暗会更看不见，悬停从 `brightness(.92)` 改成 `brightness(1.45)`。
+- `.send-stop-mark` 的方块色改成 `currentColor`，深浅主题都不用另配。
+- `--on-accent` 在深色下保持 `#14161a`（只剩开关旋钮用它，浅色轨道上要深色旋钮）。
+
+出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 43.7 MB（`c3af9200abb09135…`）。
+
 ## STATUS-046：正文里的地址点了不跳浏览器（2026-11-20，已修未发版）
 
 用户报：点地址链接也不会跳浏览器，之前以为只有本地路径不行。
