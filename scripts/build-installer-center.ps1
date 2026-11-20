@@ -73,6 +73,11 @@ $name = "SevenStationCore-win-x64-$version"
 $msi = Join-Path $dist "$name.msi"
 Remove-Item $msi -Force -ErrorAction SilentlyContinue
 Remove-Item "$msi.sha256" -Force -ErrorAction SilentlyContinue
+Remove-Item "$msi.wixpdb" -Force -ErrorAction SilentlyContinue
+
+# dist 里只留当前版本的包：以前的老版本留着，装的时候很容易点错。
+Get-ChildItem $dist -Filter "*-win-x64-*.msi*" | Where-Object { $_.Name -notlike "*$version*" } | Remove-Item -Force -ErrorAction SilentlyContinue
+Get-ChildItem $dist -Filter "*-win-x64-*.wixpdb" | Where-Object { $_.Name -notlike "*$version*" } | Remove-Item -Force -ErrorAction SilentlyContinue
 
 Push-Location (Split-Path -Parent $installer)
 try {

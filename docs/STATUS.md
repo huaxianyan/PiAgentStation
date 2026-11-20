@@ -22,6 +22,15 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-052：dist 只留当前版本的包（2026-11-20）
+
+用户嫌安装时挑不清哪个是最新包。清掉 `dist/` 里的 0.4.0 三件套（msi、sha256、wixpdb），
+并在两个打包脚本里加了一步：打包前把 `dist/` 里**版本号不是当前版本**的 `*-win-x64-*.msi*` 与 `.wixpdb` 删掉。
+顺手补上 `wixpdb` 的覆盖删除（原来只删了 msi 与 sha256）。
+
+验证：故意塞回 `SevenStationCore-win-x64-0.4.0.msi` 与 `SevenStation-win-x64-0.4.0.msi.sha256`，
+跑一次 `build-installer-center.ps1`，两个假文件都被清掉，`dist/` 只剩 0.4.1。
+
 ## STATUS-051：点路径直接打开文件（2026-11-20，未发版）
 
 用户要求的：路径点到文件就直接打开那个文件，别再开资源管理器把它选中。
