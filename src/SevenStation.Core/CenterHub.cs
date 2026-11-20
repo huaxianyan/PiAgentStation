@@ -470,7 +470,7 @@ public sealed class CenterHub
     }
 
     /// <summary>
-    /// 在资源管理器里定位一个路径。界面里出现的绝对路径点一下就能过去，省掉复制粘贴。
+    /// 打开一个路径：目录开文件夹，文件用关联程序打开。界面里出现的绝对路径点一下就能过去，省掉复制粘贴。
     /// 只认本机存在且是绝对路径的，别的一律不动手。
     /// </summary>
     private void RevealPath(CenterConnection sender, JsonObject message)
@@ -482,8 +482,7 @@ public sealed class CenterHub
             return;
         }
 
-        var isDirectory = Directory.Exists(path);
-        if (!isDirectory && !File.Exists(path))
+        if (!Directory.Exists(path) && !File.Exists(path))
         {
             sender.Send(new JsonObject { ["type"] = "notice", ["text"] = "找不到这个路径：" + path, ["kind"] = "warning" });
             return;
@@ -492,8 +491,8 @@ public sealed class CenterHub
         try
         {
             var start = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
-            // 文件用 /select, 选中它；目录直接打开。
-            start.ArgumentList.Add(isDirectory ? path : "/select," + path);
+            // 目录开文件夹，文件交给默认程序（explorer 自己认关联）。
+            start.ArgumentList.Add(path);
             Process.Start(start);
         }
         catch (Exception ex)

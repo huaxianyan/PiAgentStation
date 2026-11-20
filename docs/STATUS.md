@@ -22,6 +22,21 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-051：点路径直接打开文件（2026-11-20，未发版）
+
+用户要求的：路径点到文件就直接打开那个文件，别再开资源管理器把它选中。
+
+- 桌面壳 `reveal_path`：`explorer.exe <路径>` 一句话搞定两种——目录开文件夹，文件用关联程序打开
+  （原来文件走 `/select,`，只是选中）。先 `fs::metadata` 确认存在，不存在就直接报「找不到这个路径」，
+  不让 explorer 自己弹框。
+- Core 的兜底 `RevealPath()` 同步：`ArgumentList.Add(path)`，并删掉没用的 `isDirectory`。
+- 前端链接悬停提示从「在资源管理器里打开」改成「打开这个路径」。
+- 给 Pi 的说明也改口径：点路径直接打开（目录开文件夹、文件用默认程序），所以给路径要给到具体文件，
+  别只给目录让人自己找。
+
+出包：`dist/SevenStationCore-win-x64-0.4.1.msi`（`8bfe546e3fb561f0…`）、
+`dist/SevenStation-win-x64-0.4.1.msi`（`91da2b0c3353a499…`）。
+
 ## STATUS-050：给 Pi 的界面说明补上「你在 Seven Station 里」（2026-11-20，未发版）
 
 用户提的：Pi 一直以为自己在跟终端里的人对话，答话方式还是终端味。它确实不知道自己在 Seven Station 里跑。

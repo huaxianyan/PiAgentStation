@@ -510,7 +510,7 @@ function renderInline(text) {
   return out;
 }
 
-/** 正文里出现的地址和绝对路径要能点：地址开浏览器，路径开资源管理器。 */
+/** 正文里出现的地址和绝对路径要能点：地址开浏览器，路径直接打开（目录开文件夹，文件用默认程序）。 */
 // 带引号的路径整段吃下来（Windows 路径里常有空格），所以排在裸路径前面。
 // 裸路径不能把中文标点吃进去，否则“E:\a\b，然后”整句都成了链接。
 const LINKABLE = /https?:\/\/[^\s<>"'`？，。；！、（）【】《》]+|"[A-Za-z]:\\[^"]*"|\b[A-Za-z]:\\[^\s<>"'`|?*，。；：！？、（）【】《》「」『』]+|\\\\[^\s<>"'`|?*，。；：！？、（）【】《》「」『』]+/g;
@@ -560,7 +560,7 @@ function decorateLinks(root) {
         link.className = 'link-path';
         link.href = '#';
         link.dataset.path = url;
-        link.title = '在资源管理器里打开';
+        link.title = '打开这个路径';
       }
       fragment.appendChild(link);
 
@@ -574,7 +574,7 @@ function decorateLinks(root) {
 }
 
 /**
- * 打开一个路径。
+ * 打开一个路径：目录开文件夹，文件用默认程序直接打开。
  * 桌面客户端让壳自己开（壳跑在用户会话里，窗口才看得见）；
  * 在浏览器里或者壳那边不认账时退回 Core，Core 至少会回一句「找不到这个路径」。
  */

@@ -291,7 +291,7 @@ async fn pick_folder(app: tauri::AppHandle, initial: Option<String>) -> Option<S
 }
 
 
-/// 在资源管理器里定位文件或目录。
+/// 打开一个路径：目录在资源管理器里打开，文件用默认程序直接打开。
 ///
 /// 这件事必须由壳来做：Seven Station Core 是 Windows 服务，它 `Process.Start` 出来的
 /// explorer 活在会话 0，用户屏幕上什么都不会出现（点了就像没反应）。
@@ -302,15 +302,14 @@ fn reveal_path(path: String) -> Result<(), String> {
         return Err("没有路径".into());
     }
 
-    let meta = fs::metadata(target).map_err(|_| format!("找不到这个路径：{target}"))?;
-    let mut command = std::process::Command::new("explorer.exe");
-    if meta.is_dir() {
-        command.arg(target);
-    } else {
-        // 文件要选中它自己，而不是把所在目录打开。
-        command.arg(format!("/select,{target}"));
-    }
-    command.spawn().map_err(|error| error.to_string())?;
+    // 先确认它还在：不然 explorer 会自己弹一个「找不到」的框，不如我们在页面上说清楚。
+    fs::metadata(target).map_err(|_| format!("找不到这个路径：{target}"))?;
+
+    // explorer 对目录是打开文件夹，对文件是用关联程序打开。
+    std::process::Command::new("explorer.exe")
+        .arg(target)
+        .spawn()
+        .map_err(|error| error.to_string())?;
     Ok(())
 }
 
