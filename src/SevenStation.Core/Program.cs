@@ -1,7 +1,9 @@
 using System.Net.WebSockets;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
+using System.Net.NetworkInformation;
 using System.Text;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using SevenStation.Core;
 using SevenStation.Core.Storage;
@@ -37,6 +39,7 @@ var app = builder.Build();
 
 var store = new ConversationStore(Path.Combine(ProductPaths.CoreDataDirectory, "sevenstation.db"));
 Log.Write($"对话库：{store.DatabasePath}");
+var devices = new DeviceStore(store.DatabasePath);
 var hub = new CenterHub(store, listen);
 
 app.UseWebSockets();
@@ -56,7 +59,7 @@ app.Map("/ws", async (HttpContext context) =>
         return;
     }
 
-    if (!TokenStore.Matches(context, token))
+    if (!TokenStore.Matches(context, token) && devices.Match(TokenStore.Provided(context)) is null)
     {
         Log.Write("拒绝了一个令牌不匹配的连接");
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -66,6 +69,65 @@ app.Map("/ws", async (HttpContext context) =>
     using var socket = await context.WebSockets.AcceptWebSocketAsync();
     var connection = new CenterConnection(socket, hub);
     await connection.RunAsync(context.RequestAborted);
+});
+
+// 管理接口只认主令牌：设备令牌能看对话，但不能给自己再发一个。
+bool Admin(HttpContext context) => TokenStore.Matches(context, token);
+
+var port = new Uri(listen).Port;
+
+app.MapGet("/api/addresses", (HttpContext context) =>
+    Admin(context)
+        ? Results.Json(new { port, addresses = DeviceStore.Addresses(port) })
+        : Results.StatusCode(StatusCodes.Status401Unauthorized));
+
+app.MapGet("/api/devices", (HttpContext context) =>
+    Admin(context)
+        ? Results.Json(new { devices = devices.List() })
+        : Results.StatusCode(StatusCodes.Status401Unauthorized));
+
+app.MapPost("/api/devices", async (HttpContext context) =>
+{
+    if (!Admin(context)) return Results.StatusCode(StatusCodes.Status401Unauthorized);
+
+    string? name = null;
+    try
+    {
+        var body = await JsonNode.ParseAsync(context.Request.Body);
+        name = body?["name"]?.GetValue<string>();
+    }
+    catch
+    {
+        // 没带 body 就用默认名字。
+    }
+
+    var device = devices.Add(name ?? string.Empty);
+    Log.Write($"新增设备 {device["name"]}（{device["id"]}）");
+    return Results.Json(new { device });
+});
+
+app.MapPost("/api/devices/{id}/revoke", (HttpContext context, string id) =>
+{
+    if (!Admin(context)) return Results.StatusCode(StatusCodes.Status401Unauthorized);
+
+    devices.Revoke(id);
+    Log.Write($"作废设备 {id}");
+    return Results.Json(new { revoked = id });
+});
+
+/// <summary>
+/// 把一段文字画成二维码（SVG）。Control 拿它直接塞进页面，自己不用引二维码库，
+/// Control 那边也就不必处理二进制响应。
+/// </summary>
+app.MapGet("/api/qr", (HttpContext context, string? data) =>
+{
+    if (!Admin(context)) return Results.StatusCode(StatusCodes.Status401Unauthorized);
+    if (string.IsNullOrWhiteSpace(data)) return Results.StatusCode(StatusCodes.Status400BadRequest);
+
+    using var generator = new QRCoder.QRCodeGenerator();
+    using var code = generator.CreateQrCode(data, QRCoder.QRCodeGenerator.ECCLevel.M);
+    var svg = new QRCoder.SvgQRCode(code).GetGraphic(4);
+    return Results.Content(svg, "image/svg+xml");
 });
 
 app.MapGet("/health", () => Results.Json(new
@@ -164,8 +226,8 @@ internal static class TokenStore
         return generated;
     }
 
-    /// <summary>接受 <c>?token=</c> 或 <c>Authorization: Bearer</c>。</summary>
-    public static bool Matches(HttpContext context, string expected)
+    /// <summary>请求里带的令牌：<c>?token=</c> 或 <c>Authorization: Bearer</c>。</summary>
+    public static string Provided(HttpContext context)
     {
         var provided = context.Request.Query["token"].ToString();
         if (string.IsNullOrEmpty(provided))
@@ -178,6 +240,13 @@ internal static class TokenStore
             }
         }
 
+        return provided;
+    }
+
+    /// <summary>跟主令牌比，长度先比再定长比，避免按字节泄露时间差。</summary>
+    public static bool Matches(HttpContext context, string expected)
+    {
+        var provided = Provided(context);
         if (string.IsNullOrEmpty(provided))
         {
             return false;

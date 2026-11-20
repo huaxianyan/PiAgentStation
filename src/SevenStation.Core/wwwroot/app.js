@@ -25,12 +25,60 @@ function savePrefs() {
 
 /* 外观放在 appearance.js，那边先于渲染跑，这里只管画设置页那张卡。 */
 
+const TOKEN_KEY = 'sevenstation.token';
+
+/**
+ * 令牌来源：地址栏的 ?token=（扫码或别人发来的地址）→ 本机存储。
+ * 地址栏里那个只用来交接一次，存下来之后从 URL 上抹掉，免得留在历史记录里。
+ */
+function readToken() {
+  let fromUrl = '';
+  try {
+    fromUrl = new URLSearchParams(location.search).get('token') || '';
+  } catch {
+    fromUrl = '';
+  }
+
+  if (fromUrl) {
+    try {
+      localStorage.setItem(TOKEN_KEY, fromUrl);
+    } catch {
+      // 浏览器禁了存储就算了，这一次照样能用。
+    }
+
+    try {
+      const clean = new URL(location.href);
+      clean.searchParams.delete('token');
+      history.replaceState(null, '', clean.pathname + (clean.search ? clean.search : ''));
+    } catch {
+      // 换不掉也无所谓。
+    }
+
+    return fromUrl;
+  }
+
+  try {
+    return localStorage.getItem(TOKEN_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function saveToken(value) {
+  try {
+    localStorage.setItem(TOKEN_KEY, value);
+  } catch {
+    // 存不下就只在这次会话里用。
+  }
+  transport.token = value;
+}
+
 const transport = {
   socket: null,
   connected: false,
   attempts: 0,
   queue: [],
-  token: new URLSearchParams(location.search).get('token') || '',
+  token: readToken(),
 };
 
 function send(message) {
@@ -54,7 +102,8 @@ function setConnectionState(text, ok) {
 
 function connect() {
   if (!transport.token) {
-    setConnectionState('这个地址缺少访问令牌，用 Seven Station Core 启动时打印的地址打开。', false);
+    setConnectionState('还没有访问令牌：去「设置」里填一个', false);
+    if (app.view !== 'settings') switchView('settings');
     return;
   }
 
@@ -3675,19 +3724,94 @@ function renderClientCenterCard() {
 }
 
 
+/**
+ * 访问令牌。网页版（手机浏览器、别的电脑）打开这个页面时，这里是唯一的入口；
+ * 桌面客户端里也能用，只是它还有一份自己的地址设置。
+ */
+function renderTokenCard() {
+  const card = makePageCard('访问令牌');
+
+  const current = document.createElement('p');
+  current.className = 'page-note';
+  current.textContent = transport.token
+    ? '当前：' + transport.token.slice(0, 8) + '…（存在这台设备的浏览器里，不会传到别处）'
+    : '还没有令牌，填了才能连上。令牌在 Seven Station Core 那台机器的 %ProgramData%\SevenStation.Core\token.txt，'
+      + '或者在 Control 里点「添加设备」生成一个给这台设备专用的。';
+  card.appendChild(current);
+
+  const row = document.createElement('div');
+  row.className = 'row-edit';
+  const label = document.createElement('span');
+  label.className = 'row-label';
+  label.textContent = '令牌';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = '粘贴访问令牌';
+  input.spellcheck = false;
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') input.dataset.enter = '1';
+  });
+  row.append(label, input);
+  card.appendChild(row);
+
+  const actions = document.createElement('div');
+  actions.className = 'css-actions';
+
+  const save = document.createElement('button');
+  save.className = 'ghost-btn small';
+  save.textContent = '保存并重连';
+  save.addEventListener('click', () => {
+    const value = input.value.trim();
+    if (!value) {
+      toast('先把令牌粘贴进来', 'warning');
+      return;
+    }
+
+    saveToken(value);
+    transport.attempts = 0;
+    if (transport.socket) {
+      try { transport.socket.close(); } catch { /* 已经断了 */ }
+      transport.socket = null;
+    }
+    connect();
+    renderPage('settings');
+    toast('令牌已保存，正在重连');
+  });
+
+  const clear = document.createElement('button');
+  clear.className = 'ghost-btn small';
+  clear.textContent = '清除';
+  clear.addEventListener('click', () => {
+    saveToken('');
+    try { localStorage.removeItem(TOKEN_KEY); } catch { /* 无所谓 */ }
+    if (transport.socket) {
+      try { transport.socket.close(); } catch { /* 已经断了 */ }
+      transport.socket = null;
+    }
+    renderPage('settings');
+    setConnectionState('还没有访问令牌：去「设置」里填一个', false);
+  });
+
+  actions.append(save, clear);
+  card.appendChild(actions);
+  return card;
+}
+
 function renderSettingsPage() {
   el.pageInner.appendChild(makePageHead('设置'));
   el.pageInner.appendChild(renderAppearanceCard());
 
   const connection = makePageCard('连接');
+  const local = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
   addKeyValues(connection, [
     ['Seven Station Core', location.origin],
     ['版本', app.centerVersion || '未知'],
     ['状态', transport.connected ? '已连接' : '未连接'],
     ['数据文件', app.storePath || '未知'],
-    ['访问', '只本机能连'],
+    ['访问', local ? '本机' : '局域网'],
   ]);
   el.pageInner.appendChild(connection);
+  el.pageInner.appendChild(renderTokenCard());
 
   // 只有装成桌面客户端时才有本机设置（浏览器里直接打开页面拿不到这个桥）。
   const clientCenter = renderClientCenterCard();

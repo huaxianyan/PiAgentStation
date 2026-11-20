@@ -18,6 +18,7 @@
     <!-- 装成 Windows 服务跑：没有它就只能当控制台程序。 -->
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.4" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
     <!-- 10.0.4 默认带 2.1.11 的 e_sqlite3，有已知漏洞，钉到修好的原生库。 -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
   </ItemGroup>

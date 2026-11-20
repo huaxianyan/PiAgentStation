@@ -22,6 +22,51 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-049：单设备令牌 + 扫码配对 + 网页版填令牌（2026-11-20，未发版）
+
+按 Android 规划的落地顺序先做前两步（Core 侧 API、Control 的「添加设备」），顺带把网页版的令牌入口补上。
+
+**Core**
+
+- 新表 `devices`（`Storage/DeviceStore.cs`）：id / 名字 / 令牌 / 创建时间 / 最后在线 / 作废时间。
+- 鉴权规则：`/ws` 接受**主令牌**或**任一未作废的设备令牌**；管理接口只认主令牌（设备令牌不能给自己再发一个）。
+- 新接口（都要主令牌）：
+  - `GET /api/addresses` —— 本机私网地址（10/8、172.16/12、192.168/16），带网卡名；
+  - `GET /api/devices`、`POST /api/devices`（`{name}`）、`POST /api/devices/{id}/revoke`；
+  - `GET /api/qr?data=…` —— 返回 **SVG** 二维码（QRCoder 1.6.0）。用 SVG 是为了 Control 那边不用处理二进制。
+- `TokenStore` 拆出 `Provided(context)`，`Matches()` 复用。
+
+**网页版**
+
+- 令牌来源：地址栏 `?token=` → `localStorage`。带 `?token=` 打开时存下来并把它从地址栏抹掉（`history.replaceState`），
+  免得留在浏览记录里。
+- 设置页新增「访问令牌」卡片（浏览器里也有）：显示当前前 8 位、粘贴保存并重连、清除。
+- 没令牌时不再装作在连：状态栏写「还没有访问令牌：去「设置」里填一个」，并自动切到设置页。
+- 设置里的「访问」一行改成 本机 / 局域网，不再是写死的「只本机能连」。
+
+**Control**
+
+- 新增 Rust 命令 `core_api(method, path, body)`：走回环裸 HTTP + `Authorization: Bearer <token.txt>`，
+  自己处理 `chunked` 兜底，不引 HTTP 客户端依赖。
+- 连接卡片加一行「设备」（显示几台已配对）+ 添加设备对话框：
+  名字 → 生成 → 选地址（`/api/addresses`）→ 显示可复制的地址与令牌、二维码（SVG 直接塞进 DOM）；
+  下面列已配对设备，可作废。
+
+**验证**（沙箱 Core，临时 home，只按 PID 停自己起的进程）
+
+| 项 | 结果 |
+| --- | --- |
+| `/api/addresses` | 6 个私网地址（含 EasyTier 的 10.77.x、Hyper-V 的 192.168.x） |
+| 创建设备 | 48 位令牌，列表只回 `8327a021…` 前缀 |
+| `/api/qr` | 200，`image/svg+xml`，`:``<svg …` 开头 |
+| 设备令牌连 `/ws` | ok；乱令牌 401；设备令牌调管理接口 401 |
+| 作废后 | 设备令牌 401，主令牌仍然可用 |
+| `/?token=<设备令牌>` | 200，页面正常 |
+
+出包：`dist/SevenStationCore-win-x64-0.4.1.msi`（含 Control，`7c37517a…`）、`dist/SevenStation-win-x64-0.4.1.msi`（`79b55779…`）。
+
+下一步：Android 阶段 0（Gradle 工程 + 扫码/手输 + WebView）。
+
 ## STATUS-048：过程区重排 + 展开状态不再回弹（2026-11-20，未发版）
 
 用户报两件事：展开一条 bash 会看到两条（行头重复）；整个过程区读/写/改混在一起看着乱。原型 `work/proto-steps.html` 定稿后落地。

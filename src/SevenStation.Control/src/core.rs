@@ -100,6 +100,18 @@ fn token_file() -> PathBuf {
     home().join("token.txt")
 }
 
+/// 主令牌。Control 拿它调 Core 的管理接口（局域网里那几台设备拿的是自己的令牌）。
+pub fn token() -> String {
+    std::fs::read_to_string(token_file())
+        .map(|text| text.trim().to_string())
+        .unwrap_or_default()
+}
+
+/// Core 在听的端口，跟 settings.json 里一致。
+pub fn port() -> u16 {
+    port_of(&read_listen())
+}
+
 fn log_file() -> PathBuf {
     home().join("logs").join("center.log")
 }

@@ -241,6 +241,26 @@
   .dialog h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
   .dialog p { margin: 0 0 16px; font-size: 12.5px; line-height: 1.6; color: var(--text-soft); }
   .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .dialog.wide { width: 460px; }
+  .dialog h4, .devices-head { margin: 16px 0 6px; font-size: 12px; font-weight: 600; color: var(--text-mute); }
+  .row.edit { gap: 8px; }
+  .field {
+    flex: 1;
+    min-width: 0;
+    padding: 5px 9px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 12.5px;
+    font-family: inherit;
+  }
+  .field:focus { outline: none; border-color: var(--text-faint); }
+  .qr { display: flex; justify-content: center; padding: 12px 0 4px; }
+  .qr svg { width: 168px; height: 168px; background: #fff; border-radius: 8px; padding: 8px; }
+  .devices { max-height: 190px; overflow-y: auto; }
+  .devices .empty { padding: 6px 0; font-size: 12.5px; color: var(--text-faint); }
+  .note { margin: 6px 0 0; font-size: 12px; color: var(--text-mute); line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -275,6 +295,11 @@
         <button class="link" id="copyToken">复制</button>
         <button class="link" id="regenToken">重新生成</button>
       </span>
+    </div>
+    <div class="row">
+      <span class="label">设备</span>
+      <span class="value" id="deviceSummary">读取中…</span>
+      <span class="actions"><button class="link" id="addDevice">添加设备</button></span>
     </div>
     <div class="row">
       <span class="label">数据目录</span>
@@ -325,6 +350,46 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="scrim" id="deviceScrim" hidden>
+  <div class="dialog wide">
+    <h3>添加设备</h3>
+    <p>给这台设备单独发一个令牌：手机丢了就作废这一条，别的设备不受影响。令牌只在这里显示一次。</p>
+
+    <div class="row edit">
+      <span class="label">名字</span>
+      <input class="field" id="deviceName" placeholder="手机" spellcheck="false" />
+      <span class="actions"><button class="btn primary" id="deviceCreate">生成</button></span>
+    </div>
+
+    <div class="row edit" id="deviceAddressRow" hidden>
+      <span class="label">地址</span>
+      <select class="field" id="deviceAddress"></select>
+    </div>
+
+    <div id="deviceResult" hidden>
+      <div class="row">
+        <span class="label">地址</span>
+        <span class="value mono" id="deviceUrl"></span>
+        <span class="actions"><button class="link" id="deviceCopyUrl">复制</button></span>
+      </div>
+      <div class="row">
+        <span class="label">令牌</span>
+        <span class="value mono" id="deviceToken"></span>
+        <span class="actions"><button class="link" id="deviceCopyToken">复制</button></span>
+      </div>
+      <div class="qr" id="deviceQr"></div>
+      <p class="note">手机扫码直接打开网页版；装好 Android 客户端后扫同一个码就直接配对。</p>
+    </div>
+
+    <div class="devices-head">已配对的设备</div>
+    <div class="devices" id="deviceList"></div>
+
+    <div class="actions">
+      <button class="btn" id="deviceClose">关闭</button>
+    </div>
+  </div>
+</div>
 
 <div class="scrim" id="scrim" hidden>
   <div class="dialog">
@@ -549,6 +614,137 @@
   el('openData').addEventListener('click', () => send('open', { target: 'data' }));
   el('openLogs').addEventListener('click', () => send('open', { target: 'logs' }));
 
+  // ── 设备：给每台手机发自己的令牌，扫码或复制地址都能用 ─────────────────
+  let deviceCount = 0;
+
+  async function coreApi(method, path, body) {
+    return invoke('core_api', { method, path, body: body === undefined ? null : body });
+  }
+
+  async function loadDevices() {
+    try {
+      const data = JSON.parse(await coreApi('GET', '/api/devices'));
+      const list = data.devices || [];
+      deviceCount = list.filter((device) => !device.revokedAt).length;
+      el('deviceSummary').textContent = deviceCount ? deviceCount + ' 台已配对' : '还没配过设备';
+
+      const box = el('deviceList');
+      box.innerHTML = '';
+      if (!list.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = '还没有设备。生成一个令牌，手机扫一下就能用。';
+        box.appendChild(empty);
+        return;
+      }
+
+      for (const device of list) {
+        const row = document.createElement('div');
+        row.className = 'row';
+
+        const label = document.createElement('span');
+        label.className = 'label';
+        label.textContent = device.name;
+
+        const value = document.createElement('span');
+        value.className = 'value mono';
+        value.textContent = device.revokedAt
+          ? '已作废 · ' + device.tokenHint
+          : device.tokenHint + (device.lastSeenAt ? ' · 最近用过' : ' · 还没用过');
+        value.style.color = device.revokedAt ? 'var(--text-faint)' : '';
+
+        const actions = document.createElement('span');
+        actions.className = 'actions';
+        if (!device.revokedAt) {
+          const revoke = document.createElement('button');
+          revoke.className = 'link';
+          revoke.textContent = '作废';
+          revoke.addEventListener('click', async () => {
+            try {
+              await coreApi('POST', '/api/devices/' + encodeURIComponent(device.id) + '/revoke', '{}');
+              toast('已作废「' + device.name + '」');
+              await loadDevices();
+            } catch (error) {
+              toast(typeof error === 'string' ? error : '作废没成功');
+            }
+          });
+          actions.appendChild(revoke);
+        }
+
+        row.append(label, value, actions);
+        box.appendChild(row);
+      }
+    } catch (error) {
+      el('deviceSummary').textContent = '读不到设备列表';
+      throw error;
+    }
+  }
+
+  async function openDevices() {
+    el('deviceScrim').hidden = false;
+    el('deviceResult').hidden = true;
+    el('deviceName').value = '';
+    el('deviceToken').textContent = '';
+    el('deviceQr').innerHTML = '';
+    el('deviceAddress').innerHTML = '';
+
+    // 局域网开着才有别的地址可挑；只本机的时候给个回环地址兜底。
+    try {
+      const data = JSON.parse(await coreApi('GET', '/api/addresses'));
+      const select = el('deviceAddress');
+      for (const entry of data.addresses || []) {
+        const option = document.createElement('option');
+        option.value = entry.url;
+        option.textContent = entry.url + '  ' + entry.name;
+        select.appendChild(option);
+      }
+      el('deviceAddressRow').hidden = !select.options.length;
+    } catch {
+      el('deviceAddressRow').hidden = true;
+    }
+
+    try {
+      await loadDevices();
+    } catch {
+      // loadDevices 已经把提示写在界面上了。
+    }
+  }
+
+  el('addDevice').addEventListener('click', openDevices);
+  el('deviceClose').addEventListener('click', () => { el('deviceScrim').hidden = true; });
+  el('deviceScrim').addEventListener('click', (event) => {
+    if (event.target === el('deviceScrim')) el('deviceScrim').hidden = true;
+  });
+
+  el('deviceCreate').addEventListener('click', async () => {
+    const button = el('deviceCreate');
+    button.disabled = true;
+    try {
+      const created = JSON.parse(await coreApi('POST', '/api/devices', JSON.stringify({ name: el('deviceName').value })));
+      const device = created.device;
+
+      const base = el('deviceAddress').value || (state && state.listen) || 'http://127.0.0.1:8787';
+      const url = base.replace(/\/$/, '') + '/?token=' + encodeURIComponent(device.token);
+
+      el('deviceUrl').textContent = url;
+      el('deviceToken').textContent = device.token;
+      el('deviceResult').hidden = false;
+
+      const svg = await coreApi('GET', '/api/qr?data=' + encodeURIComponent(url));
+      el('deviceQr').innerHTML = svg;
+
+      await loadDevices();
+      toast('令牌已生成，扫码或复制都行');
+    } catch (error) {
+      toast(typeof error === 'string' ? error : '生成令牌没成功');
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  el('deviceCopyUrl').addEventListener('click', () => send('copy', { text: el('deviceUrl').textContent }));
+  el('deviceCopyToken').addEventListener('click', () => send('copy', { text: el('deviceToken').textContent }));
+
   el('regenToken').addEventListener('click', () => { el('scrim').hidden = false; });
   el('regenCancel').addEventListener('click', () => { el('scrim').hidden = true; });
   el('regenConfirm').addEventListener('click', () => {
@@ -564,6 +760,7 @@
   listen('toast', (event) => toast(event.payload));
 
   send('ready');
+  loadDevices().catch(() => {});
 </script>
 </body>
 </html>

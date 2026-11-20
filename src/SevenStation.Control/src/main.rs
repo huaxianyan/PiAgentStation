@@ -18,6 +18,104 @@ fn set_pi_dir(path: String) -> Result<(), String> {
     core::set_pi_dir(&path)
 }
 
+
+/// 跟本机的 Seven Station Core 说一句话（管理接口都只认主令牌）。
+/// 走回环的裸 HTTP：够用，也不必引 HTTP 客户端依赖。
+/// 返回响应体文本；二维码是 SVG，页面直接塞进 DOM 就行。
+#[tauri::command]
+fn core_api(method: String, path: String, body: Option<String>) -> Result<String, String> {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+
+    let token = core::token();
+    if token.is_empty() {
+        return Err("读不到 Seven Station Core 的访问令牌，先点「启动」把它拉起来。".into());
+    }
+
+    let mut stream = TcpStream::connect(("127.0.0.1", core::port()))
+        .map_err(|error| format!("连不上 Seven Station Core：{error}"))?;
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(20)))
+        .ok();
+
+    let payload = body.unwrap_or_default();
+    let request = format!(
+        "{method} {path} HTTP/1.1
+
+Host: 127.0.0.1
+
+Authorization: Bearer {token}
+
+Content-Type: application/json
+
+Content-Length: {len}
+
+Connection: close
+
+
+
+{payload}",
+        len = payload.len()
+    );
+
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|error| format!("发给 Seven Station Core 失败：{error}"))?;
+
+    let mut raw = Vec::new();
+    stream
+        .read_to_end(&mut raw)
+        .map_err(|error| format!("等 Seven Station Core 回话失败：{error}"))?;
+
+    let text = String::from_utf8_lossy(&raw).to_string();
+    let (head, rest) = text
+        .split_once("
+
+
+
+")
+        .ok_or_else(|| "Seven Station Core 回了一段看不懂的响应".to_string())?;
+
+    let status: u16 = head
+        .split_whitespace()
+        .nth(1)
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0);
+
+    let chunked = head.to_ascii_lowercase().contains("transfer-encoding: chunked");
+    let payload = if chunked { dechunk(rest) } else { rest.to_string() };
+
+    if status >= 400 {
+        return Err(format!("Seven Station Core 回了 {status}：{payload}"));
+    }
+
+    Ok(payload)
+}
+
+/// 把 chunked 响应拼回一整段（小响应 Kestrel 一般直接给 Content-Length，这里只是兜底）。
+fn dechunk(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+
+    loop {
+        let Some(split) = rest.find("
+
+") else { break };
+        let size_text = rest[..split].trim();
+        let Ok(size) = usize::from_str_radix(size_text, 16) else { break };
+        if size == 0 {
+            break;
+        }
+
+        let start = split + 2;
+        let end = (start + size).min(rest.len());
+        out.push_str(&rest[start..end]);
+        rest = &rest[(end + 2).min(rest.len())..];
+    }
+
+    out
+}
+
 #[tauri::command]
 fn read_state() -> core::Snapshot {
     core::snapshot()
@@ -212,7 +310,8 @@ fn main() {
             set_lan,
             regenerate_token,
             copy_text,
-            open_target
+            open_target,
+            core_api
         ])
         .setup(|app| {
             let window = tauri::WebviewWindowBuilder::new(
