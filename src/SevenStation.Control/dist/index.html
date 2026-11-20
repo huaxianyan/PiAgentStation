@@ -783,7 +783,8 @@
         box.appendChild(row);
       }
     } catch (error) {
-      el('deviceSummary').textContent = '读不到设备列表';
+      // 服务在不在运行看主界面那块状态卡就知道，这里只说「没读到」本身。
+      el('deviceSummary').textContent = '读不到';
       throw error;
     }
   }
@@ -823,13 +824,13 @@
 
     try {
       await loadDevices();
-    } catch {
-      // Core 没起来的时候别留一片空白，说清楚读不到。
+    } catch (error) {
+      // 读不到就把真正的原因摆出来，别让人猜。
       const box = el('deviceList');
       box.innerHTML = '';
       const note = document.createElement('div');
       note.className = 'empty';
-      note.textContent = '读不到设备列表，先确认 Seven Station Core 在运行。';
+      note.textContent = '读不到设备列表：' + (typeof error === 'string' ? error : (error && error.message) || '未知原因');
       box.appendChild(note);
     }
   }

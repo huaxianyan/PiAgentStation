@@ -22,6 +22,31 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-057：core_api 真的连不上 —— 请求头被写成了裸 LF（2026-11-20，未发版）
+
+补完 ACL 之后还是不行，弹窗报「Seven Station Core 回了一段看不懂的响应」。
+
+**根因**：`core_api` 里手写的 HTTP 请求，`
+` 在生成代码时被写成了**真正的换行**（字符串字面量里是裸 LF）。
+于是请求头全是坏的：请求行后面直接空行，Kestrel 当成「没有 Host 头的 HTTP/1.1」回 400，
+而解析那头找的又是四个换行连在一起，永远找不到 → 报「看不懂的响应」。
+
+**修法**：
+
+- 拼请求单独抽成 `build_request()`，用一个地方写 CRLF；`core_api` 只调它。
+- 解析改成 `split_headers()`：先认 `CRLFCRLF`，退化再认 `LFLF`；`dechunk()` 同样先认 CRLF 再认 LF。
+- 补 6 个单元测试锁住这些（`cargo test --release`）：请求行/头必须带 CRLF、头后要有空行、去 CRLF 后不能有裸 LF、
+  chunked 单块与多块拼接。
+
+**顺带**（用户提的）：出错时那句「读不到设备列表，先确认 Seven Station Core 在运行」是废话 ——
+服务在不在运行看主界面状态卡就知道。改成直接摆原因：「读不到设备列表：<错误原文>」，顶部那行只写「读不到」。
+
+验证：raw socket 打沙箱 Core（临时 home，只按 PID 停）确认响应是 `HTTP/1.1 200` + CRLFCRLF，
+`/api/devices`、`/api/addresses`、`POST /api/devices` 都是 chunked，`/api/qr` 带 Content-Length；
+两种正文都能被新解析拿到。
+
+出包：`dist/SevenStationCore-win-x64-0.4.1.msi`（`5ac2cc3a65de9409…`）。
+
 ## STATUS-056：弹窗里「思考」不换行、Control 的 core_api 被 ACL 拦住（2026-11-20，未发版）
 
 装完 STATUS-055 之后用户报两条：
