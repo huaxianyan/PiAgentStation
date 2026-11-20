@@ -304,39 +304,14 @@ public sealed class ConversationStore : IDisposable
         string? title = null)
     {
         var now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        var storedCount = 0;
         lock (_gate)
         {
             using var transaction = _connection.BeginTransaction();
 
             if (messages is not null)
             {
-                using (var clear = _connection.CreateCommand())
-                {
-                    clear.Transaction = transaction;
-                    clear.CommandText = "DELETE FROM messages WHERE conversation_id = $id;";
-                    clear.Parameters.AddWithValue("$id", id);
-                    clear.ExecuteNonQuery();
-                }
-
-                for (var index = 0; index < messages.Count; index++)
-                {
-                    if (messages[index] is null)
-                    {
-                        continue;
-                    }
-
-                    using var insert = _connection.CreateCommand();
-                    insert.Transaction = transaction;
-                    insert.CommandText = """
-                        INSERT INTO messages (conversation_id, seq, payload, text)
-                        VALUES ($id, $seq, $payload, $text);
-                        """;
-                    insert.Parameters.AddWithValue("$id", id);
-                    insert.Parameters.AddWithValue("$seq", index);
-                    insert.Parameters.AddWithValue("$payload", messages[index]!.ToJsonString());
-                    insert.Parameters.AddWithValue("$text", PayloadText(messages[index]!.ToJsonString()));
-                    insert.ExecuteNonQuery();
-                }
+                storedCount = MergeMessages(id, messages, transaction);
             }
 
             var setParts = new List<string> { "updated_at = $now" };
@@ -372,7 +347,7 @@ public sealed class ConversationStore : IDisposable
                 update.CommandText = $"UPDATE conversations SET {string.Join(", ", setParts)} WHERE id = $id;";
                 update.Parameters.AddWithValue("$id", id);
                 update.Parameters.AddWithValue("$now", now);
-                update.Parameters.AddWithValue("$count", messages?.Count ?? 0);
+                update.Parameters.AddWithValue("$count", storedCount);
                 update.Parameters.AddWithValue("$stats", stats?.ToJsonString() ?? (object)DBNull.Value);
                 update.Parameters.AddWithValue("$model", state?["model"]?.ToJsonString() ?? (object)DBNull.Value);
                 update.Parameters.AddWithValue(
@@ -390,9 +365,133 @@ public sealed class ConversationStore : IDisposable
     }
 
     /// <summary>
+    /// 把 Pi 回来的这一轮并进库：按「角色 + 时间戳」去重，已有的不动。
+    /// 以前这里先 DELETE 再整段重插，可 Pi 压缩上下文之后只回窗口里的消息，
+    /// 一压缩整段历史就没了（2026-11-20 用户就这么丢了一天的记录）。
+    /// </summary>
+    private int MergeMessages(string id, JsonArray messages, SqliteTransaction transaction)
+    {
+        var existing = new List<(long Seq, long Stamp, string Payload)>();
+        var known = new HashSet<string>(StringComparer.Ordinal);
+        using (var read = _connection.CreateCommand())
+        {
+            read.Transaction = transaction;
+            read.CommandText = "SELECT seq, payload FROM messages WHERE conversation_id = $id ORDER BY seq;";
+            read.Parameters.AddWithValue("$id", id);
+            using var reader = read.ExecuteReader();
+            while (reader.Read())
+            {
+                var payload = reader.GetString(1);
+                known.Add(MessageKey(payload));
+                existing.Add((reader.GetInt64(0), MessageStamp(payload), payload));
+            }
+        }
+
+        var fresh = new List<(long Stamp, string Payload)>();
+        foreach (var node in messages)
+        {
+            if (node is null) continue;
+            var payload = node.ToJsonString();
+            if (!known.Add(MessageKey(payload))) continue;
+            fresh.Add((MessageStamp(payload), payload));
+        }
+
+        if (fresh.Count == 0)
+        {
+            return existing.Count;
+        }
+
+        var lastStamp = existing.Count == 0 ? long.MinValue : existing.Max(entry => entry.Stamp);
+        if (fresh.Exists(entry => entry.Stamp < lastStamp))
+        {
+            // 回来的消息比库里还早（跨了压缩点），整段按时间排序重写一次，顺序不能乱。
+            var all = existing
+                .Select((entry, index) => (entry.Stamp, Order: (long)index, entry.Payload))
+                .Concat(fresh.Select((entry, index) => (entry.Stamp, Order: (long)(existing.Count + index), entry.Payload)))
+                .OrderBy(entry => entry.Stamp)
+                .ThenBy(entry => entry.Order)
+                .ToList();
+
+            using (var clear = _connection.CreateCommand())
+            {
+                clear.Transaction = transaction;
+                clear.CommandText = "DELETE FROM messages WHERE conversation_id = $id;";
+                clear.Parameters.AddWithValue("$id", id);
+                clear.ExecuteNonQuery();
+            }
+
+            for (var index = 0; index < all.Count; index++)
+            {
+                InsertMessage(id, index, all[index].Payload, transaction);
+            }
+
+            return all.Count;
+        }
+
+        var next = existing.Count == 0 ? 0 : existing.Max(entry => entry.Seq) + 1;
+        foreach (var (stamp, payload) in fresh)
+        {
+            InsertMessage(id, next++, payload, transaction);
+        }
+
+        return existing.Count + fresh.Count;
+    }
+
+    private void InsertMessage(string id, long seq, string payload, SqliteTransaction transaction)
+    {
+        using var insert = _connection.CreateCommand();
+        insert.Transaction = transaction;
+        insert.CommandText = """
+            INSERT INTO messages (conversation_id, seq, payload, text)
+            VALUES ($id, $seq, $payload, $text);
+            """;
+        insert.Parameters.AddWithValue("$id", id);
+        insert.Parameters.AddWithValue("$seq", seq);
+        insert.Parameters.AddWithValue("$payload", payload);
+        insert.Parameters.AddWithValue("$text", PayloadText(payload));
+        insert.ExecuteNonQuery();
+    }
+
+    private static string MessageKey(string payload)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(payload);
+            var root = document.RootElement;
+            var role = root.TryGetProperty("role", out var roleValue) ? roleValue.ToString() : string.Empty;
+            var stamp = root.TryGetProperty("timestamp", out var stampValue) ? stampValue.ToString() : string.Empty;
+            var call = root.TryGetProperty("toolCallId", out var callValue) ? callValue.ToString() : string.Empty;
+            return role + "|" + stamp + "|" + call;
+        }
+        catch
+        {
+            return payload;
+        }
+    }
+
+    private static long MessageStamp(string payload)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(payload);
+            if (document.RootElement.TryGetProperty("timestamp", out var value) &&
+                value.ValueKind == System.Text.Json.JsonValueKind.Number)
+            {
+                return value.GetInt64();
+            }
+        }
+        catch
+        {
+            // 解析不了的当最早处理。
+        }
+
+        return long.MinValue;
+    }
+
+    /// <summary>
     /// 追加消息，不动已有内容。用在一轮还没结束的时候：用户的话和每一步的
     /// 结果一产生就落库，中途切走再切回来才看得见这段正在跑的内容。
-    /// 轮次结束时 <see cref="SaveTurn"/> 会拿 Pi 那边的完整消息整体替换，能自愈。
+    /// 轮次结束时 <see cref="SaveTurn"/> 会把 Pi 回来的消息并进来，重复的丢掉。
     /// </summary>
     public int AppendMessages(string id, IEnumerable<JsonNode?> messages)
     {
