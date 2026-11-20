@@ -909,112 +909,130 @@ button { cursor: pointer; }
   white-space: pre-wrap;
 }
 
-.tool {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  overflow: visible;
-}
+/* ── 过程区：一行一步，左边图标说种类，中间一句摘要，右边一个状态记号 ── */
+.st-item { display: block; }
 
-.tool-head {
+.st-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
+  gap: 9px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 13.5px;
+  color: var(--text-soft);
 }
 
-.tool-head:hover { background: var(--active); }
-.tool-name { font-size: 14px; color: var(--text-dim); }
-.tool-args {
-  flex: 1;
+.st-row:hover { background: var(--active); }
+.st-row.is-open { background: var(--active); }
+.st-row.st-sub { padding-left: 30px; }
+
+.st-icon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-mute);
+}
+
+.st-icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.st-row.is-thinking .st-icon { color: var(--text-faint); }
+
+.st-name { flex: none; font-size: 13px; color: var(--text-dim); }
+.st-row.st-sub .st-name { display: none; }
+.st-count { flex: none; font-size: 12px; color: var(--text-mute); }
+
+.st-sum {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  font-size: 12.5px;
   color: var(--text-mute);
-  font-family: var(--mono);
-  font-size: 13px;
 }
-.tool-time { color: var(--text-mute); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 
-.state {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
+.st-sum.mono { font-family: var(--mono); font-size: 11.5px; }
+
+.st-sum.is-link { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.st-sum.is-link:hover { color: var(--text); }
+
+/* 状态只要一个记号，不写字。 */
+.st-state {
+  flex: none;
+  width: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  border-radius: 50%;
+  font-size: 12px;
+  color: var(--text-faint);
 }
 
-.state.ok { background: color-mix(in oklab, var(--green) 18%, transparent); }
-.state.ok::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
-.state.err { background: color-mix(in oklab, var(--danger) 18%, transparent); }
-.state.err::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }
-.state.running {
-  background: transparent;
+.st-state.is-ok { color: color-mix(in oklab, var(--green) 68%, var(--text-mute)); }
+.st-state.is-error { color: var(--danger); }
+.st-state.is-aborted { color: var(--text-faint); }
+
+.st-state .spin {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
   border: 2px solid color-mix(in oklab, var(--green) 22%, transparent);
   border-top-color: var(--green);
   animation: spin .9s linear infinite;
 }
 
-.tool-body {
+/* 时长平时不占地方，展开某一步才露出来。 */
+.st-time {
+  flex: none;
+  display: none;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.st-item.is-open > .st-row > .st-time { display: inline; }
+
+.st-body {
+  margin: 1px 0 7px 24px;
   padding: 9px 11px;
-  border-top: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: 9px;
   background: var(--panel);
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text-dim);
-  white-space: pre-wrap;
   max-height: 320px;
   overflow: auto;
 }
 
-.err-text { color: var(--danger); }
+.st-group-body { margin: 0 0 4px; }
+
+.st-label { margin: 0 0 5px; font-size: 11.5px; color: var(--text-mute); }
+.st-label + .st-code { margin-bottom: 9px; }
+.st-code:last-child { margin-bottom: 0; }
+
+.st-code {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 /* 改动前后用一点底色区分，比一大段 JSON 好认。 */
-.tool-body pre.is-removed {
+.st-code.is-removed {
   background: color-mix(in oklab, var(--danger) 9%, transparent);
   border-radius: 5px;
   padding: 4px 6px;
 }
 
-.tool-body pre.is-added {
-  background: color-mix(in oklab, #2f9e44 11%, transparent);
+.st-code.is-added {
+  background: color-mix(in oklab, var(--green) 11%, transparent);
   border-radius: 5px;
   padding: 4px 6px;
 }
 
-/* 干活时前面完成的步骤收在这行折子里，点一下展开。 */
-.work-more {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 2px 0 6px;
-  padding: 2px 8px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--text-mute);
-  font-size: 12.5px;
-  cursor: pointer;
-  align-self: flex-start;
-}
-
-.work-more:hover { color: var(--text-dim); }
-
-.work-earlier {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 4px;
-  padding-left: 2px;
-  border-left: 1px solid var(--border);
-}
+.st-code.err-text { color: var(--danger); }
 
 /* ---------------------------------------------------------------- *
  * 空状态
@@ -1499,94 +1517,7 @@ button { cursor: pointer; }
 /* 跑完展开看历史时可以很长，限个高，别把正文顶出屏幕。 */
 .work-body { max-height: 320px; overflow-y: auto; }
 
-.step.is-current .step-text { max-width: 46ch; }
 .work.is-collapsed .work-body { display: none; }
-
-.step { border-top: 0; }
-.step + .step { border-top: 0; }
-
-.step-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  text-align: left;
-  font-size: 14px;
-  color: var(--text-soft);
-}
-
-.step-head:hover { background: var(--active); }
-
-.step-dot {
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--green);
-}
-
-.step-dot.is-running {
-  background: transparent;
-  border: 2px solid color-mix(in oklab, var(--green) 22%, transparent);
-  border-top-color: var(--green);
-  animation: spin .9s linear infinite;
-}
-
-/* 被中断的步骤：空心的灰圈，跟「还在转」区分开。 */
-.step-dot.is-aborted {
-  background: transparent;
-  border: 2px solid var(--text-faint);
-}
-
-.step-name {
-  flex: 0 0 auto;
-  font-size: 14px;
-  color: var(--text-dim);
-}
-
-.step-text {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--text-mute);
-}
-
-.step-status {
-  flex: none;
-  font-size: 12.5px;
-  color: var(--text-mute);
-}
-
-.step-time {
-  flex: none;
-  font-size: 12.5px;
-  color: var(--text-mute);
-}
-
-.step-detail { padding: 0 10px 8px; }
-
-.step-detail pre {
-  margin: 0;
-  padding: 8px 10px;
-  max-height: 320px;
-  overflow: auto;
-  background: var(--panel);
-  border-radius: 8px;
-  font-size: 11.5px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.step-detail .tool-card { margin: 0; }
 
 .completions {
   margin-bottom: 8px;
@@ -1676,14 +1607,6 @@ body.dragging .composer-box {
   font-size: 12px;
   color: var(--danger, #b42318);
 }
-
-.tool-args.is-link {
-  cursor: pointer;
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-}
-
-.tool-args.is-link:hover { color: var(--text); }
 
 .modal.wide {
   max-width: 720px;

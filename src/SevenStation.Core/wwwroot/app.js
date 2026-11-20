@@ -773,15 +773,9 @@ function blocksFromMessage(message) {
   }).filter(Boolean);
 }
 
-/** 一段步骤算不算「还在跑」：有结果算完成，被中断的不算在跑，两者都不显示的才是运行中。 */
+/** 一段步骤算不算「还在跑」：有结果算完成，被中断的不算在跑，两者都不是的才是在跑。 */
 function stepRunning(entry) {
   return entry.kind === 'tool' && !entry.block.done && !entry.block.interrupted;
-}
-
-function stepStatusText(entry) {
-  if (entry.kind !== 'tool') return '完成';
-  if (entry.block.done) return '完成';
-  return entry.block.interrupted ? '已中断' : '运行中';
 }
 
 function messageTimestamp(message) {
@@ -1011,6 +1005,11 @@ function contentImages(content) {
     .map((block) => 'data:' + (block.mimeType || 'image/png') + ';base64,' + block.data);
 }
 
+/** 回合的稳定标识：拿第一条的 id 顶，重画之后还是同一块工作记录。 */
+function turnKeyOf(turn) {
+  return String(turn?.items?.[0]?.id || '');
+}
+
 function turnsOf(session) {
   const turns = [];
   for (const item of session.items) {
@@ -1074,7 +1073,9 @@ function turnNode(turn, session, isLast) {
   assistant.className = 'msg assistant';
 
   if (hasWork) {
-    assistant.appendChild(workGroup(work, answered && !streaming, turnMs, streaming && ask ? ask.ts : 0));
+    assistant.appendChild(
+      workGroup(work, answered && !streaming, turnMs, streaming && ask ? ask.ts : 0, session, turnKeyOf(turn)),
+    );
   }
 
   for (const text of texts) {
@@ -1164,9 +1165,165 @@ function formatSpent(totalMs) {
   return minutes ? hours + ' 小时 ' + minutes + ' 分' : hours + ' 小时';
 }
 
-function workGroup(work, collapsed, turnMs, since) {
+/** 过程区的展开状态挂在会话上：整轮重画之后要能恢复（节点一换就回弹的老毛病）。 */
+function uiOf(session) {
+  if (!session.ui) session.ui = { work: new Map(), groups: new Set(), steps: new Set() };
+  return session.ui;
+}
+
+/** 工具的种类决定图标和行首那两个字；没登记过的用加号兜底。 */
+const STEP_KINDS = {
+  bash: { label: '执行命令', icon: 'term' },
+  shell: { label: '执行命令', icon: 'term' },
+  read: { label: '读取文件', icon: 'read' },
+  write: { label: '写入文件', icon: 'write' },
+  edit: { label: '修改文件', icon: 'edit' },
+  multi_edit: { label: '修改文件', icon: 'edit' },
+  grep: { label: '搜索内容', icon: 'find' },
+  search: { label: '搜索内容', icon: 'find' },
+  glob: { label: '找文件', icon: 'find' },
+  list_dir: { label: '列目录', icon: 'find' },
+  web_search: { label: '搜索网页', icon: 'web' },
+  fetch_content: { label: '打开网页', icon: 'web' },
+  get_search_content: { label: '读搜索结果', icon: 'web' },
+  todo: { label: '列计划', icon: 'list' },
+  thinking: { label: '思考', icon: 'think' },
+};
+
+const STEP_ICONS = {
+  term: '<path d="M5 6.5 8.5 10 5 13.5"/><path d="M11.5 14h7"/>',
+  read: '<path d="M6.5 4.5h7l4 4v11h-11z"/><path d="M9.5 12h5M9.5 15.5h5"/>',
+  write: '<path d="M6.5 4.5h11v15h-11z"/><path d="M9.5 9h5M9.5 12.5h5M9.5 16h3"/>',
+  edit: '<path d="M6.5 4.5h7l4 4v11h-11z"/><path d="M13.5 4.5v4h4"/><path d="M9.5 14.5h5"/>',
+  find: '<circle cx="11" cy="10.5" r="5.2"/><path d="m15 14.5 4 4"/>',
+  web: '<circle cx="12" cy="12" r="7.5"/><path d="M4.5 12h15M12 4.5c2.2 2.4 2.2 12.6 0 15M12 4.5c-2.2 2.4-2.2 12.6 0 15"/>',
+  list: '<path d="M5 7h3M10 7h9M5 12h3M10 12h9M5 17h3M10 17h9"/>',
+  think: '<path d="M12 4.5a5.2 5.2 0 0 1 3.2 9.3c-.5.4-.7.9-.7 1.4v.3H9.5v-.3c0-.5-.2-1-.7-1.4A5.2 5.2 0 0 1 12 4.5Z"/><path d="M10 18.5h4"/>',
+  other: '<path d="M12 5.5v13M5.5 12h13"/>',
+};
+
+function stepKindKey(entry) {
+  if (entry.kind === 'thinking') return 'thinking';
+  const name = String(entry.block?.name || '');
+  return STEP_KINDS[name] ? name : 'other';
+}
+
+function stepMeta(entry) {
+  return STEP_KINDS[stepKindKey(entry)] || { label: toolLabel(entry.block?.name) || '工具', icon: 'other' };
+}
+
+function stepIcon(icon) {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (STEP_ICONS[icon] || STEP_ICONS.other) + '</svg>';
+}
+
+/** 一行只有一句摘要：路径留尾巴，命令压成一行，思考截前 60 个字。 */
+function stepSummaryText(entry) {
+  if (entry.kind === 'thinking') {
+    return { text: String(entry.block?.text || '').replace(/\s+/g, ' ').trim().slice(0, 60), mono: false };
+  }
+
+  const block = entry.block || {};
+  const args = block.args || {};
+  const path = args.path || args.file_path;
+  if (typeof path === 'string' && path) return { text: shortenPath(path), mono: true };
+
+  const raw = [args.command, args.pattern, args.query, args.url, args.directory]
+    .find((value) => typeof value === 'string' && value.trim());
+  if (raw) {
+    const flat = String(raw).replace(/\s+/g, ' ').trim();
+    return { text: flat.length > 90 ? flat.slice(0, 90) + '…' : flat, mono: true };
+  }
+
+  if (block.running) return { text: '进行中…', mono: false };
+  if (block.isError) return { text: '出错', mono: false };
+  return { text: '', mono: false };
+}
+
+function timeText(entry) {
+  const ms = entry?.block?.durationMs;
+  return ms == null ? '' : formatDuration(ms);
+}
+
+/** 右边只留一个记号：打勾、转圈、感叹号、中断的横杠。 */
+function stepStateNode(entry) {
+  const span = document.createElement('span');
+  span.className = 'st-state';
+
+  if (stepRunning(entry)) {
+    span.innerHTML = '<span class="spin"></span>';
+    span.title = '正在跑';
+    return span;
+  }
+
+  if (entry.block?.isError) {
+    span.classList.add('is-error');
+    span.textContent = '!';
+    span.title = '这一步出错了';
+    return span;
+  }
+
+  if (entry.block?.interrupted && !entry.block?.done) {
+    span.classList.add('is-aborted');
+    span.textContent = '—';
+    span.title = '这一轮被中断了';
+    return span;
+  }
+
+  span.classList.add('is-ok');
+  span.textContent = '✓';
+  span.title = '完成';
+  return span;
+}
+
+/** 合并起来的一组，状态取最显眼的那条：还在跑 > 出错 > 最后一条。 */
+function groupStateEntry(entries) {
+  return entries.find((entry) => stepRunning(entry))
+    || entries.find((entry) => entry.block?.isError)
+    || entries[entries.length - 1];
+}
+
+/** 连续同类合并成「执行命令 ×3」。思考和没登记的工具不合并。 */
+function groupWork(work) {
+  const rows = [];
+  for (const entry of work) {
+    const kind = stepKindKey(entry);
+    const last = rows[rows.length - 1];
+    if (kind !== 'thinking' && kind !== 'other' && last && last.kind === kind) {
+      last.entries.push(entry);
+      continue;
+    }
+    rows.push({ kind, entries: [entry] });
+  }
+  return rows;
+}
+
+/** 展开一行的时候把别的收起来，同一块里只留一个开着的。 */
+function closeOpenItems(ctx, keep) {
+  if (!ctx.wrap) return;
+
+  for (const item of ctx.wrap.querySelectorAll('.st-item.is-open')) {
+    if (item === keep || item.contains(keep)) continue;
+
+    item.classList.remove('is-open');
+    const body = item.querySelector(':scope > .st-body, :scope > .st-group-body');
+    if (body) body.hidden = true;
+
+    const row = item.querySelector(':scope > .st-row');
+    if (row) {
+      row.classList.remove('is-open');
+      const key = row.dataset.group || row.dataset.step;
+      if (row.dataset.group) ctx.ui?.groups.delete(key);
+      else ctx.ui?.steps.delete(key);
+    }
+  }
+}
+
+function workGroup(work, collapsed, turnMs, since, session, turnKey) {
   const wrap = document.createElement('div');
   wrap.className = 'work';
+
+  const ui = session ? uiOf(session) : null;
+  const ctx = { ui, wrap };
 
   // 还在跑的按开始到现在算，每秒跟着刷新；跑完的用这一轮的实际耗时。
   const live = since > 0;
@@ -1184,104 +1341,159 @@ function workGroup(work, collapsed, turnMs, since) {
   }
   head.innerHTML =
     '<span class="work-caret">▸</span>' +
-    '<span class="work-title">' + escapeHtml(workLabel(totalMs, work.length, since > 0)) + '</span>';
+    '<span class="work-title">' + escapeHtml(workLabel(totalMs, work.length, live)) + '</span>';
 
   const body = document.createElement('div');
   body.className = 'work-body';
+  for (const row of groupWork(work)) body.appendChild(workRowNode(ctx, row));
 
-  // 干活的时候正文只摆最新那条；完成的收在上面的折子里，点一下就能翻出来看。
-  // （以前是直接不画，翻都翻不出来。）
-  const earlier = live ? work.slice(0, -1) : [];
-  if (earlier.length) {
-    const fold = document.createElement('button');
-    fold.className = 'work-more';
-    fold.type = 'button';
-
-    const list = document.createElement('div');
-    list.className = 'work-earlier';
-    list.hidden = true;
-    for (const entry of earlier) list.appendChild(stepRow(entry));
-
-    let open = false;
-    const label = () => (open ? '收起前面 ' + earlier.length + ' 步' : '前 ' + earlier.length + ' 步已完成');
-    fold.textContent = label();
-    fold.addEventListener('click', (event) => {
-      event.stopPropagation();
-      open = !open;
-      list.hidden = !open;
-      fold.textContent = label();
-      fold.classList.toggle('is-open', open);
-    });
-
-    body.appendChild(fold);
-    body.appendChild(list);
-  }
-
-  for (const entry of live ? work.slice(-1) : work) {
-    body.appendChild(stepRow(entry));
-  }
-
-  const setCollapsed = (value) => {
-    wrap.classList.toggle('is-collapsed', value);
-    body.hidden = value;
-    head.querySelector('.work-caret').textContent = value ? '▸' : '▾';
+  const setOpen = (value, silent) => {
+    wrap.classList.toggle('is-collapsed', !value);
+    body.hidden = !value;
+    head.querySelector('.work-caret').textContent = value ? '▾' : '▸';
+    if (!silent && ui && turnKey) ui.work.set(turnKey, value);
   };
 
-  setCollapsed(collapsed);
-  head.addEventListener('click', () => setCollapsed(!wrap.classList.contains('is-collapsed')));
+  // 上回点开的就按上回的开着，没点过才按默认：跑着展开、跑完收起。
+  const stored = ui && turnKey ? ui.work.get(turnKey) : undefined;
+  setOpen(typeof stored === 'boolean' ? stored : !collapsed, true);
+  head.addEventListener('click', () => setOpen(wrap.classList.contains('is-collapsed')));
 
   wrap.appendChild(head);
   wrap.appendChild(body);
   return wrap;
 }
 
-/** 一行一步：思考或某个工具，点开才看细节。 */
-function stepRow(entry) {
-  const row = document.createElement('div');
-  row.className = 'step' + (entry.kind === 'thinking' ? ' is-thinking' : '');
-  // 记下是哪一步：就地更新时要认出「还是同一条」，换了就整轮重画。
-  row.dataset.step = String(entry.block.id || '');
+/**
+ * 一行：图标 + 种类 + 摘要 + 状态记号，点开才看内容。
+ * 合并起来的那一行点开摊成子行，每条子行自己还能再展开。
+ */
+function workRowNode(ctx, row, member) {
+  const many = row.entries.length > 1 && !member;
+  const first = row.entries[0];
+  const last = row.entries[row.entries.length - 1];
+  const meta = stepMeta(first);
+  const summary = stepSummaryText(first);
+  const state = groupStateEntry(row.entries);
+  const shown = many ? last : first;
 
-  const head = document.createElement('button');
-  head.className = 'step-head';
+  const item = document.createElement('div');
+  item.className = 'st-item' + (member ? ' st-sub' : '');
 
-  const label = entry.kind === 'thinking' ? '思考' : toolLabel(entry.block.name);
-  const summary = entry.kind === 'thinking'
-    ? String(entry.block.text).replace(/\s+/g, ' ').slice(0, 46)
-    : toolSummary(entry.block);
+  const node = document.createElement('div');
+  node.className = 'st-row'
+    + (row.kind === 'thinking' ? ' is-thinking' : '')
+    + (member ? ' st-sub' : '');
+  node.dataset.step = String(first.block?.id || '');
+  node.dataset.lastStep = String(last.block?.id || '');
+  if (many) node.dataset.group = 'g:' + String(first.block?.id || '');
 
-  const running = stepRunning(entry);
-  const aborted = entry.kind === 'tool' && entry.block.interrupted && !entry.block.done;
-  head.innerHTML =
-    '<span class="step-name">' + escapeHtml(label) + '</span>' +
-    '<span class="step-dot' + (running ? ' is-running' : aborted ? ' is-aborted' : '') + '"></span>' +
-    '<span class="step-text">' + escapeHtml(summary) + '</span>' +
-    '<span class="step-status">' + stepStatusText(entry) + '</span>' +
-    (entry.block.durationMs != null
-      ? '<span class="step-time">' + escapeHtml(formatDuration(entry.block.durationMs)) + '</span>'
-      : '');
+  node.innerHTML =
+    '<span class="st-icon">' + stepIcon(meta.icon) + '</span>' +
+    '<span class="st-name">' + escapeHtml(meta.label) + '</span>' +
+    (many ? '<span class="st-count">×' + row.entries.length + '</span>' : '') +
+    '<span class="st-sum' + (summary.mono ? ' mono' : '') + '">' + escapeHtml(summary.text) + '</span>';
 
-  row.appendChild(head);
-
-  const detail = document.createElement('div');
-  detail.className = 'step-detail';
-  detail.hidden = true;
-
-  if (entry.kind === 'thinking') {
-    const pre = document.createElement('pre');
-    pre.textContent = entry.block.text;
-    detail.appendChild(pre);
-  } else {
-    detail.appendChild(toolCard(entry.block));
-  }
-
-  head.addEventListener('click', () => {
-    detail.hidden = !detail.hidden;
-    row.classList.toggle('is-open', !detail.hidden);
+  // 能点、能按回车；不然只能用鼠标。
+  node.tabIndex = 0;
+  node.setAttribute('role', 'button');
+  node.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      node.click();
+    }
   });
 
-  row.appendChild(detail);
-  return row;
+  // 读写过的路径点一下在右侧文件面板打开，省得自己去目录里翻。
+  const targetPath = first.block?.args?.path || first.block?.args?.file_path;
+  const sum = node.querySelector('.st-sum');
+  if (typeof targetPath === 'string' && targetPath && sum) {
+    sum.classList.add('is-link');
+    sum.title = '在文件面板里打开 ' + targetPath;
+    sum.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const session = current();
+      if (!session) return;
+      el.filePanel.hidden = false;
+      document.querySelector('.main').classList.add('files-open');
+      el.filesPath.textContent = '/' + targetPath;
+      el.filesPath.title = '/' + targetPath;
+      el.filesBody.innerHTML = '<div class="files-note">读取中…</div>';
+      send({ type: 'read_file', key: session.key, path: targetPath });
+    });
+  }
+
+  node.appendChild(stepStateNode(state));
+
+  const time = document.createElement('span');
+  time.className = 'st-time';
+  time.textContent = timeText(shown);
+  node.appendChild(time);
+
+  item.appendChild(node);
+
+  // 合并行：摊开成子行，自己不摆内容。
+  if (many) {
+    const groupBody = document.createElement('div');
+    groupBody.className = 'st-group-body';
+    groupBody.hidden = true;
+    for (const entry of row.entries) {
+      groupBody.appendChild(workRowNode(ctx, { kind: row.kind, entries: [entry] }, true));
+    }
+    item.appendChild(groupBody);
+
+    const key = node.dataset.group;
+    const open = Boolean(ctx.ui && ctx.ui.groups.has(key));
+    node.classList.toggle('is-open', open);
+    item.classList.toggle('is-open', open);
+    groupBody.hidden = !open;
+
+    node.addEventListener('click', () => {
+      const next = !item.classList.contains('is-open');
+      if (next) closeOpenItems(ctx, item);
+      item.classList.toggle('is-open', next);
+      node.classList.toggle('is-open', next);
+      groupBody.hidden = !next;
+      if (ctx.ui) {
+        if (next) ctx.ui.groups.add(key);
+        else ctx.ui.groups.delete(key);
+      }
+    });
+    return item;
+  }
+
+  // 单条：详情只摆内容，行头不再重复一遍。
+  const detail = document.createElement('div');
+  detail.className = 'st-body';
+  if (row.kind === 'thinking') {
+    const pre = document.createElement('pre');
+    pre.className = 'st-code';
+    pre.textContent = String(first.block?.text || '');
+    detail.appendChild(pre);
+  } else {
+    appendSections(detail, first.block || {});
+  }
+  item.appendChild(detail);
+
+  const key = node.dataset.step;
+  const open = Boolean(ctx.ui && ctx.ui.steps.has(key));
+  node.classList.toggle('is-open', open);
+  item.classList.toggle('is-open', open);
+  detail.hidden = !open;
+
+  node.addEventListener('click', () => {
+    const next = !item.classList.contains('is-open');
+    if (next) closeOpenItems(ctx, item);
+    item.classList.toggle('is-open', next);
+    node.classList.toggle('is-open', next);
+    detail.hidden = !next;
+    if (ctx.ui) {
+      if (next) ctx.ui.steps.add(key);
+      else ctx.ui.steps.delete(key);
+    }
+  });
+
+  return item;
 }
 
 function formatDuration(ms) {
@@ -1391,89 +1603,31 @@ function toolSections(block) {
   return sections.filter((section) => section.text !== '' || section.label.startsWith('第 '));
 }
 
-function toolCard(block) {
-  const card = document.createElement('div');
-  card.className = 'tool' + (block.open ? ' open' : '');
-
-  const head = document.createElement('div');
-  head.className = 'tool-head';
-
-  const state = document.createElement('span');
-  state.className = 'state ' + (block.running ? 'running' : block.isError ? 'err' : block.interrupted ? 'err' : block.done ? 'ok' : 'running');
-
-  const name = document.createElement('span');
-  name.className = 'tool-name';
-  name.textContent = block.name || 'tool';
-
-  const args = document.createElement('span');
-  args.className = 'tool-args';
-  args.textContent = toolSummary(block);
-  args.title = toolSummary(block);
-
-  // 工具读写的路径点一下就能在文件面板里看，省得自己去目录里翻。
-  const target = block.args?.path || block.args?.file_path;
-  if (typeof target === 'string' && target) {
-    args.classList.add('is-link');
-    args.title = '在文件面板里打开 ' + target;
-    args.addEventListener('click', (event) => {
-      event.stopPropagation();
-      const session = current();
-      if (!session) return;
-      el.filePanel.hidden = false;
-      document.querySelector('.main').classList.add('files-open');
-      el.filesPath.textContent = '/' + target;
-      el.filesPath.title = '/' + target;
-      el.filesBody.innerHTML = '<div class="files-note">读取中…</div>';
-      send({ type: 'read_file', key: session.key, path: target });
-    });
-  }
-
-  head.appendChild(state);
-  head.appendChild(name);
-  head.appendChild(args);
-
-  if (block.durationMs != null) {
-    const time = document.createElement('span');
-    time.className = 'tool-time';
-    time.textContent = block.durationMs >= 1000
-      ? (block.durationMs / 1000).toFixed(1) + ' 秒'
-      : block.durationMs + ' 毫秒';
-    head.appendChild(time);
-  }
-
-  head.addEventListener('click', () => {
-    block.open = !block.open;
-    card.classList.toggle('open', Boolean(block.open));
-  });
-
-  const body = document.createElement('div');
-  body.className = 'tool-body';
-
+/** 工具详情只摆内容：命令、输出、改了哪几行——行头在步骤行上，这里不再重复。 */
+function appendSections(container, block) {
   for (const section of toolSections(block)) {
     if (section.label) {
       const label = document.createElement('div');
-      label.className = 'label';
+      label.className = 'st-label';
       label.textContent = section.label;
-      body.appendChild(label);
+      container.appendChild(label);
     }
+
     const pre = document.createElement('pre');
-    if (section.label === '- 原来') pre.className = 'is-removed';
-    if (section.label === '+ 换成') pre.className = 'is-added';
-    if (block.isError && section.label.startsWith('输出')) pre.className += ' err-text';
+    pre.className = 'st-code';
+    if (section.label === '- 原来') pre.classList.add('is-removed');
+    if (section.label === '+ 换成') pre.classList.add('is-added');
+    if (block.isError && section.label.startsWith('输出')) pre.classList.add('err-text');
     pre.textContent = section.text;
-    body.appendChild(pre);
+    container.appendChild(pre);
   }
 
-  if (!body.childNodes.length) {
+  if (!container.childNodes.length) {
     const empty = document.createElement('div');
-    empty.className = 'label';
+    empty.className = 'st-label';
     empty.textContent = block.running ? '进行中…' : '没有更多细节';
-    body.appendChild(empty);
+    container.appendChild(empty);
   }
-
-  card.appendChild(head);
-  card.appendChild(body);
-  return card;
 }
 
 const TOOL_LABELS = {
@@ -1722,7 +1876,7 @@ function patchItem(item) {
 
 /**
  * 正在跑的一轮：内容只增不减，所以可以就地更新。
- * 任务完成后的正文和展开的步骤详情不在这里处理，交给整轮重画。
+ * 展开着的那一步也不再整轮重画了：只把详情里的内容换掉，节点和展开状态都留着。
  */
 function updateLiveTurn(node, turn) {
   const assistant = node.querySelector('.msg.assistant');
@@ -1733,14 +1887,15 @@ function updateLiveTurn(node, turn) {
   if (!work.length || texts.length) return false;
 
   const target = work[work.length - 1];
-  const rows = wrap.querySelectorAll('.work-body > .step');
+  const targetId = String(target.block?.id || '');
+  const rows = wrap.querySelectorAll('.work-body .st-row');
   const row = rows[rows.length - 1];
-  // 换到下一步了就整轮重画：刚才那条得折进「前 N 步」里。
-  if (!row || row.getAttribute('data-step') !== String(target.block.id || '')) return false;
-  // 详情展开着就不动它，里面的内容是旧的，重新点开才看得到。
-  if (row.classList.contains('is-open')) return false;
+  if (!row) return false;
 
-  updateStepRow(row, work[work.length - 1]);
+  // 最后一行还是它才就地改；换了（合并、换种类、换步）就整轮重画，展开状态在会话里存着，不会丢。
+  if ((row.dataset.lastStep || row.dataset.step) !== targetId) return false;
+
+  updateLiveRow(row, target);
 
   const head = wrap.querySelector('.work-head');
   if (head) {
@@ -1754,38 +1909,33 @@ function updateLiveTurn(node, turn) {
   return true;
 }
 
-/** 把一行步骤的文字换掉，节点不动。 */
-function updateStepRow(row, entry) {
-  const head = row.querySelector('.step-head');
-  if (!head) return;
+/** 就地改一行：摘要、状态、时长；详情开着的话把内容也换新。 */
+function updateLiveRow(row, entry) {
+  const summary = stepSummaryText(entry);
+  const sum = row.querySelector('.st-sum');
+  if (sum) {
+    sum.textContent = summary.text;
+    sum.classList.toggle('mono', summary.mono);
+  }
 
-  const label = entry.kind === 'thinking' ? '思考' : toolLabel(entry.block.name);
-  const summary = entry.kind === 'thinking'
-    ? String(entry.block.text).replace(/\s+/g, ' ').slice(0, 46)
-    : toolSummary(entry.block);
-  const running = stepRunning(entry);
-  const aborted = entry.kind === 'tool' && entry.block.interrupted && !entry.block.done;
+  const state = row.querySelector('.st-state');
+  if (state) state.replaceWith(stepStateNode(entry));
 
-  row.className = 'step' + (entry.kind === 'thinking' ? ' is-thinking' : '') + ' is-current';
-  head.querySelector('.step-name').textContent = label;
-  head.querySelector('.step-text').textContent = summary;
-  head.querySelector('.step-status').textContent = stepStatusText(entry);
-  head.querySelector('.step-dot').className =
-    'step-dot' + (running ? ' is-running' : aborted ? ' is-aborted' : '');
+  const time = row.querySelector('.st-time');
+  if (time) time.textContent = timeText(entry);
 
-  let time = head.querySelector('.step-time');
-  if (entry.block.durationMs != null) {
-    const text = formatDuration(entry.block.durationMs);
-    if (time) {
-      time.textContent = text;
-    } else {
-      time = document.createElement('span');
-      time.className = 'step-time';
-      time.textContent = text;
-      head.appendChild(time);
-    }
-  } else if (time) {
-    time.textContent = '';
+  const item = row.parentElement;
+  const body = item && item.querySelector(':scope > .st-body');
+  if (!body || !item.classList.contains('is-open')) return;
+
+  body.innerHTML = '';
+  if (entry.kind === 'thinking') {
+    const pre = document.createElement('pre');
+    pre.className = 'st-code';
+    pre.textContent = String(entry.block?.text || '');
+    body.appendChild(pre);
+  } else {
+    appendSections(body, entry.block || {});
   }
 }
 
@@ -5198,6 +5348,8 @@ function onSessionState(message) {
   if (previous) {
     session.models = previous.models;
     session.levels = previous.levels;
+    // 展开状态跟着会话走：重新拉一遍状态、断线重连回来都不该把展开的步骤回弹。
+    session.ui = previous.ui;
   }
 
   app.byKey.set(key, session);
