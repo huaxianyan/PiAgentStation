@@ -11,6 +11,7 @@
     "allow-set-lan",
     "allow-regenerate-token",
     "allow-copy-text",
-    "allow-open-target"
+    "allow-open-target",
+    "allow-core-api"
   ]
 }

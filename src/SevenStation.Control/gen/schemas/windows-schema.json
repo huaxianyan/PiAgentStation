@@ -189,6 +189,12 @@
           "markdownDescription": "Enables the copy_text command without any pre-configured scope."
         },
         {
+          "description": "Enables the core_api command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-core-api",
+          "markdownDescription": "Enables the core_api command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_target command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-target",
@@ -247,6 +253,12 @@
           "type": "string",
           "const": "deny-copy-text",
           "markdownDescription": "Denies the copy_text command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the core_api command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-core-api",
+          "markdownDescription": "Denies the core_api command without any pre-configured scope."
         },
         {
           "description": "Denies the open_target command without any pre-configured scope.",

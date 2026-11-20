@@ -10,6 +10,7 @@ fn main() {
             "regenerate_token",
             "copy_text",
             "open_target",
+            "core_api",
         ]),
     );
     tauri_build::try_build(attributes).expect("tauri 构建脚本失败");
