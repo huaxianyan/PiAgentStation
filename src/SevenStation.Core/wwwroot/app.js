@@ -71,6 +71,11 @@ function connect() {
       socket.send(JSON.stringify(transport.queue.shift()));
     }
     send({ type: 'list_conversations' });
+
+    // 断线重连后把正在看的这条重新要一遍：不重开会话，线程里那一步会一直停在断开前的样子。
+    if (app.currentKey) {
+      send({ type: 'open_conversation', id: app.currentKey });
+    }
   });
 
   socket.addEventListener('message', (event) => {
@@ -741,6 +746,7 @@ function blocksFromMessage(message) {
         output: '',
         running: false,
         done: false,
+        interrupted: Boolean(block.interrupted),
         isError: false,
         durationMs: null,
       };
@@ -750,6 +756,17 @@ function blocksFromMessage(message) {
     }
     return null;
   }).filter(Boolean);
+}
+
+/** 一段步骤算不算「还在跑」：有结果算完成，被中断的不算在跑，两者都不显示的才是运行中。 */
+function stepRunning(entry) {
+  return entry.kind === 'tool' && !entry.block.done && !entry.block.interrupted;
+}
+
+function stepStatusText(entry) {
+  if (entry.kind !== 'tool') return '完成';
+  if (entry.block.done) return '完成';
+  return entry.block.interrupted ? '已中断' : '运行中';
 }
 
 function messageTimestamp(message) {
@@ -1218,12 +1235,13 @@ function stepRow(entry) {
     ? String(entry.block.text).replace(/\s+/g, ' ').slice(0, 46)
     : toolSummary(entry.block);
 
-  const running = entry.kind === 'tool' && !entry.block.done;
+  const running = stepRunning(entry);
+  const aborted = entry.kind === 'tool' && entry.block.interrupted && !entry.block.done;
   head.innerHTML =
     '<span class="step-name">' + escapeHtml(label) + '</span>' +
-    '<span class="step-dot' + (running ? ' is-running' : '') + '"></span>' +
+    '<span class="step-dot' + (running ? ' is-running' : aborted ? ' is-aborted' : '') + '"></span>' +
     '<span class="step-text">' + escapeHtml(summary) + '</span>' +
-    '<span class="step-status">' + (running ? '运行中' : '完成') + '</span>' +
+    '<span class="step-status">' + stepStatusText(entry) + '</span>' +
     (entry.block.durationMs != null
       ? '<span class="step-time">' + escapeHtml(formatDuration(entry.block.durationMs)) + '</span>'
       : '');
@@ -1366,7 +1384,7 @@ function toolCard(block) {
   head.className = 'tool-head';
 
   const state = document.createElement('span');
-  state.className = 'state ' + (block.running ? 'running' : block.isError ? 'err' : block.done ? 'ok' : 'running');
+  state.className = 'state ' + (block.running ? 'running' : block.isError ? 'err' : block.interrupted ? 'err' : block.done ? 'ok' : 'running');
 
   const name = document.createElement('span');
   name.className = 'tool-name';
@@ -1730,13 +1748,15 @@ function updateStepRow(row, entry) {
   const summary = entry.kind === 'thinking'
     ? String(entry.block.text).replace(/\s+/g, ' ').slice(0, 46)
     : toolSummary(entry.block);
-  const running = entry.kind === 'tool' && !entry.block.done;
+  const running = stepRunning(entry);
+  const aborted = entry.kind === 'tool' && entry.block.interrupted && !entry.block.done;
 
   row.className = 'step' + (entry.kind === 'thinking' ? ' is-thinking' : '') + ' is-current';
   head.querySelector('.step-name').textContent = label;
   head.querySelector('.step-text').textContent = summary;
-  head.querySelector('.step-status').textContent = running ? '运行中' : '完成';
-  head.querySelector('.step-dot').className = 'step-dot' + (running ? ' is-running' : '');
+  head.querySelector('.step-status').textContent = stepStatusText(entry);
+  head.querySelector('.step-dot').className =
+    'step-dot' + (running ? ' is-running' : aborted ? ' is-aborted' : '');
 
   let time = head.querySelector('.step-time');
   if (entry.block.durationMs != null) {

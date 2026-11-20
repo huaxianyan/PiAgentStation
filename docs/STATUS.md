@@ -22,6 +22,30 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-044：卡住的「运行中」、停止卡 120 秒、重连后不出状态，三处一起修（2026-11-20，未发版）
+
+按 STATUS-043 的结论动手：
+
+- **没跑完的步骤不再假装在跑**：`CenterHub.MarkInterruptedSteps()` 在发 `session_state` 前，
+  对「有 `toolCall` 没 `toolResult`」的块补 `interrupted: true`（只在没有在跑的回合上做）。
+  前端 `stepRunning()` / `stepStatusText()` 统一判断，被中断的显示「已中断」、灰空心点（`.step-dot.is-aborted`），
+  不再一直转「运行中」。卡片状态点也把中断当错误色。
+- **重连后重新要一遍状态**：`connect()` 里 socket 打开时，如果正看着某条对话，补发一次
+  `open_conversation`；以前只发 `list_conversations`，线程就停在上次断开前的样子。
+- **停止不再等 120 秒**：`abort` 单独走 `AbortAsync()`，`SendAsync` 超时 5 秒；
+  超时就把子进程收掉、`SetStreaming(false)`、发一条 notice 再补 `session_state`。
+  `EnsureLive` 靠 `Session.IsRunning` 判断，收掉之后下次发消息会重新起子进程。
+- **关闭有总时限**：`ApplicationStopping` 里 `ShutdownAsync().Wait(10s)`，超时就先退出，不陪 SCM 耗。
+- 验证（沙箱 Core，临时 home + 8909 端口，只按 PID 停自己起的进程）：
+  往临时库塞「一条有结果、一条没结果」的消息 → `open_conversation` 回来
+  `call-done interrupted=false`、`call-open interrupted=true`，`isStreaming=false` ✓。
+- 出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 43.7 MB（`c0fbac0de01de2b4…`）。
+
+**踩坑（记进 AGENTS.md）**：测试脚本里 `taskkill /F /IM SevenStation.Core.exe` 按镜像名匹配，
+会把用户正在用的正式服务一起杀掉，一小时内栽了两次，用户只好退回终端用 pi。
+以后只按 PID 停自己 spawn 的进程。另外 `wix extension add WixToolset.Util.wixext/5.0.2`
+**不带 `-g` 会返回 0 但什么都没装**，打包就报 WIX0144。
+
 ## STATUS-043：查到「断开后状态自相矛盾 / 停止卡住 / 看着像重连失败」的链路（2026-11-20，只调查未改代码）
 
 用户现象：Core 服务停了 → 手动启动 → 客户端「已连接」但任务状态不明 → 点「停止」一直转 →

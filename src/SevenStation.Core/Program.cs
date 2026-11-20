@@ -76,7 +76,13 @@ app.MapGet("/health", () => Results.Json(new
 
 app.Lifetime.ApplicationStopping.Register(() =>
 {
-    hub.ShutdownAsync().GetAwaiter().GetResult();
+    // 收尾要有上限：Pi 子进程或哪条连接不理人时，不能让服务卡在「停止中」等 SCM 强杀。
+    var shutdown = hub.ShutdownAsync();
+    if (!shutdown.Wait(TimeSpan.FromSeconds(10)))
+    {
+        Log.Write("收尾超过 10 秒，先退出去");
+    }
+
     store.Dispose();
     Log.Write("Seven Station Core 停止");
 });

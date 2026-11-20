@@ -170,11 +170,7 @@ public sealed class CenterHub
                     break;
 
                 case "abort":
-                    if (LiveFor(Require(key, "对话标识")) is { } stopping)
-                    {
-                        stopping.StopRequested = true;
-                    }
-                    await SimpleAsync(Require(key, "对话标识"), "abort");
+                    await AbortAsync(Require(key, "对话标识"), sender);
                     break;
 
                 case "compact":
@@ -552,6 +548,14 @@ public sealed class CenterHub
         }
 
         var (messages, total) = _store.MessageWindow(id, MessagePageSize);
+
+        // 没有在跑的回合时，把尾巴上没结果的步骤标成中断：进程被杀、客户端关掉都会留下这种尾巴，
+        // 界面按「有结果才算完成」渲染，不标就永远转「运行中」，重启也治不好（状态在库里）。
+        if (live is null || !live.Streaming)
+        {
+            MarkInterruptedSteps(messages);
+        }
+
         sender.Send(new JsonObject
         {
             ["type"] = "session_state",
@@ -564,6 +568,32 @@ public sealed class CenterHub
             ["hasMore"] = total > messages.Count,
             ["stats"] = Parse(conversation.Stats),
         });
+    }
+
+    /// <summary>把没有 toolResult 的 toolCall 标成中断。只在没在跑的回合上调用。</summary>
+    private static void MarkInterruptedSteps(JsonArray messages)
+    {
+        var answered = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var node in messages)
+        {
+            if (node is not JsonObject message) continue;
+            if (message["role"]?.GetValue<string>() != "toolResult") continue;
+            if (message["toolCallId"]?.GetValue<string>() is { } callId) answered.Add(callId);
+        }
+
+        foreach (var node in messages)
+        {
+            if (node is not JsonObject message) continue;
+            if (message["content"] is not JsonArray content) continue;
+            foreach (var item in content)
+            {
+                if (item is not JsonObject block) continue;
+                if (block["type"]?.GetValue<string>() != "toolCall") continue;
+                var callId = block["id"]?.GetValue<string>();
+                if (callId is not null && answered.Contains(callId)) continue;
+                block["interrupted"] = true;
+            }
+        }
     }
 
     /// <summary>往前翻一页：<c>loaded</c> 是界面上已有的条数，返回它前面那一段。</summary>
@@ -2077,10 +2107,49 @@ public sealed class CenterHub
         }
     }
 
-    private async Task SimpleAsync(string id, string command)
+    private async Task SimpleAsync(string id, string command, TimeSpan? timeout = null)
     {
         var live = EnsureLive(RequireConversation(id));
-        await live.Session.SendAsync(new JsonObject { ["type"] = command }, TimeSpan.FromSeconds(120));
+        await live.Session.SendAsync(new JsonObject { ["type"] = command }, timeout ?? TimeSpan.FromSeconds(120));
+    }
+
+    /// <summary>
+    /// 中止当前这一轮。Pi 正常会秒回；它要是不理人，别跟着 120 秒的通用超时干等——
+    /// 把子进程收掉，这一轮就算结束了，界面也能从「运行中」里出来。
+    /// </summary>
+    private async Task AbortAsync(string id, CenterConnection sender)
+    {
+        var live = EnsureLive(RequireConversation(id));
+        live.StopRequested = true;
+
+        try
+        {
+            await live.Session.SendAsync(new JsonObject { ["type"] = "abort" }, TimeSpan.FromSeconds(5));
+            return;
+        }
+        catch (Exception error)
+        {
+            Log.Write($"中止 {id} 没成功：{error.Message}，收掉子进程");
+        }
+
+        live.StopRequested = false;
+        try
+        {
+            await live.Session.DisposeAsync();
+        }
+        catch
+        {
+            // 已经没了。
+        }
+
+        SetStreaming(live, false);
+        sender.Send(new JsonObject
+        {
+            ["type"] = "notice",
+            ["kind"] = "warning",
+            ["text"] = "Pi 没响应中止请求，这一轮已经强制结束。",
+        });
+        SendState(id, sender);
     }
 
     private async Task SetModelAsync(string id, JsonObject message, CenterConnection sender)
