@@ -22,6 +22,39 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-043：查到「断开后状态自相矛盾 / 停止卡住 / 看着像重连失败」的链路（2026-11-20，只调查未改代码）
+
+用户现象：Core 服务停了 → 手动启动 → 客户端「已连接」但任务状态不明 → 点「停止」一直转 →
+关掉客户端重开，线框里还挂着一条「运行中」。
+
+证据（生产日志 + 对话库，只读）：
+
+1. `2026-11-20 10:47:00.750 对话 c-426013b16dfa 起子进程 …` 之后，下一条是
+   `2026-11-20 11:01:30.975 启动（Windows 服务）`，**中间没有「停止」行**——进程是被硬杀掉/超时终结的，
+   回合没走完。同一段 `01:40:08 停止` 之后还继续服务了 30 秒（`open_conversation 失败 :: InvalidOperationException:
+   ExecuteReader can only be called when the store…`），说明关闭时连接没断、宿主吊着——已在 `c86fc9e` 修掉。
+2. 对话库 `messages` 最后一条（seq 844）是 `{"type":"toolCall","id":"call_00_ET_8Tlf8…","name":"bash"}`，
+   **没有对应的 toolResult**。
+3. `app.js` 里步骤行是 `const running = entry.kind === 'tool' && !entry.block.done;`（约 1224 行），
+   没有结果的 tool 块永远画成「运行中」；而侧栏转圈看的是 Core 的 `conversation.working`，
+   新进程里 `_live` 是空的 → 绿点。于是同一条对话「侧栏不转、线框转」，重启 Core、重开客户端都不会变——
+   这个状态在 `messages.payload` 里，不在内存里。
+4. 「停止」卡住：`abort` 走 `SimpleAsync → live.Session.SendAsync(..., TimeSpan.FromSeconds(120))`
+   （`CenterHub.cs:2080`），子进程不回应就干等 **120 秒**，界面上就是一直转。
+
+关于「重装后不自动重连」：前端 `connect()` 的 `close` 处理器是无限退避重试（1s→2s→…→15s 封顶），
+令牌也不会因重启而变（`read_center`：`center.json` → `token.txt`，`token.txt` 只在缺失时生成）。
+所以更可能是旧 Core 关闭时吊住 30 秒占着 8787，新 Core 起不来/绑不上，页面确实连不上；
+叠加第 3 条那个卡住的「运行中」，看起来就像「没重连成功」。**推测，验证方式**：升级前让 Control 先等
+`sc query` 到 STOPPED 再放行安装（现在已经 45 秒），或升级后查日志里有没有新的「启动」行。
+
+要改的话四处（还没动手）：
+
+- 打开对话/启动 Core 时，把「有 toolCall 没 toolResult」的尾巴标成中断，界面显示「已中断」而不是「运行中」。
+- `session_state`/`open_conversation` 报 `streaming=false` 时，前端把本地 `session.streaming` 清掉。
+- `abort` 单独给短超时（5 秒），失败就明确提示，别跟着 120 秒通用超时转。
+- 关闭流程：断 WS（已做）+ 子进程退出上限（已有 8 秒），再给整体关闭一个总时限。
+
 ## STATUS-042：服务停不下来 → 重启超时 → 服务留在停止状态（2026-11-20，未发版）
 
 - 用户报：重新探测仍提示找不到 Pi；手动改、重新探测、失败回填，三种情况都不会把服务拉起来。
