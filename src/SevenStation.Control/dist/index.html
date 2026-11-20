@@ -426,7 +426,7 @@
       <h3>添加设备</h3>
       <button class="dlg-close" id="deviceCloseX" title="关闭">&#215;</button>
     </div>
-    <p class="dlg-lead">给这台设备单独发一个令牌。丢了就在下面作废这一条，别的设备不受影响。</p>
+    <p class="dlg-lead">给这台设备单独发一个令牌。丢了就在下面移除这一条，别的设备不受影响。</p>
 
     <div class="dlg-body">
       <label class="field-row">
@@ -466,6 +466,17 @@
       <button class="btn" id="deviceClose">关闭</button>
       <span class="spacer"></span>
       <button class="btn primary" id="deviceCreate">生成令牌</button>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="revokeScrim" hidden>
+  <div class="dialog">
+    <h3>移除这台设备？</h3>
+    <p id="revokeLead">移除之后它要重新扫码才能连上，已经跑起来的对话不受影响。</p>
+    <div class="actions">
+      <button class="btn" id="revokeCancel">取消</button>
+      <button class="btn primary" id="revokeConfirm">移除</button>
     </div>
   </div>
 </div>
@@ -730,7 +741,7 @@
         const value = document.createElement('span');
         value.className = 'value mono';
         value.textContent = device.revokedAt
-          ? '已作废 · ' + device.tokenHint
+          ? '已移除 · ' + device.tokenHint
           : device.tokenHint + (device.lastSeenAt ? ' · 最近用过' : ' · 还没用过');
         value.style.color = device.revokedAt ? 'var(--text-faint)' : '';
 
@@ -739,15 +750,11 @@
         if (!device.revokedAt) {
           const revoke = document.createElement('button');
           revoke.className = 'link';
-          revoke.textContent = '作废';
-          revoke.addEventListener('click', async () => {
-            try {
-              await coreApi('POST', '/api/devices/' + encodeURIComponent(device.id) + '/revoke', '{}');
-              toast('已作废「' + device.name + '」');
-              await loadDevices();
-            } catch (error) {
-              toast(typeof error === 'string' ? error : '作废没成功');
-            }
+          revoke.textContent = '移除';
+          revoke.addEventListener('click', () => {
+            pendingRevoke = device;
+            el('revokeLead').textContent = '「' + device.name + '」移除之后要重新扫码才能连上，已经跑起来的对话不受影响。';
+            el('revokeScrim').hidden = false;
           });
           actions.appendChild(revoke);
         }
@@ -832,6 +839,28 @@
       toast(typeof error === 'string' ? error : '生成令牌没成功');
     } finally {
       button.disabled = false;
+    }
+  });
+
+  let pendingRevoke = null;
+
+  el('revokeCancel').addEventListener('click', () => {
+    pendingRevoke = null;
+    el('revokeScrim').hidden = true;
+  });
+
+  el('revokeConfirm').addEventListener('click', async () => {
+    const device = pendingRevoke;
+    pendingRevoke = null;
+    el('revokeScrim').hidden = true;
+    if (!device) return;
+
+    try {
+      await coreApi('POST', '/api/devices/' + encodeURIComponent(device.id) + '/revoke', '{}');
+      toast('已移除「' + device.name + '」');
+      await loadDevices();
+    } catch (error) {
+      toast(typeof error === 'string' ? error : '移除没成功');
     }
   });
 

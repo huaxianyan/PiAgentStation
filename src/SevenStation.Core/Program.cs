@@ -111,7 +111,7 @@ app.MapPost("/api/devices/{id}/revoke", (HttpContext context, string id) =>
     if (!Admin(context)) return Results.StatusCode(StatusCodes.Status401Unauthorized);
 
     devices.Revoke(id);
-    Log.Write($"作废设备 {id}");
+    Log.Write($"移除设备 {id}");
     return Results.Json(new { revoked = id });
 });
 
