@@ -273,6 +273,19 @@
   }
   .dlg-close:hover { background: var(--active); color: var(--text); }
   .dlg-lead { margin: 8px 20px 0; font-size: 12px; line-height: 1.65; color: var(--text-mute); }
+  .summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: inset 0 0 0 1px var(--border);
+    color: var(--text-soft);
+    font-size: 12.5px;
+  }
+  .summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dlg-body {
     flex: 1;
     min-height: 0;
@@ -429,7 +442,11 @@
     <p class="dlg-lead">给这台设备单独发一个令牌。丢了就在下面移除这一条，别的设备不受影响。</p>
 
     <div class="dlg-body">
-      <label class="field-row">
+      <div class="summary" id="deviceSummaryRow" hidden>
+        <span id="deviceSummaryText"></span>
+      </div>
+
+      <label class="field-row" id="deviceNameRow">
         <span class="field-label">名字</span>
         <input class="field" id="deviceName" placeholder="手机" spellcheck="false" />
       </label>
@@ -466,6 +483,7 @@
       <button class="btn" id="deviceClose">关闭</button>
       <span class="spacer"></span>
       <button class="btn primary" id="deviceCreate">生成令牌</button>
+      <button class="btn primary" id="deviceDone" hidden>完成</button>
     </div>
   </div>
 </div>
@@ -771,6 +789,10 @@
   async function openDevices() {
     el('deviceScrim').hidden = false;
     el('deviceResult').hidden = true;
+    el('deviceSummaryRow').hidden = true;
+    el('deviceNameRow').hidden = false;
+    el('deviceCreate').hidden = false;
+    el('deviceDone').hidden = true;
     el('deviceName').value = '';
     el('deviceToken').textContent = '';
     el('deviceQr').innerHTML = '';
@@ -807,6 +829,7 @@
   el('addDevice').addEventListener('click', openDevices);
   const closeDevices = () => { el('deviceScrim').hidden = true; };
   el('deviceClose').addEventListener('click', closeDevices);
+  el('deviceDone').addEventListener('click', closeDevices);
   el('deviceCloseX').addEventListener('click', closeDevices);
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !el('deviceScrim').hidden) closeDevices();
@@ -831,6 +854,15 @@
 
       const svg = await coreApi('GET', '/api/qr?data=' + encodeURIComponent(url));
       el('deviceQr').innerHTML = svg;
+
+      // 生成之后名字和地址都不再影响这个令牌，表单收成一行，主按钮换成「完成」。
+      el('deviceNameRow').hidden = true;
+      el('deviceAddressRow').hidden = true;
+      el('deviceLanHint').hidden = true;
+      el('deviceSummaryText').textContent = device.name + ' · ' + base.replace(/\/$/, '');
+      el('deviceSummaryRow').hidden = false;
+      el('deviceCreate').hidden = true;
+      el('deviceDone').hidden = false;
       el('deviceResult').scrollIntoView({ block: 'nearest' });
 
       await loadDevices();
