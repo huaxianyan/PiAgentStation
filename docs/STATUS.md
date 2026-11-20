@@ -22,6 +22,18 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-053：对话框里冒出空灰条、空地址框（2026-11-20）
+
+装完新版打开「添加设备」看到的两个毛病，同一个根因：**元素自己写了 `display: flex`，把 `[hidden]` 盖掉了**。
+
+- 顶部那条空灰条 = `#deviceSummaryRow`（`.summary` 是 flex），本该在生成前隐藏。
+- 空的地址下拉 = `#deviceAddressRow`（`.field-row` 是 flex），局域网没开时本该隐藏。
+
+修法：样式里加全局兜底 `[hidden] { display: none !important; }`（这坑 AGENTS 里早写过，Control 这边漏了）。
+顺手：Core 没起来时「已配对的设备」下面不再是空白，改成一行为「读不到设备列表，先确认 Seven Station Core 在运行。」
+
+出包：`dist/SevenStationCore-win-x64-0.4.1.msi`（`01d1b0a2d71e3029…`）。
+
 ## STATUS-052：dist 只留当前版本的包（2026-11-20）
 
 用户嫌安装时挑不清哪个是最新包。清掉 `dist/` 里的 0.4.0 三件套（msi、sha256、wixpdb），

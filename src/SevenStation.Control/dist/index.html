@@ -106,6 +106,8 @@
   .btn.primary { background: var(--accent); color: var(--card); box-shadow: none; }
   .btn.primary:hover { opacity: .88; }
   .btn:disabled { color: var(--text-faint); box-shadow: inset 0 0 0 1px var(--border); cursor: default; }
+  /* 自己写了 display 的元素会盖掉 [hidden]（.summary、.field-row 都栽过），这条是兜底。 */
+  [hidden] { display: none !important; }
   .btn[hidden] { display: none; }
 
   .link {
@@ -822,7 +824,13 @@
     try {
       await loadDevices();
     } catch {
-      // loadDevices 已经把提示写在界面上了。
+      // Core 没起来的时候别留一片空白，说清楚读不到。
+      const box = el('deviceList');
+      box.innerHTML = '';
+      const note = document.createElement('div');
+      note.className = 'empty';
+      note.textContent = '读不到设备列表，先确认 Seven Station Core 在运行。';
+      box.appendChild(note);
     }
   }
 
