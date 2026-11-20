@@ -22,6 +22,28 @@
 - 已知限制（写进发布说明）：Seven Station Core 目前只放 Windows 包，之后会出 Linux 版；局域网限本地子网、没做 TLS；
   手机窄屏未调；数据库没有版本化迁移，只有「查列再补」这一处临时逻辑。
 
+## STATUS-042：服务停不下来 → 重启超时 → 服务留在停止状态（2026-11-20，未发版）
+
+- 用户报：重新探测仍提示找不到 Pi；手动改、重新探测、失败回填，三种情况都不会把服务拉起来。
+- 查到的因果链（生产日志 + `%LOCALAPPDATA%\SevenStation.Control\control.log`）：
+  1. `2026-11-20 10:02:55 Seven Station Core 停止` 之后，进程**又活了 30 秒**，期间客户端还在连、还在报
+     SQLite 已释放的错——宿主在等 WebSocket 收尾。
+  2. `CenterHub.ShutdownAsync()` 根本不断开连接，Kestrel 关闭要等连接结束，默认超时 30 秒才强断。
+  3. Control 的 `restart()` 里 `wait_for(false)` 只等 20 秒（40×500ms），超时就 `?` 直接返回，
+     **`sc start` 从来没发出去**，服务就这么留在「已停止」。
+  4. 服务没起来 → Core 不会重新探测 → UI 看到 `piReady=false` → 「找不到 Pi」。三个现象其实是同一个原因。
+- Core 改法：`CenterConnection.Abort()`（`Interlocked` 置位 + `WebSocket.Abort()`），
+  `ShutdownAsync()` 先把所有连接 Abort 掉再收尾。
+- Control 改法：停止等待放宽到 90×500ms（45 秒），而且**停不下来不再提前返回**，继续 `sc start`
+  让真正的错误暴露出来；启动等待 60×500ms。UI 上如果发现服务没起来，直接提示
+  「服务没起来，点上面的『启动』把它拉起来」，而不是含糊地说没找到 Pi。
+- 实测（沙箱服务 `SevenStationCore-Sandbox`，自己的数据目录与端口，不碰生产）：
+  - 挂着客户端时 `sc stop` → **603 ms** 变 STOPPED（改之前 30 秒起步）。
+  - 同一沙箱上跑 `sevenstation-control.exe --do pi ""`（清空 + 重启）→ 整段 **703 ms**，结束后服务 RUNNING，
+    Core 日志 `找到 Pi：C:\Users\7inaBranford\.pi\agent`，`settings.json` 回填正确。
+  - 测完已删掉沙箱服务与临时目录。
+- 出包：`dist/SevenStationCore-win-x64-0.4.1.msi` 43.7 MB（`e2a11355a8e4cdf4…`）。
+
 ## STATUS-041：深色模式下一堆写死的浅色底（2026-11-20，未发版）
 
 - 现象：深色模式下正文里的表格、代码块、行内代码亮得刺眼，表头和白底行里的浅灰字几乎看不见。

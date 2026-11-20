@@ -371,7 +371,9 @@ pub fn restart() -> Result<(), String> {
             ERROR_ACCESS_DENIED => return elevate(&["restart"]),
             _ => {}
         }
-        wait_for(false)?;
+        // 停不下来也别就此收手：继续 start，让它把真正的原因说出来。
+        // 以前是 wait_for(false)? 一超时就直接返回，服务就停在「已停止」再没人拉起来。
+        let _ = wait_for_tries(false, WAIT_STOP_TRIES);
         let (code, _) = run("sc.exe", &["start", service()]);
         return match code {
             0 => wait_for(true),
@@ -385,8 +387,16 @@ pub fn restart() -> Result<(), String> {
 }
 
 /// `sc start/stop` 是异步的，等它真的换了状态再回界面。
+/// 等服务的状态变成期望值。停止可能要几十秒（要收掉 Pi 子进程），所以给足时间。
+const WAIT_STOP_TRIES: u32 = 90;
+const WAIT_START_TRIES: u32 = 60;
+
 fn wait_for(running: bool) -> Result<(), String> {
-    for _ in 0..40 {
+    wait_for_tries(running, if running { WAIT_START_TRIES } else { WAIT_STOP_TRIES })
+}
+
+fn wait_for_tries(running: bool, tries: u32) -> Result<(), String> {
+    for _ in 0..tries {
         if service_running() == running {
             return Ok(());
         }

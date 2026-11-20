@@ -2195,6 +2195,20 @@ public sealed class CenterHub
 
     public async Task ShutdownAsync()
     {
+        // 先断开所有客户端：宿主关闭要等连接收尾，客户端还挂着进程就退不出去，
+        // 服务会停在「停止中」，Control 的重启那一步就等到超时（以前就是这么卡住的）。
+        CenterConnection[] clients;
+        lock (_gate)
+        {
+            clients = _clients.ToArray();
+            _clients.Clear();
+        }
+
+        foreach (var client in clients)
+        {
+            client.Abort();
+        }
+
         Live[] entries;
         lock (_gate)
         {

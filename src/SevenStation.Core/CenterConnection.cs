@@ -125,6 +125,24 @@ public sealed class CenterConnection
         }
     }
 
+
+    /// <summary>
+    /// 立刻断开，不走关闭握手。关闭流程里用：Kestrel 要等所有连接结束才退出，
+    /// 客户端不走的话进程会一直吊着，服务看起来卡在「停止中」，外面的重启就等到超时。
+    /// </summary>
+    public void Abort()
+    {
+        Interlocked.Exchange(ref _closed, 1);
+        try
+        {
+            _socket.Abort();
+        }
+        catch
+        {
+            // 已经断了。
+        }
+    }
+
     private async Task CloseQuietlyAsync()
     {
         if (Interlocked.Exchange(ref _closed, 1) == 1)
