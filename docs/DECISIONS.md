@@ -115,3 +115,9 @@ Linux 版等用户的 Linux 环境就绪再做，代码里已经有 `OperatingSy
 窗口叫 SevenStation。两个名字分工固定：说 SevenStation.Core 指部署在 Seven Station Core 那套服务，说 SevenStation
 指客户端。程序集按这个分。目录不再分两份：改名后 Seven Station Core 与客户端都写 `%LOCALAPPDATA%\SevenStation`，
 令牌 `token.txt`、日志 `logs/`、对话库 `data/`、客户端配置 `center.json` 并列在一起。
+
+## D11 发版只由用户主动发起，不问
+
+2026-11-20 用户定：平时开发只管把代码推上仓库，**不要问要不要发版**，也不要顺手打标签、建 Release。
+用户要发版会明说；没说就是不发。问一次就够了，反复问是噪音。
+
