@@ -1214,10 +1214,27 @@ function formatSpent(totalMs) {
   return minutes ? hours + ' 小时 ' + minutes + ' 分' : hours + ' 小时';
 }
 
-/** 过程区的展开状态挂在会话上：整轮重画之后要能恢复（节点一换就回弹的老毛病）。 */
+/** 过程区折叠状态挂在会话上：整轮重画之后要能恢复（节点一换就回弹的老毛病）。 */
 function uiOf(session) {
-  if (!session.ui) session.ui = { work: new Map(), groups: new Set(), steps: new Set() };
+  if (!session.ui) session.ui = { work: new Map() };
   return session.ui;
+}
+
+/**
+ * 每一轮过程区滚到哪儿了（贴不贴底、翻上去时停在什么位置）。
+ * 过程区现在自己滚动，整轮重画（换步、断线回来）以后位置和「贴底跟随」都要接上。
+ */
+const workScroll = new Map();
+
+function rememberScroll(key, value) {
+  if (!key) return;
+  workScroll.set(key, value);
+  if (workScroll.size > 200) workScroll.delete(workScroll.keys().next().value);
+}
+
+/** 这个小滚动区是不是贴着底（跟 thread 那个 atBottom 是两回事）。 */
+function nearBottom(box) {
+  return box.scrollHeight - box.scrollTop - box.clientHeight < 24;
 }
 
 /** 工具的种类决定图标和行首那两个字；没登记过的用加号兜底。 */
@@ -1288,11 +1305,6 @@ function stepSummaryText(entry) {
   return { text: '', mono: false };
 }
 
-function timeText(entry) {
-  const ms = entry?.block?.durationMs;
-  return ms == null ? '' : formatDuration(ms);
-}
-
 /** 右边只留一个记号：打勾、转圈、感叹号、中断的横杠。 */
 function stepStateNode(entry) {
   const span = document.createElement('span');
@@ -1350,32 +1362,11 @@ function groupWork(work) {
 }
 
 /** 展开一行的时候把别的收起来，同一块里只留一个开着的。 */
-function closeOpenItems(ctx, keep) {
-  if (!ctx.wrap) return;
-
-  for (const item of ctx.wrap.querySelectorAll('.st-item.is-open')) {
-    if (item === keep || item.contains(keep)) continue;
-
-    item.classList.remove('is-open');
-    const body = item.querySelector(':scope > .st-body, :scope > .st-group-body');
-    if (body) body.hidden = true;
-
-    const row = item.querySelector(':scope > .st-row');
-    if (row) {
-      row.classList.remove('is-open');
-      const key = row.dataset.group || row.dataset.step;
-      if (row.dataset.group) ctx.ui?.groups.delete(key);
-      else ctx.ui?.steps.delete(key);
-    }
-  }
-}
-
 function workGroup(work, collapsed, turnMs, since, session, turnKey) {
   const wrap = document.createElement('div');
   wrap.className = 'work';
 
   const ui = session ? uiOf(session) : null;
-  const ctx = { ui, wrap };
 
   // 还在跑的按开始到现在算，每秒跟着刷新；跑完的用这一轮的实际耗时。
   const live = since > 0;
@@ -1395,13 +1386,76 @@ function workGroup(work, collapsed, turnMs, since, session, turnKey) {
     '<span class="work-caret">▸</span>' +
     '<span class="work-title">' + escapeHtml(workLabel(totalMs, work.length, live)) + '</span>';
 
+  const rows = groupWork(work);
+  const key = turnKey || '';
+
+  const scroll = document.createElement('div');
+  scroll.className = 'work-scroll';
+
   const body = document.createElement('div');
   body.className = 'work-body';
-  for (const row of groupWork(work)) body.appendChild(workRowNode(ctx, row));
+  rows.forEach((row, index) => body.appendChild(workRowNode(rows, index)));
+
+  // 翻上去了才浮出来：新出几条、点一下回到最下面。
+  const pill = document.createElement('button');
+  pill.type = 'button';
+  pill.className = 'work-latest';
+  pill.hidden = true;
+  pill.innerHTML =
+    '<span class="work-latest-arrow" aria-hidden="true">↓</span>' +
+    '<span>回到最新</span>' +
+    '<span class="work-latest-count"></span>';
+
+  scroll.append(body, pill);
+
+  const saved = workScroll.get(key);
+  let stuck = Boolean(saved && saved.stuck);
+  let seen = saved ? saved.seen : rows.length;
+
+  const syncPill = () => {
+    const fresh = rows.length - seen;
+    pill.hidden = !stuck;
+    pill.querySelector('.work-latest-count').textContent = stuck && fresh > 0 ? fresh + ' 条' : '';
+    scroll.classList.toggle('is-scrolled', stuck);
+  };
+
+  const save = () => rememberScroll(key, { stuck, seen, top: body.scrollTop });
+
+  // 贴底就跟着新的走，用户往上翻就冻住——别抢人家的视线。
+  body.addEventListener('scroll', () => {
+    stuck = !nearBottom(body);
+    if (!stuck) seen = rows.length;
+    syncPill();
+    save();
+  }, { passive: true });
+
+  pill.addEventListener('click', () => {
+    stuck = false;
+    seen = rows.length;
+    body.scrollTop = body.scrollHeight;
+    syncPill();
+    save();
+  });
+
+  // 新的一步进来（就地更新那条路会调它）。
+  wrap.follow = () => {
+    if (stuck) {
+      syncPill();
+      return;
+    }
+    seen = rows.length;
+    body.scrollTop = body.scrollHeight;
+  };
+
+  // 首帧：上次翻上去就回到原位，否则贴底。
+  requestAnimationFrame(() => {
+    body.scrollTop = stuck ? Number(saved && saved.top) || 0 : body.scrollHeight;
+    syncPill();
+  });
 
   const setOpen = (value, silent) => {
     wrap.classList.toggle('is-collapsed', !value);
-    body.hidden = !value;
+    scroll.hidden = !value;
     head.querySelector('.work-caret').textContent = value ? '▾' : '▸';
     if (!silent && ui && turnKey) ui.work.set(turnKey, value);
   };
@@ -1412,43 +1466,42 @@ function workGroup(work, collapsed, turnMs, since, session, turnKey) {
   head.addEventListener('click', () => setOpen(wrap.classList.contains('is-collapsed')));
 
   wrap.appendChild(head);
-  wrap.appendChild(body);
+  wrap.appendChild(scroll);
   return wrap;
 }
 
 /**
- * 一行：图标 + 种类 + 摘要 + 状态记号，点开才看内容。
- * 合并起来的那一行点开摊成子行，每条子行自己还能再展开。
+ * 一行：图标 + 种类 + 摘要 + 状态记号。点一下弹窗看完整内容。
+ * 不在原地展开——就地展开会把下面的内容顶走，长输出还会把整轮撑变形。
  */
-function workRowNode(ctx, row, member) {
-  const many = row.entries.length > 1 && !member;
+function workRowNode(rows, index) {
+  const row = rows[index];
+  const many = row.entries.length > 1;
   const first = row.entries[0];
   const last = row.entries[row.entries.length - 1];
   const meta = stepMeta(first);
   const summary = stepSummaryText(first);
   const state = groupStateEntry(row.entries);
-  const shown = many ? last : first;
 
   const item = document.createElement('div');
-  item.className = 'st-item' + (member ? ' st-sub' : '');
+  item.className = 'st-item';
 
   const node = document.createElement('div');
-  node.className = 'st-row'
-    + (row.kind === 'thinking' ? ' is-thinking' : '')
-    + (member ? ' st-sub' : '');
+  node.className = 'st-row' + (row.kind === 'thinking' ? ' is-thinking' : '');
   node.dataset.step = String(first.block?.id || '');
   node.dataset.lastStep = String(last.block?.id || '');
-  if (many) node.dataset.group = 'g:' + String(first.block?.id || '');
 
   node.innerHTML =
     '<span class="st-icon">' + stepIcon(meta.icon) + '</span>' +
     '<span class="st-name">' + escapeHtml(meta.label) + '</span>' +
     (many ? '<span class="st-count">×' + row.entries.length + '</span>' : '') +
-    '<span class="st-sum' + (summary.mono ? ' mono' : '') + '">' + escapeHtml(summary.text) + '</span>';
+    '<span class="st-sum' + (summary.mono ? ' mono' : '') + '">' + escapeHtml(summary.text) + '</span>' +
+    '<span class="st-open" aria-hidden="true">详情</span>';
 
-  // 能点、能按回车；不然只能用鼠标。
   node.tabIndex = 0;
   node.setAttribute('role', 'button');
+  node.title = '点开看这一步的完整内容';
+  node.addEventListener('click', () => openStepModal(rows, index));
   node.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
@@ -1456,7 +1509,7 @@ function workRowNode(ctx, row, member) {
     }
   });
 
-  // 读写过的路径点一下在右侧文件面板打开，省得自己去目录里翻。
+  // 读写过的路径点一下在右侧文件面板打开，省得自己去目录里翻（别连弹窗一起开）。
   const targetPath = first.block?.args?.path || first.block?.args?.file_path;
   const sum = node.querySelector('.st-sum');
   if (typeof targetPath === 'string' && targetPath && sum) {
@@ -1464,88 +1517,218 @@ function workRowNode(ctx, row, member) {
     sum.title = '在文件面板里打开 ' + targetPath;
     sum.addEventListener('click', (event) => {
       event.stopPropagation();
-      const session = current();
-      if (!session) return;
-      el.filePanel.hidden = false;
-      document.querySelector('.main').classList.add('files-open');
-      el.filesPath.textContent = '/' + targetPath;
-      el.filesPath.title = '/' + targetPath;
-      el.filesBody.innerHTML = '<div class="files-note">读取中…</div>';
-      send({ type: 'read_file', key: session.key, path: targetPath });
+      openPathInPanel(targetPath);
     });
   }
 
   node.appendChild(stepStateNode(state));
 
-  const time = document.createElement('span');
-  time.className = 'st-time';
-  time.textContent = timeText(shown);
-  node.appendChild(time);
-
   item.appendChild(node);
-
-  // 合并行：摊开成子行，自己不摆内容。
-  if (many) {
-    const groupBody = document.createElement('div');
-    groupBody.className = 'st-group-body';
-    groupBody.hidden = true;
-    for (const entry of row.entries) {
-      groupBody.appendChild(workRowNode(ctx, { kind: row.kind, entries: [entry] }, true));
-    }
-    item.appendChild(groupBody);
-
-    const key = node.dataset.group;
-    const open = Boolean(ctx.ui && ctx.ui.groups.has(key));
-    node.classList.toggle('is-open', open);
-    item.classList.toggle('is-open', open);
-    groupBody.hidden = !open;
-
-    node.addEventListener('click', () => {
-      const next = !item.classList.contains('is-open');
-      if (next) closeOpenItems(ctx, item);
-      item.classList.toggle('is-open', next);
-      node.classList.toggle('is-open', next);
-      groupBody.hidden = !next;
-      if (ctx.ui) {
-        if (next) ctx.ui.groups.add(key);
-        else ctx.ui.groups.delete(key);
-      }
-    });
-    return item;
-  }
-
-  // 单条：详情只摆内容，行头不再重复一遍。
-  const detail = document.createElement('div');
-  detail.className = 'st-body';
-  if (row.kind === 'thinking') {
-    const pre = document.createElement('pre');
-    pre.className = 'st-code';
-    pre.textContent = String(first.block?.text || '');
-    detail.appendChild(pre);
-  } else {
-    appendSections(detail, first.block || {});
-  }
-  item.appendChild(detail);
-
-  const key = node.dataset.step;
-  const open = Boolean(ctx.ui && ctx.ui.steps.has(key));
-  node.classList.toggle('is-open', open);
-  item.classList.toggle('is-open', open);
-  detail.hidden = !open;
-
-  node.addEventListener('click', () => {
-    const next = !item.classList.contains('is-open');
-    if (next) closeOpenItems(ctx, item);
-    item.classList.toggle('is-open', next);
-    node.classList.toggle('is-open', next);
-    detail.hidden = !next;
-    if (ctx.ui) {
-      if (next) ctx.ui.steps.add(key);
-      else ctx.ui.steps.delete(key);
-    }
-  });
-
   return item;
+}
+
+/** 右侧文件面板打开一个路径。 */
+function openPathInPanel(targetPath) {
+  const session = current();
+  if (!session) return;
+
+  el.filePanel.hidden = false;
+  document.querySelector('.main').classList.add('files-open');
+  el.filesPath.textContent = '/' + targetPath;
+  el.filesPath.title = '/' + targetPath;
+  el.filesBody.innerHTML = '<div class="files-note">读取中…</div>';
+  send({ type: 'read_file', key: session.key, path: targetPath });
+}
+
+/* ────────────────────────── 步骤详情弹窗 ────────────────────────── *
+ * 一条（或合并起来的一组）步骤的全部内容：命令、输出、改动、耗时。
+ * 主界面排版一动不动，长输出在自己的框里滚。
+ */
+
+let stepModal = null;
+
+/** 状态说人话：弹窗里可以写字，不像行尾只有一个记号。 */
+function stepStateText(entry) {
+  if (stepRunning(entry)) return { text: '正在跑', cls: '' };
+  if (entry.block?.isError) return { text: '出错', cls: 'is-error' };
+  if (entry.block?.interrupted && !entry.block?.done) return { text: '被中断', cls: 'is-aborted' };
+  return { text: '完成', cls: 'is-ok' };
+}
+
+/** 这一步是什么时候发生的，没有时间戳就留空。 */
+function clockOf(entry) {
+  const raw = entry?.block?.ts ?? entry?.block?.startedAt ?? entry?.item?.ts ?? entry?.ts;
+  const value = Number(raw);
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return String(date.getHours()).padStart(2, '0') + ':' +
+    String(date.getMinutes()).padStart(2, '0') + ':' +
+    String(date.getSeconds()).padStart(2, '0');
+}
+
+function closeStepModal() {
+  if (!stepModal) return;
+  document.removeEventListener('keydown', stepModal.onKey);
+  stepModal.scrim.remove();
+  stepModal = null;
+}
+
+function openStepModal(rows, index) {
+  closeStepModal();
+
+  const scrim = document.createElement('div');
+  scrim.className = 'sm-scrim';
+  scrim.addEventListener('click', (event) => {
+    if (event.target === scrim) closeStepModal();
+  });
+  document.body.appendChild(scrim);
+
+  const onKey = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeStepModal();
+      return;
+    }
+    if (event.key === 'ArrowRight') moveStepModal(1);
+    if (event.key === 'ArrowLeft') moveStepModal(-1);
+  };
+
+  stepModal = { rows, index, scrim, onKey };
+  document.addEventListener('keydown', onKey);
+  renderStepModal();
+}
+
+function moveStepModal(step) {
+  if (!stepModal) return;
+  const next = stepModal.index + step;
+  if (next < 0 || next >= stepModal.rows.length) return;
+  stepModal.index = next;
+  renderStepModal();
+}
+
+function renderStepModal() {
+  if (!stepModal) return;
+
+  const { rows, index, scrim } = stepModal;
+  const row = rows[index];
+  if (!row) {
+    closeStepModal();
+    return;
+  }
+
+  const first = row.entries[0];
+  const meta = stepMeta(first);
+  const state = groupStateEntry(row.entries);
+  const status = stepStateText(state);
+  const duration = row.entries.reduce((sum, entry) => sum + (entry.block.durationMs || 0), 0);
+  const cwd = current()?.cwd || '';
+
+  // 正在跑的那条会不停刷新，别把弹窗里的滚动位置刷没了。
+  const keep = scrim.querySelector('.sm-body') ? scrim.querySelector('.sm-body').scrollTop : 0;
+
+  scrim.innerHTML = '';
+  const dlg = document.createElement('div');
+  dlg.className = 'sm-dlg';
+
+  const head = document.createElement('div');
+  head.className = 'sm-head';
+  const title = document.createElement('div');
+  title.className = 'sm-title';
+  const heading = document.createElement('h3');
+  heading.textContent = meta.label + (row.entries.length > 1 ? ' ×' + row.entries.length : '');
+  const clock = document.createElement('span');
+  clock.className = 'sm-clock';
+  clock.textContent = clockOf(first);
+  title.append(heading, clock);
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'sm-close';
+  close.textContent = '×';
+  close.title = '关闭（Esc）';
+  close.addEventListener('click', closeStepModal);
+  head.append(title, close);
+
+  const line = document.createElement('div');
+  line.className = 'sm-meta';
+  const statusNode = document.createElement('span');
+  statusNode.className = status.cls;
+  statusNode.textContent = status.text;
+  line.appendChild(statusNode);
+  if (duration > 0) {
+    const used = document.createElement('span');
+    used.textContent = '用时 ' + formatDuration(duration);
+    line.append('·', used);
+  }
+  if (cwd) {
+    const where = document.createElement('span');
+    where.className = 'sm-cwd';
+    where.textContent = cwd;
+    line.append('·', where);
+  }
+
+  const body = document.createElement('div');
+  body.className = 'sm-body';
+  for (const entry of row.entries) {
+    if (row.entries.length > 1) {
+      const tag = document.createElement('div');
+      tag.className = 'sm-tag';
+      const stamp = clockOf(entry);
+      tag.textContent = (stamp ? stamp + ' · ' : '') + stepStateText(entry).text;
+      body.appendChild(tag);
+    }
+
+    if (row.kind === 'thinking') {
+      const pre = document.createElement('pre');
+      pre.className = 'sm-code';
+      pre.textContent = String(entry.block?.text || '');
+      body.appendChild(pre);
+    } else {
+      const block = document.createElement('div');
+      block.className = 'sm-block';
+      appendSections(block, entry.block || {});
+      body.appendChild(block);
+    }
+  }
+
+  const foot = document.createElement('div');
+  foot.className = 'sm-foot';
+  const prev = document.createElement('button');
+  prev.type = 'button';
+  prev.className = 'sm-btn';
+  prev.textContent = '上一条';
+  prev.disabled = index <= 0;
+  prev.addEventListener('click', () => moveStepModal(-1));
+
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'sm-btn';
+  next.textContent = '下一条';
+  next.disabled = index >= rows.length - 1;
+  next.addEventListener('click', () => moveStepModal(1));
+
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'sm-btn';
+  done.textContent = '关闭';
+  done.addEventListener('click', closeStepModal);
+
+  const spacer = document.createElement('span');
+  spacer.className = 'spacer';
+  foot.append(prev, next, spacer, done);
+
+  dlg.append(head, line, body, foot);
+  scrim.appendChild(dlg);
+  body.scrollTop = keep;
+}
+
+/** 这一行正好是弹窗里那条：内容变了就顺手刷新（正在跑的输出会一直长）。 */
+function refreshStepModal(entry) {
+  if (!stepModal) return;
+  const row = stepModal.rows[stepModal.index];
+  if (!row || !row.entries.some((item) => item === entry)) return;
+  renderStepModal();
 }
 
 function formatDuration(ms) {
@@ -1949,6 +2132,8 @@ function updateLiveTurn(node, turn) {
 
   updateLiveRow(row, target);
 
+  if (typeof wrap.follow === 'function') wrap.follow();
+
   const head = wrap.querySelector('.work-head');
   if (head) {
     head.dataset.steps = String(work.length);
@@ -1980,7 +2165,7 @@ function sameState(left, right) {
   return Boolean(left.querySelector('.spin')) === Boolean(right.querySelector('.spin'));
 }
 
-/** 就地改一行：摘要、状态、时长；详情开着的话把内容也换新。 */
+/** 就地改一行：摘要和状态。内容在弹窗里，不在这儿铺。 */
 function updateLiveRow(row, entry) {
   const summary = stepSummaryText(entry);
   const sum = row.querySelector('.st-sum');
@@ -1997,23 +2182,10 @@ function updateLiveRow(row, entry) {
     if (!sameState(state, next)) state.replaceWith(next);
   }
 
-  const time = row.querySelector('.st-time');
-  if (time) time.textContent = timeText(entry);
-
-  const item = row.parentElement;
-  const body = item && item.querySelector(':scope > .st-body');
-  if (!body || !item.classList.contains('is-open')) return;
-
-  body.innerHTML = '';
-  if (entry.kind === 'thinking') {
-    const pre = document.createElement('pre');
-    pre.className = 'st-code';
-    pre.textContent = String(entry.block?.text || '');
-    body.appendChild(pre);
-  } else {
-    appendSections(body, entry.block || {});
-  }
+  // 弹窗正开着这一条就把内容也换新（正在跑的输出会一直长）。
+  refreshStepModal(entry);
 }
+
 
 /* 24 px 以内才箮「贴底」：以前是 90，稍往下拖一点就被当成在底部，
    于是新步骤一进来就把人拽回去。 */
